@@ -83,8 +83,11 @@ composer release           # tag a new version for each untagged upstream releas
 downloads each version from WordPress.org and tags it. Sources are gitignored — the repository
 carries stubs, not a copy of the plugin.
 
-The finder reads `app/`, `boot/` and `api/`. Assets, templates, language files and `vendor/` are excluded:
-they declare nothing a consumer calls, and vendored packages ship their own stubs.
+The finder reads `app/`, `boot/`, `api/` and `vendor/wpfluent/framework/src`. That last one is
+not an oversight: the WPFluent framework is namespaced into `FluentCart\Framework`, which makes
+it part of Fluent Cart's own API — every model extends its ORM base, and `Order::query()`
+resolves through that base's `__callStatic`. Leave it out and every model call reads as
+undefined. The rest of `vendor/`, along with assets, templates and language files, is excluded.
 
 ## 📁 Package structure
 

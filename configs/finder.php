@@ -12,6 +12,12 @@ return Finder::create()
         'source/fluent-cart/app',
         'source/fluent-cart/boot',
         'source/fluent-cart/api',
+        // Namespaced into FluentCart\Framework rather than left under its own vendor
+        // namespace, so it is part of Fluent Cart's own API surface and has no separate
+        // stub package. Without it every model inherits from a class that does not exist
+        // here, and `Order::query()` — which resolves through the base model's
+        // __callStatic — reads as a call to an undefined static method.
+        'source/fluent-cart/vendor/wpfluent/framework/src',
     ) )
     ->append(
         Finder::create()
