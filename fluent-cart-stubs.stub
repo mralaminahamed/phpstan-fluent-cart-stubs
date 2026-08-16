@@ -884,9 +884,12 @@ namespace FluentCart\Api\Resource {
          *       ],
          *       string
          *  ]
+         * @param int|null $status HTTP status the framework's wpErrorToResponse should use
+         *        (Route::dispatch converts any returned WP_Error via rest_convert_error_to_response,
+         *        which reads error_data['status'] and falls back to 500 when absent).
          * @return \WP_Error
          */
-        public static function makeErrorResponse($errors): \WP_Error
+        public static function makeErrorResponse($errors, ?int $status = null): \WP_Error
         {
         }
         /**
@@ -1122,6 +1125,10 @@ namespace FluentCart\Api\Resource {
     class CouponResource extends \FluentCart\Api\Resource\BaseResourceApi
     {
         /**
+         * Upper bound on the applied-coupon list a single eligibility check will accept.
+         */
+        const MAX_ELIGIBILITY_COUPONS = 50;
+        /**
          * Get the query builder instance for the Coupons model.
          *
          * @return \FluentCart\Framework\Database\Orm\Builder
@@ -1160,6 +1167,20 @@ namespace FluentCart\Api\Resource {
         {
         }
         public static function reapplyCoupon($data, $returnCouponService = true)
+        {
+        }
+        /**
+         * Report whether a product may be bought while the given coupons are applied.
+         *
+         * A product is eligible only when every applied coupon accepts it, so the first
+         * rejection wins and carries its message back to the caller.
+         *
+         * @param int $productId
+         * @param array $appliedCouponCodes Coupon codes, per the published API contract.
+         * @param string|null $origin Context the check came from; not currently branched on.
+         * @return array|\WP_Error
+         */
+        public static function checkProductEligibilityForCodes($productId, $appliedCouponCodes = [], $origin = null)
         {
         }
         private static function makeCouponFromAppliedCoupons($previouslyAppliedCouponCodes)
@@ -2662,6 +2683,24 @@ namespace FluentCart\Api\Resource {
         /**
          * @throws \Exception
          */
+        /**
+         * Validate a shipping cents value for the DIRECT Resource API boundary.
+         * REST callers can reach neither branch (OrderRequest's numeric/min:0 rules
+         * 422 them first); both exist purely for direct callers.
+         *
+         * - Only absent/null may default to zero — that is the omitted-key shape
+         *   REST produces (pickKeys null-fill). A present non-numeric is a caller
+         *   bug, and coercing it to 0 would silently grant free shipping.
+         * - The sign is checked on the RAW value, BEFORE rounding: roundCent(-0.4)
+         *   is 0, so a post-rounding check would wave fractional negatives through
+         *   as free shipping instead of rejecting them.
+         *
+         * @param mixed $value
+         * @return mixed the value, unchanged, when null or a non-negative numeric
+         */
+        protected static function assertShippingCents($value)
+        {
+        }
         public static function updatedPlaceOrder($data, $params = [])
         {
         }
@@ -2679,10 +2718,28 @@ namespace FluentCart\Api\Resource {
         {
         }
         /**
+         * Rebuild an order's item-derived totals from the rows actually in
+         * fct_order_items, then let the tax pass derive total_amount from the new
+         * subtotal.
+         *
+         * The whole-order save posts client-computed totals alongside the items, so
+         * it does not need this. A caller that writes a single line item on its own
+         * does — without it the order keeps the subtotal it had before the line
+         * existed. Same aggregation as AdminOrderProcessor: fee lines live in
+         * fee_total, and trial lines are not billed now.
+         */
+        public static function syncItemDerivedTotals(\FluentCart\App\Models\Order $order)
+        {
+        }
+        /**
          * Recalculate and persist tax for an existing order after create or update.
          * Reads saved items + billing address from the DB, runs AdminOrderTaxService,
          * recomputes total_amount from scratch, and rewrites fct_order_tax_rate rows.
          * Never throws — tax failure must not block the save.
+         *
+         * @return bool false when the order was left carrying tax data the current
+         *              items no longer justify (transient calculator failure or a
+         *              rolled-back write); true when it reached a coherent state.
          */
         private static function reapplyTaxAfterUpdate($orderId, $order)
         {
@@ -2721,6 +2778,8 @@ namespace FluentCart\Api\Resource {
          * Zero out all tax fields, rate rows, and per-item tax amounts for an order
          * that has become definitively non-taxable (no address, no taxable items).
          * Only called for deterministic states — not on transient calculation failures.
+         *
+         * @return bool false when the clear rolled back and the stale tax data remains.
          */
         private static function clearOrderTax($orderId, $order)
         {
@@ -3527,8 +3586,6 @@ namespace FluentCart\Api\Resource {
          *      'product_terms' => (array) Optional. Terms of the product.
          *          'product-categories' => (array) Required if categories. Product categories.
          *              [0]       => (int) Optional. The category ID.
-         *          'product-tags'       => (array) Required if tags. Product tags.
-         *              [0]       => (int) Optional. The tag ID.
          *          'product-types'      => (array) Required if types. Product types.
          *              [0]       => (int) Optional. The type ID.
          * ];
@@ -3828,6 +3885,8 @@ namespace FluentCart\Framework\Support {
 namespace FluentCart\Api {
     class StoreSettings implements \FluentCart\Framework\Support\ArrayableInterface
     {
+        const CACHE_KEY = 'store_settings';
+        const CACHE_GROUP = 'fluentcart';
         /**
          * @var string
          *
@@ -3841,6 +3900,9 @@ namespace FluentCart\Api {
          */
         protected array $storeSettings;
         protected static $cachedStoreSettings = null;
+        public static function clearCache(): void
+        {
+        }
         public function __construct()
         {
         }
@@ -4906,6 +4968,36 @@ namespace FluentCart\App\Events\Subscription {
         {
         }
     }
+    class SubscriptionRenewalFailed extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/subscription_renewal_failed';
+        protected array $listeners = [\FluentCart\App\Listeners\Subscription\SubscriptionRenewalFailed::class];
+        /**
+         * @var \FluentCart\App\Models\Subscription $subscription
+         */
+        public \FluentCart\App\Models\Subscription $subscription;
+        /**
+         * @var \FluentCart\App\Models\Order $order
+         */
+        public \FluentCart\App\Models\Order $order;
+        /**
+         * @var \FluentCart\App\Models\Customer|null $customer
+         */
+        public ?\FluentCart\App\Models\Customer $customer;
+        /**
+         * @var string $error Gateway failure reason
+         */
+        public string $error;
+        public function __construct($subscription, $order, $customer, $error = '')
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        public function getActivityEventModel()
+        {
+        }
+    }
     class SubscriptionRenewed extends \FluentCart\App\Events\EventDispatcher
     {
         public string $hook = 'fluent_cart/subscription_renewed';
@@ -5732,7 +5824,29 @@ namespace FluentCart\App\Helpers {
         public function prepareCouponCalculation($order)
         {
         }
+        /**
+         * Coupon restriction lists live inside the JSON `conditions` column. The model accessor
+         * decodes them to arrays, but rows written before that accessor existed can still hold a
+         * JSON string, so accept both shapes.
+         *
+         * @param mixed $value
+         * @return array
+         */
+        protected static function normalizeConditionList($value): array
+        {
+        }
         public static function checkProductEligibility($productId, $couponCode, $origin)
+        {
+        }
+        /**
+         * Verdict for one already-loaded product/coupon pair, so a caller checking several
+         * coupons at once hydrates the product and the coupon rows a single time.
+         *
+         * @param \FluentCart\App\Models\Product $productModel
+         * @param \FluentCart\App\Models\Coupon $coupon
+         * @return array
+         */
+        public static function evaluateProductEligibility($productModel, $coupon): array
         {
         }
         public static function getCouponApplicableItemsWithLineTotal($coupon, $modifiedOrderItems)
@@ -6136,6 +6250,25 @@ namespace FluentCart\App\Helpers {
         {
         }
         public static function toCent($amount): int
+        {
+        }
+        /**
+         * Normalize a value that is ALREADY in cents to a whole-cent int.
+         *
+         * Unlike toCent(), this does not scale — use it when the incoming value is a
+         * cents amount that may have arrived as a float. Clients computing cents in
+         * JavaScript send artifacts like 1998.9999999999998 for 1999, and a bare
+         * (int) cast truncates those, silently undercharging by a cent. Non-numeric
+         * input (including the null the request pipeline injects for omitted keys)
+         * normalizes to 0.
+         *
+         * Magnitudes beyond float's exact-integer range (2^53) are REJECTED, not
+         * coerced: is_numeric() accepts exponential notation like 1e19, and casting
+         * that float to int wraps to -8446744073709551616 — a VALID signed BIGINT —
+         * so the corrupt value would persist silently where an un-normalized float
+         * used to fail loudly at MySQL. No real cents amount approaches this bound.
+         */
+        public static function roundCent($amount): int
         {
         }
         public static function toDecimalWithoutComma($amount)
@@ -8389,6 +8522,13 @@ namespace FluentCart\App\Hooks\Handlers\CustomCheckout {
         public function handleCustomCheckoutRedirect($data)
         {
         }
+        /**
+         * Build cart items for a one-time (non-subscription) order re-pay, priced at the
+         * order's own unit_price rather than the current catalogue price.
+         */
+        protected static function buildOneTimeCartItems(\FluentCart\App\Models\Order $order, $itemManualDiscountTotal)
+        {
+        }
     }
 }
 namespace FluentCart\App\Hooks\Handlers {
@@ -9345,6 +9485,22 @@ namespace FluentCart\App\Http\Controllers\AdvanceFilter {
         public function getFilterOption(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
+        /**
+         * Can the current user read the data behind this key?
+         *
+         * One URL serves several unrelated lists, so a permission on the route
+         * would let whoever holds the weakest one read the rest. It belongs to the
+         * key instead, and a key with no entry below is denied.
+         *
+         * Add-ons answer for their own keys through the filter, which is named
+         * after the key so a plugin can only speak for the one it added.
+         *
+         * @param string $dataKey
+         * @return bool
+         */
+        protected function resolvePermission($dataKey): bool
+        {
+        }
         public function getSearchOptions(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
@@ -9520,6 +9676,153 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function find(\FluentCart\Framework\Http\Request\Request $request, $customerId)
+        {
+        }
+        /**
+         * What the `with` parameter on `GET customers/{id}` may eager-load.
+         *
+         * ## The entry form
+         *
+         * Every entry is a LITERAL request key mapped to a CALLABLE. The key is never
+         * decomposed, prefix-matched or suffix-stripped, so what the client sends is
+         * either a key in this map or it is dropped. That is what keeps every ORM
+         * `with` shape out on its own: the dotted `orders.customer.wpUser`, the
+         * column-select `wpUser:ID,user_pass` and the nested array
+         * `with[orders][]=customer.wpUser` are all non-keys here.
+         *
+         * The callback owns the whole path AND its own permission bar, and returns
+         * the relation paths to eager-load — an empty array when it refuses. The
+         * caller merges what comes back; a refusing callback contributes nothing.
+         *
+         * ## Two tiers of key
+         *
+         * A SCREEN key names a calling screen and loads exactly the subtree that
+         * screen renders, so the screen can be re-scoped without widening the payload
+         * for anybody else. A PUBLIC key is a plain relation name an external
+         * consumer of a customer endpoint can reasonably ask for; each one carries
+         * the same gate its screen-key counterpart carries.
+         *
+         * ## What stays off the map
+         *
+         * `wpUser` is absent and must stay absent at EVERY nesting depth: it is a
+         * BelongsTo onto the WordPress `users` table, so loading it hands the caller
+         * the password hash (`user_pass`) and the password-reset token
+         * (`user_activation_key`). No callback below names it, and no dotted path can
+         * reach it because dotted paths are not keys.
+         *
+         * Kept local to this controller rather than folded into
+         * `Services/Filter/BaseFilter::allowedWiths()`: that map adopts a Builder
+         * returned by each callback, while this endpoint eager-loads onto a model
+         * lookup, and the two maps share no entry.
+         *
+         * @return array<string, callable>
+         */
+        private function allowedWiths(): array
+        {
+        }
+        /**
+         * `Modules/Customers/SingleCustomer.vue` fetch() — the customer detail screen,
+         * and the only caller of this endpoint in the admin app.
+         *
+         * It renders the two address blocks, the label chips and the subscriptions
+         * table, so it gets exactly those four relations and no `orders`: the same
+         * screen pulls its order table from `GET customers/{id}/orders`, which
+         * paginates.
+         *
+         * The gates match what each relation reaches, not what the screen wants:
+         * addresses are customer-owned rows and carry nothing beyond the customer
+         * record the route already granted, while labels and subscriptions are
+         * separate resources with their own permission.
+         *
+         * @return array relation paths
+         */
+        private function adminCustomerDetail(): array
+        {
+        }
+        /**
+         * The customer's shipping addresses. A customer-owned row: the route's own
+         * `customers/view` is the whole bar, restated here so the entry still refuses
+         * if this method is ever reached from somewhere the route did not guard.
+         *
+         * @return array relation paths
+         */
+        private function publicShippingAddress(): array
+        {
+        }
+        /**
+         * The customer's billing addresses. Same bar as the shipping addresses.
+         *
+         * @return array relation paths
+         */
+        private function publicBillingAddress(): array
+        {
+        }
+        /**
+         * The single address flagged primary for shipping. Same bar again — it is a
+         * narrowed `shipping_address`, not a different resource.
+         *
+         * @return array relation paths
+         */
+        private function publicPrimaryShippingAddress(): array
+        {
+        }
+        /**
+         * The single address flagged primary for billing.
+         *
+         * @return array relation paths
+         */
+        private function publicPrimaryBillingAddress(): array
+        {
+        }
+        /**
+         * The labels attached to this customer. A separate resource with its own
+         * permission, so `customers/view` alone is not enough.
+         *
+         * @return array relation paths
+         */
+        private function publicLabels(): array
+        {
+        }
+        /**
+         * The customer's subscriptions. `subscriptions/view` is the bar.
+         *
+         * UNBOUNDED, and knowingly so. This is a to-many with no LIMIT, so a
+         * customer with a long history costs a proportional number of rows,
+         * hydrated models and serialized output on one request. `orders` used to sit
+         * beside it and was removed for exactly that reason — but `orders` had a
+         * paginated endpoint to redirect to (`GET customers/{id}/orders`) and no
+         * production caller, while this one has neither.
+         *
+         * SingleCustomer.vue renders `customer.subscriptions` as a complete list
+         * with a count, so capping it here would silently truncate a list the UI
+         * presents as whole — worse than the unbounded read.
+         *
+         * The fix is a paginated subscriptions endpoint, after which this key goes
+         * the same way `orders` did. Until then the exposure is real and this
+         * comment is the record of it.
+         *
+         * @return array relation paths
+         */
+        private function publicSubscriptions(): array
+        {
+        }
+        /**
+         * Reduce a client-supplied `with` payload to the relation paths this endpoint
+         * is allowed to eager-load.
+         *
+         * Anything that is not a literal key of allowedWiths() is dropped SILENTLY.
+         * An unknown relation otherwise reaches Builder::getRelation(), which turns a
+         * BadMethodCallException into a RelationNotFoundException — a 500 — so a
+         * stale admin build would hard-fail where it should degrade.
+         *
+         * Only STRING request entries are considered. Dropping the rest is what kills
+         * the nested-array shape `with[orders][]=customer.wpUser`: its value is an
+         * array, and its key is never read.
+         *
+         * @param mixed $with raw request value
+         * @return array relation names safe to pass to Customer::with()
+         */
+        private function resolveEagerLoads($with): array
         {
         }
         public function findOrder(\FluentCart\Framework\Http\Request\Request $request, $customerId)
@@ -9761,6 +10064,11 @@ namespace FluentCart\App\Http\Controllers\FrontendControllers {
     class CustomerProfileController extends \FluentCart\App\Http\Controllers\FrontendControllers\BaseFrontendController
     {
         /**
+         * Portal surfaces an add-on may attach a section to. Each value maps to the
+         * hook `fluent_cart/customer_portal/{value}`.
+         */
+        const PORTAL_SECTION_FILTERS = ['profile_sections'];
+        /**
          * Handle the request to retrieve the customer's orders.
          *
          * This method checks if the user is logged in, retrieves the current customer,
@@ -9773,6 +10081,30 @@ namespace FluentCart\App\Http\Controllers\FrontendControllers {
         {
         }
         public function getCustomerProfileDetails()
+        {
+        }
+        /**
+         * Return the add-on sections registered for one customer-portal surface.
+         *
+         * Each entry carries an UNCOMPILED Vue component string plus its payload;
+         * the portal SPA compiles it in the browser (see the shared
+         * DynamicTemplateParser). This is how an add-on renders inside the SPA at
+         * all — the router's route table is static and cannot be extended.
+         *
+         * @param \FluentCart\Framework\Http\Request\Request $request
+         * @return \WP_REST_Response
+         */
+        public function getSections(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
+        /**
+         * Normalise whatever add-ons returned into the shape the SPA renders, and
+         * drop entries with nothing to compile.
+         *
+         * @param mixed $sections
+         * @return array
+         */
+        private function formatPortalSections($sections): array
         {
         }
         public function updateCustomerProfileDetails(\FluentCart\App\Http\Requests\FrontendRequests\CustomerRequests\CustomerProfileAccountDetailsRequest $request): \WP_REST_Response
@@ -10046,6 +10378,23 @@ namespace FluentCart\App\Http\Controllers {
         public static function hasSubscription($orderItems): bool
         {
         }
+        /**
+         * The variation row decides whether a line is recurring, so every label the payload
+         * carries has to agree with it. A recurring line must additionally be labelled in
+         * other_info: that is the only copy AdminOrderProcessor reads, and the interval and
+         * installment count travel beside it.
+         *
+         * @return string empty when the line is consistent, else the rejection message
+         */
+        protected static function getPaymentTypeConflict($item, $variationPaymentTypes): string
+        {
+        }
+        /**
+         * @return array variation id => stored payment_type, for the lines that resolve
+         */
+        protected static function getVariationPaymentTypes($orderItems): array
+        {
+        }
         public function updateOrder(\FluentCart\App\Http\Requests\OrderRequest $request, $order_id)
         {
         }
@@ -10080,6 +10429,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function getDetails($orderId)
+        {
+        }
+        public function getTransactionDetails($orderId, $transactionId)
         {
         }
         public function createCustom(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Helpers\OrderItemHelper $orderItemHelper, \FluentCart\App\Models\Order $order)
@@ -10184,6 +10536,111 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function find(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Product $product): array
+        {
+        }
+        /**
+         * What the `with` parameter on `GET products/{id}` may eager-load.
+         *
+         * ## The entry form
+         *
+         * Every entry is a LITERAL request key mapped to a CALLABLE. The key is never
+         * decomposed, prefix-matched or suffix-stripped, so what the client sends is
+         * either a key in this map or it is dropped. That is what keeps the dotted
+         * `orderItems.order.customer`, the column-select
+         * `orderItems.order.customer:id,email` and the nested array
+         * `with[orderItems][]=order.customer` out — none of them is a key.
+         *
+         * The callback owns the whole path AND its own permission bar, and returns the
+         * relation paths to eager-load, or an empty array when it refuses.
+         *
+         * ## Two tiers of key
+         *
+         * A SCREEN key names a calling screen and loads exactly what that screen
+         * renders. A PUBLIC key is a plain relation name an external consumer of a
+         * product endpoint can reasonably ask for.
+         *
+         * ## What stays off the map
+         *
+         * `Product::orderItems()` is a real relation keyed on `post_id`, so before the
+         * request value was constrained an actor holding nothing but products/view
+         * could walk `?with[]=orderItems.order.customer` from a catalogue product to
+         * order and customer data — a probe pulled 104 KB of it off one product. It
+         * must stay unreachable, along with `downloadable_files` (protected file
+         * paths), `licensesMeta`, `postmeta` and `wpTerms`.
+         *
+         * `product_menu` is NOT on this map and does not belong on it: it is a
+         * controller sentinel, not a relation. find() reads it straight off the raw
+         * request and answers it with AdminHelper::getProductMenu(); it never reaches
+         * load(), so it is unaffected by anything here.
+         *
+         * No entry declares a select. `Product::$appends` carries `thumbnail`, which
+         * resolves through `detail->featured_media` — itself a ProductDetail append
+         * backed by the `galleryImage` relation — and `ProductVariation::$appends`
+         * lazy-loads `media` keyed on the variant `id`. A select would have to go
+         * INSIDE the relation closure in any case; on the main query it would narrow
+         * the product row itself.
+         *
+         * @return array<string, callable>
+         */
+        private function allowedWiths(): array
+        {
+        }
+        /**
+         * The Gutenberg block editors' single-product fetch. Fourteen block editors
+         * under `resources/admin/BlockEditor/` hit this endpoint —  BuySection,
+         * Excerpt, MediaCarousel, PriceRange, ProductCard, ProductDescription,
+         * ProductGallery, ProductImage, ProductInfo, ProductSku, ProductTitle,
+         * RelatedProduct, SaleBadge and Stock — and between them they render the
+         * detail row (price range, stock availability, gallery) and the variation
+         * rows (SKU, per-variant price, buy section), so the key loads both.
+         *
+         * `products/view` is the route's own bar, restated here so the entry still
+         * refuses if this map is ever reached from somewhere the route did not guard.
+         *
+         * @return array relation paths
+         */
+        private function blockProductDetail(): array
+        {
+        }
+        /**
+         * The catalogue detail row on its own — price range, stock availability,
+         * variation type, featured media.
+         *
+         * @return array relation paths
+         */
+        private function publicDetail(): array
+        {
+        }
+        /**
+         * The variation rows on their own — SKU, per-variant price, stock.
+         *
+         * @return array relation paths
+         */
+        private function publicVariants(): array
+        {
+        }
+        /**
+         * Reduce a client-supplied `with` payload to the relation paths this endpoint
+         * is allowed to eager-load.
+         *
+         * Anything that is not a literal key of allowedWiths() is dropped SILENTLY —
+         * an unknown relation otherwise reaches Builder::getRelation() and becomes a
+         * RelationNotFoundException, i.e. a 500, where a stale block build should
+         * simply render without its data.
+         *
+         * Only STRING request entries are considered, which is what drops the nested
+         * array shape `with[orderItems][]=order.customer`: its value is an array and
+         * its key is never read.
+         *
+         * Kept local to this controller rather than folded into
+         * `Services/Filter/BaseFilter::allowedWiths()`: that map adopts a Builder
+         * returned by each callback, while this endpoint eager-loads onto a
+         * route-model-bound instance, and the two maps share no entry.
+         *
+         * @param mixed $with raw request value
+         * @return array relation names safe to pass to Product::load()
+         */
+        private function resolveEagerLoads($with): array
         {
         }
         public function getRelatedProducts(\FluentCart\Framework\Http\Request\Request $request, $productId): \WP_REST_Response
@@ -11057,6 +11514,34 @@ namespace FluentCart\App\Http\Policies {
     }
     class AdminPolicy extends \FluentCart\App\Http\Policies\Policy
     {
+        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request): bool
+        {
+        }
+    }
+    /**
+     * Unlike the other policies here, this one deliberately does not read the
+     * route's permission meta.
+     *
+     * The endpoint it guards serves many unrelated data sets behind one URL —
+     * product variations, labels, attributes, tax states — so a single route-level
+     * permission would have to be the union of all of them, and would let anyone
+     * holding the weakest one read the data behind the strongest. The check that
+     * matters is per data key, and only the controller knows which key was asked
+     * for.
+     *
+     * So this is the outer door: it keeps non-admins out entirely, and leaves
+     * AdvanceFilterController::resolvePermission() to decide who may read what.
+     *
+     * @package FluentCart\App\Http\Policies
+     *
+     * @version 1.0.0
+     */
+    class AdvanceFilterPolicy extends \FluentCart\App\Http\Policies\Policy
+    {
+        /**
+         * @param \FluentCart\Framework\Http\Request\Request $request
+         * @return bool
+         */
         public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request): bool
         {
         }
@@ -12182,7 +12667,10 @@ namespace FluentCart\App\Listeners {
         public function runOrderActionsAjax()
         {
         }
-        private function formatIntegrationFeed($feed, $hook, $addOns = null, $scope = 'product', $orderId = null)
+        private function formatIntegrationFeed($feed, $hook, $addOns = null, $scope = 'product', $orderId = null, $orderNeverPaid = false)
+        {
+        }
+        private function orderNeverReceivedPayment($order)
         {
         }
     }
@@ -12265,6 +12753,12 @@ namespace FluentCart\App\Listeners\Order {
     }
 }
 namespace FluentCart\App\Listeners\Subscription {
+    class SubscriptionRenewalFailed
+    {
+        public static function handle(\FluentCart\App\Events\Subscription\SubscriptionRenewalFailed $event)
+        {
+        }
+    }
     class SubscriptionRenewed
     {
         public static function handle(\FluentCart\App\Events\Subscription\SubscriptionRenewed $event)
@@ -17986,9 +18480,6 @@ namespace FluentCart\App\Models {
         public function getCategories()
         {
         }
-        public function getTags()
-        {
-        }
         public function getMediaUrl($size = 'thumbnail')
         {
         }
@@ -17996,9 +18487,6 @@ namespace FluentCart\App\Models {
          * Transforming old getters with accessor
          * Todo check
          */
-        public function getTagsAttribute($value)
-        {
-        }
         public function getCategoriesAttribute($value)
         {
         }
@@ -18021,9 +18509,6 @@ namespace FluentCart\App\Models {
         // Get Category Relationship
         */
         public function categories()
-        {
-        }
-        public function tags()
         {
         }
         /*
@@ -19195,6 +19680,20 @@ namespace FluentCart\App\Models {
         {
         }
         /**
+         * Merge keys into the config blob under a row lock.
+         *
+         * Every writer of this column must go through here. `config` is a single JSON
+         * document written by the cancel path, both Stripe paths and both PayPal paths;
+         * a plain read-merge-write loses whichever concurrent write commits first, and a
+         * renewal landing during a payment-method switch is not a rare pairing.
+         *
+         * @param array $values keys to set; existing keys not named here survive
+         * @return array the merged config as committed
+         */
+        public function mergeConfig(array $values): array
+        {
+        }
+        /**
          * Customer-facing display name. When the config['item_attributes'] snapshot
          * resolves it returns the product name with the labeled combination
          * ("Cake - Flavor: Vanilla | Weight: 500 g"); otherwise the raw item_name
@@ -19343,6 +19842,49 @@ namespace FluentCart\App\Models {
         {
         }
         public function canUpgrade()
+        {
+        }
+        /**
+         * The gateway backing this subscription, or null when there is not one.
+         *
+         * `App::gateway()` returns the GatewayManager when its argument is null —
+         * that is how `App::gateway()` with no argument is meant to work, but
+         * `current_payment_method` is nullable, so a subscription with no payment
+         * method resolves to the manager too. The manager is a truthy object, so
+         * every `if (!$gateway)` guard in this class waved it through, and the next
+         * line read `$gateway->supportedFeatures` as null.
+         *
+         * `in_array($needle, null)` is a TypeError on PHP 8, thrown from
+         * `getPermissionsAttribute()` — an `$appends` entry — so it fires while
+         * SERIALIZING. One subscription row with a blank payment method therefore
+         * took down the entire subscriptions list response, not just its own row.
+         *
+         * Resolve through here rather than calling `App::gateway()` directly.
+         *
+         * The instanceof is against PaymentGatewayInterface — the manager's
+         * registration contract — NOT AbstractPaymentGateway, so a third-party
+         * gateway implementing the interface directly still resolves. The only
+         * object it rejects is the GatewayManager itself, which does not implement
+         * the interface.
+         *
+         * @return \FluentCart\App\Modules\PaymentMethods\Core\PaymentGatewayInterface|null
+         */
+        private function resolveGateway(): ?\FluentCart\App\Modules\PaymentMethods\Core\PaymentGatewayInterface
+        {
+        }
+        /**
+         * The `switch_payment_method` entry of `supportedFeatures`, or [] when the
+         * gateway does not declare one.
+         *
+         * Unlike the flat feature flags this is a KEYED entry carrying config
+         * (`supported_gateways`), so `has()` cannot answer it — it needs the raw
+         * `supportedFeatures` property, which only AbstractPaymentGateway carries.
+         * An interface-only gateway therefore reports no switch support rather
+         * than triggering an undefined-property read.
+         *
+         * @return array
+         */
+        private function switchPaymentConfig(): array
         {
         }
         public function canUpdatePaymentMethod()
@@ -19655,6 +20197,26 @@ namespace FluentCart\App\Models {
          */
         protected $primaryKey = 'ID';
         protected $guarded = ['password'];
+        /**
+         * Credential columns of the WordPress `users` table that must never be
+         * serialized into an API response.
+         *
+         * `$guarded` above is mass-assignment protection only (GuardsAttributes) and
+         * has no effect on serialization — and it names `password`, which is not even
+         * a real column. Serialization hiding lives here (HidesAttributes), and it is
+         * applied by HasAttributes::getArrayableItems(), so it covers toArray(),
+         * toJson() and every `with('wpUser')` eager load at once.
+         *
+         * This affects serialization ONLY. Direct property access ($user->user_pass)
+         * still works, so internal reads are unaffected.
+         *
+         * @var array
+         */
+        protected $hidden = [
+            'user_pass',
+            // bcrypt/phpass password hash
+            'user_activation_key',
+        ];
         /**
          * Check if the user has a specific permission.
          * @param string|array $permission
@@ -22061,7 +22623,7 @@ namespace FluentCart\App\Modules\MCP\Tools {
         private static function variations($product)
         {
         }
-        private static function terms($product, $which)
+        private static function terms($product)
         {
         }
         /**
@@ -23706,6 +24268,26 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     }
     class Processor
     {
+        /**
+         * Does this order-create error actually implicate the vault attributes?
+         *
+         * PayPal reports the offending field path in details[].field, which is the
+         * structural signal — it points straight at attributes/vault when the vault
+         * block is the problem, and elsewhere when it is not. details[].issue is
+         * matched too, against a deliberately small list: guessing broadly here would
+         * recreate the bug this method exists to prevent, so anything unrecognised is
+         * treated as unrelated and the error is returned untouched.
+         *
+         * The issue list is filterable because PayPal can introduce codes faster than
+         * a core release can follow, and a missing code should be correctable without
+         * one.
+         *
+         * @param mixed $error
+         * @return bool
+         */
+        public static function isVaultRejection($error): bool
+        {
+        }
         public function handleSinglePayment(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $args = [])
         {
         }
@@ -23815,9 +24397,15 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
          * capture path, report settling captures as 'processing', everything else as
          * a definitive failure with PayPal's reason.
          *
-         * @return true|string|\WP_Error
+         * Public so an extension charging a vaulted token outside the renewal engine
+         * (saved payment methods) settles through this exact contract rather than
+         * reimplementing it. The PENDING branch in particular is money-critical: a
+         * settling eCheck is neither paid nor failed, and a duplicate of this logic
+         * would eventually drift and mis-report one.
+         *
+         * @return true|string|\WP_Error true = captured, 'processing' = settling
          */
-        private function settleVaultChargeResponse(\FluentCart\App\Models\OrderTransaction $transaction, $paypalOrder)
+        public function settleVaultChargeResponse(\FluentCart\App\Models\OrderTransaction $transaction, $paypalOrder)
         {
         }
     }
@@ -24586,6 +25174,27 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         /**
+         * One-time analogue of guardExistingRemoteSubscription(). A resubmit whose
+         * charge-material params changed (or whose key aged past Stripe's 24h window)
+         * would mint a second PaymentIntent while the first stays confirmable in any
+         * stale tab — and a charge on that orphan is dropped by the webhook with no
+         * local record. Succeeded remote: record the payment and stop the re-charge.
+         * In-flight (processing / requires_capture): stop and let it settle.
+         * Confirmable with matching charge-material params: reuse it. Mismatched:
+         * cancel it so exactly one confirmable intent exists. Lookup/cancel failures
+         * fail CLOSED (WP_Error, retryable) rather than falling through to create —
+         * otherwise a transient Stripe error would let a second intent get created
+         * while the first stays confirmable, reopening the orphan path this guards.
+         *
+         * Returns null (create fresh), the reusable intent array, a redirect response
+         * array (already-succeeded — checkout's GET render has no order-status check,
+         * so the caller must push the browser to the receipt page itself rather than
+         * ask the customer to refresh), or WP_Error (stop, retryable).
+         */
+        private function guardExistingPaymentIntent(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $intentData)
+        {
+        }
+        /**
          * Handle single payment for stripe (onsite or hosted)
          *
          * @return \WP_Error|array
@@ -24842,12 +25451,12 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         /**
          * Check rate limit for SetupIntent creation to prevent card testing fraud.
          *
-         * Rate limit: 7 attempts per day per customer by default (for subscription
+         * Rate limit: 5 attempts per day per customer by default (for subscription
          * card updates), overridable via the
          * fluent_cart/stripe/setup_intent_rate_limit_customer_daily filter. The SAME
          * filter default feeds getRemainingRateLimit(), so enforcement and the
          * displayed remaining count share one contract.
-         * 
+         *
          * @param string $customerId Stripe customer ID
          * @return bool|\WP_Error Returns true if allowed, WP_Error if rate limited
          */
@@ -24985,6 +25594,17 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway\Webhook {
         {
         }
         public static function webhookInstruction(): array
+        {
+        }
+        /**
+         * Why the last processAndInsertOrderByEvent() call resolved no order. The
+         * caller answers the webhook with it, so "we have no resolver for this type"
+         * is distinguishable from "resolved fine, but nothing local matches".
+         *
+         * @var string
+         */
+        protected $unresolvedReason = '';
+        public function getUnresolvedReason()
         {
         }
         public function processAndInsertOrderByEvent($event)
@@ -25505,10 +26125,158 @@ namespace FluentCart\App\Services\Filter {
         protected function applySort()
         {
         }
+        /**
+         * What the `with` request parameter may load.
+         *
+         * DENY BY DEFAULT — the base returns an empty map, so a filter that does not
+         * override this loads nothing at all. That matters because the ORM resolves
+         * a relation by literally calling that method on the model
+         * (`Builder::getRelation()`), catching only BadMethodCallException. A method
+         * that exists but is not a relation still RUNS: before this allow-list,
+         * `with[]=recountTotalPaidAndRefund` inserted a phantom refunded order row.
+         *
+         * ## The entry form — one form, no others
+         *
+         * Every entry is a LITERAL request key mapped to a CALLABLE. Nothing else is
+         * an entry: a non-callable value is refused. The key is never decomposed,
+         * pattern-matched or prefix-parsed, so what the client sends is either a key
+         * in this map or it is dropped.
+         *
+         *     protected function allowedWiths(): array
+         *     {
+         *         return [
+         *             'admin_product_list' => [$this, 'adminProductList'],
+         *         ];
+         *     }
+         *
+         *     protected function adminProductList($query)
+         *     {
+         *         if (!$this->userCanAny('products/view')) {
+         *             return false;   // contributes nothing
+         *         }
+         *
+         *         return $query->with(['detail' => function ($q) {
+         *             $q->select(['id', 'post_id', 'featured_media']);
+         *         }]);
+         *     }
+         *
+         * ## Callback contract
+         *
+         * The callback receives the query as built so far — every entry already
+         * adopted is on it — checks its own permission, applies its own eager load
+         * (`with()`, `withCount()`, whatever it needs), and returns the query. It
+         * runs EXACTLY ONCE. The base never learns a relation name; the callback owns
+         * the whole path, the selects and the gate.
+         *
+         *   return false (or anything that is not a Builder) → contributes nothing
+         *   return the Builder                               → the base adopts it
+         *
+         * A count is not a special case: it is a callback that calls `withCount()`.
+         *
+         * ## Nested paths
+         *
+         * Nesting is not a special case either: name the full path (`'a.b'`) inside
+         * the callback. Two consequences, both of them sharp:
+         *
+         * 1. `with('a.b')` auto-injects the parent `a` with an EMPTY closure, so a
+         *    nested callback must repeat whatever GATE the parent carries — the
+         *    nested path is otherwise a way around it.
+         * 2. That injected empty closure also overwrites a CONSTRAINT an earlier
+         *    entry put on `a`, because each callback issues its own `with()` call and
+         *    Builder::with() array_merges into $eagerLoad (addNestedWiths() only
+         *    protects entries inside a single call). So a nested callback must also
+         *    re-state the parent's constraint in its own `with()` call:
+         *
+         *        return $query->with([
+         *            'a'   => function ($q) { $q->select([...]); },
+         *            'a.b' => function ($q) { $q->select([...]); },
+         *        ]);
+         *
+         * ## Why the builder you are handed is safe to mutate
+         *
+         * `$query->with([...])` mutates in place and returns the same instance, so a
+         * callback that mutated and then refused would already have changed the
+         * query. The base therefore invokes every callback against `clone
+         * $this->query` and adopts the result only when a Builder comes back:
+         * Orm\Builder::__clone() also clones the underlying Query\Builder, and both
+         * hold their wheres, bindings, columns and eager loads in plain arrays, which
+         * PHP copies by value. A refusing callback is structurally incapable of
+         * touching the live query.
+         *
+         * ## Escape valve
+         *
+         * The gate lives in applyWith(), so it covers every instance including a
+         * `with` assigned after construction, and it reads the CURRENT user — a cron
+         * or WP-CLI caller loses permission-gated entries. The
+         * `fluent_cart/{filter}_allowed_withs` filter is how an add-on or a
+         * privileged background job adds its own entry.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * What the `scopes` request parameter may apply.
+         *
+         * DENY BY DEFAULT. The old applyScopes() invoked whatever method name the
+         * request supplied directly on the query builder, before any WHERE clause
+         * existed — `scopes[]=delete` emptied the table, `scopes[]=truncate` wiped it
+         * and the array form mass-updated every row.
+         *
+         * Same single entry form as allowedWiths(): literal key => callable. This is
+         * a separate map only because the request delivers it on a different
+         * parameter; the resolution and the safety properties are identical.
+         *
+         * Scope callbacks are invoked as `($query, $args)`, where `$args` is the raw
+         * remainder of an array-form request entry (`scopes[]=['x','y']` → `['y']`).
+         * `$args` is UNVALIDATED client input. Declare the parameter only if you
+         * intend to validate it; a callback declared `($query)` simply never sees it,
+         * which is the default refusal of request-supplied arguments.
+         *
+         * A scope name is not reachable unless a callback routes to it, and routing
+         * through `Builder::scopes()` adds a second structural gate: it resolves via
+         * Model::callNamedScope(), which prefixes with "scope", so only a real
+         * `scopeX()` method exists at the end of that path.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedScopes(): array
+        {
+        }
         protected function applyWith()
         {
         }
         protected function applyScopes()
+        {
+        }
+        /**
+         * Invoke one allow-map entry and adopt what it hands back.
+         *
+         * The callback gets a CLONE of the live query, so a callback that mutates
+         * and then refuses cannot leave its mutation behind. Only a Builder is
+         * adopted; every other return value — false, null, a stray string — means the
+         * entry contributes nothing.
+         *
+         * @param mixed $entry Anything non-callable is refused.
+         * @param array $args  Unvalidated client arguments; always empty for a `with`.
+         * @return void
+         */
+        protected function adoptAllowEntry($entry, array $args = []): void
+        {
+        }
+        /**
+         * @param string|array $permission
+         * @return bool
+         */
+        protected function userCan($permission): bool
+        {
+        }
+        /**
+         * @param string|array $permission
+         * @return bool
+         */
+        protected function userCanAny($permission): bool
         {
         }
         /**
@@ -25677,6 +26445,16 @@ namespace FluentCart\App\Modules\Shipping\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * Intentionally empty, and verified so: ShippingClassTable.js sends no
+         * `with` at all, so there is nothing to allow. Add an entry only when a
+         * caller actually needs it — do not pre-open relations.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
@@ -25693,6 +26471,47 @@ namespace FluentCart\App\Modules\Shipping\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * SCREEN key — `admin_shipping_zone_list` is what ShippingZoneTable.js
+         * sends, and a method COUNT is the whole of what that screen renders.
+         *
+         * PUBLIC key — `methodsCount` is the name the client sent before this
+         * allow-list existed, so it stays an accepted value rather than becoming a
+         * silently ignored one for anybody else who was already sending it.
+         *
+         * A count is not a separate mechanism: both entries are callbacks that call
+         * withCount(). The method ROWS themselves stay unlisted — no caller renders
+         * them, and the number is not the rows.
+         *
+         * No further permission bar on either entry: the whole `shipping` route
+         * group mounts under `StoreSensitivePolicy` (`store/sensitive`), so a caller
+         * here is already trusted with shipping configuration.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `GET /shipping/zones`, sent by ShippingZoneTable.js — ShippingZonesTable.vue
+         * renders the resulting `methods_count` attribute.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminShippingZoneList($query)
+        {
+        }
+        /**
+         * `with[]=methodsCount` — a public entry point, covered by the route
+         * group's own `store/sensitive` policy.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicMethodsCount($query)
         {
         }
         protected function defaultSorting(): array
@@ -26311,6 +27130,51 @@ namespace FluentCart\App\Modules\Subscriptions\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * `GET /subscriptions` requires `subscriptions/view`, which says nothing
+         * about customers, so the customer relation carries its own bar through
+         * BOTH doors below.
+         *
+         * SCREEN key — `admin_subscription_list` loads what SubscriptionTable.js
+         * renders. PUBLIC key — `customer` is the plain relation name a consumer
+         * can reasonably ask a subscription endpoint for, and it was an accepted
+         * value before this allow-list existed; keeping it is what stops the
+         * conversion from silently narrowing a published response.
+         *
+         * Deliberately NOT allowlisted: `transactions` (gateway ids and card
+         * metadata), `license`/`licenses` (`license_key` serializes verbatim),
+         * `meta` (arbitrary stored keys).
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `GET /subscriptions`, sent by SubscriptionTable.js — the customer column
+         * is the only relation this screen renders.
+         *
+         * No select: Customer::$appends (`full_name`, `photo`, `country_name`,
+         * `formatted_address`, `user_link`) reads first_name, last_name, country,
+         * state, city, postcode and user_id.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminSubscriptionList($query)
+        {
+        }
+        /**
+         * `with[]=customer` — a public entry point, carrying the same
+         * `customers/view` bar as the screen key. A public name is not a way
+         * around the gate.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return bool|\FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicCustomer($query)
         {
         }
         public function applyActiveViewFilter(?string $activeView = null): void
@@ -28977,6 +29841,12 @@ namespace FluentCart\App\Services\Coupon\Concerns {
         public function ensureMinimumPurchaseAmount(\FluentCart\App\Models\Coupon $coupon): bool
         {
         }
+        public function ensureMaximumPurchaseAmount(\FluentCart\App\Models\Coupon $coupon): bool
+        {
+        }
+        public function matchesEmailRestrictions(\FluentCart\App\Models\Coupon $coupon): bool
+        {
+        }
         public function isCouponActive(\FluentCart\App\Models\Coupon $coupon): bool
         {
         }
@@ -29023,12 +29893,14 @@ namespace FluentCart\App\Services\Coupon {
         protected array $calculatedLineItems = [];
         protected bool $usingCart = true;
         protected ?\FluentCart\Framework\Support\Collection $couponErrors = null;
+        protected string $customerEmail = '';
         /**
          * @param array $lineItems
          * @param ?\FluentCart\Framework\Support\Collection $previouslyAppliedCoupons
-         * @param bool $usingCart
+         * @param array $applicableCouponCodes
+         * @param string $customerEmail
          */
-        public function __construct(array $lineItems = [], ?\FluentCart\Framework\Support\Collection $previouslyAppliedCoupons = null, $applicableCouponCodes = [])
+        public function __construct(array $lineItems = [], ?\FluentCart\Framework\Support\Collection $previouslyAppliedCoupons = null, $applicableCouponCodes = [], $customerEmail = '')
         {
         }
         private function init()
@@ -29117,6 +29989,18 @@ namespace FluentCart\App\Services\Coupon {
         {
         }
         private function applyDiscountToItems(array $items, $percent, \FluentCart\App\Models\Coupon $coupon)
+        {
+        }
+        /**
+         * Clamp this coupon's total contribution under $valueKey to $maxAmount,
+         * scaling each item's share proportionally (cents in, cents out).
+         *
+         * $preValues holds each item's value before this coupon ran, keyed by item
+         * id — only the delta above it (this coupon's share) is ever reduced.
+         *
+         * @return array [items, appliedTotalForThisCoupon]
+         */
+        private function capDiscountAtMax(array $items, $valueKey, $maxAmount, array $preValues)
         {
         }
         private function correctFixedCouponRounding(array $items, \FluentCart\App\Models\Coupon $coupon, $couponDiscountTotal)
@@ -31336,6 +32220,16 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * Intentionally empty, and verified so: AttrGroupsTable.js sends no `with`
+         * at all, so there is nothing to allow. Add an entry only when a caller
+         * actually needs it — do not pre-open relations.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
@@ -31373,12 +32267,25 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * Intentionally empty, and verified so: AttrTermsTable.js sends no `with`
+         * at all, so there is nothing to allow. Add an entry only when a caller
+         * actually needs it — do not pre-open relations.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
     }
     class CouponFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
+        public function buildQuery(): \FluentCart\Framework\Database\Orm\Builder
+        {
+        }
         public function applySimpleFilter(?string $search = null): void
         {
         }
@@ -31389,6 +32296,58 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * No screen key: CouponTable.js sends no `with` at all. AllCoupons.vue and
+         * CouponsTableMobile.vue render the real `use_count` column off the coupons
+         * table, so no admin screen needs a relation here.
+         *
+         * PUBLIC key — `appliedCouponsCount` was an accepted request value before
+         * this allow-list existed, so it stays one. "No consumer in our repos" is
+         * not evidence of no consumer, and a name that used to answer and now
+         * silently does not is the regression this tier exists to prevent.
+         *
+         * No permission bar: what comes back is a NUMBER, not the orders. A caller
+         * learns how many times a coupon has been redeemed, which the coupon row's
+         * own `use_count` column already tells them on the same response.
+         *
+         * `appliedCoupons` itself stays denied on its own merit: the ROWS say which
+         * orders used which coupon, and that is order data behind `orders/view`.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `with[]=appliedCouponsCount` — a public entry point. A count is not a
+         * special case: it is a callback that calls withCount(), which surfaces as
+         * the `applied_coupons_count` attribute.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicAppliedCouponsCount($query)
+        {
+        }
+        /**
+         * Sent by Orders/Coupon.vue when suggesting coupons to apply to an order.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedScopes(): array
+        {
+        }
+        /**
+         * Declared `($query)` on purpose: the array form of a `scopes` entry would
+         * otherwise hand this callback raw client arguments, and Coupon's
+         * `scopeActive()` takes none.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function activeScope($query)
         {
         }
         public function applyActiveViewFilter(?string $activeView = null): void
@@ -31407,6 +32366,106 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * SCREEN key — `admin_customer_search` is the one screen on `GET /customers`
+         * that sends a `with` at all. CustomerTable.js and ChangeOrderCustomer.vue
+         * send none.
+         *
+         * PUBLIC keys — the address sets and the labels are relation names an
+         * external consumer can reasonably ask a customer endpoint for, and they
+         * were accepted values before this allow-list existed. They are restored as
+         * first-class entry points rather than dropped: "no consumer in our repos"
+         * is not the same as "no consumer", and silently narrowing a published
+         * response is the exact regression this tier exists to prevent.
+         *
+         * `GET /customers/{id}` is a different mechanism entirely —
+         * CustomerController::allowedEagerLoads() — and keeps its own bars. This
+         * map governs the list route only.
+         *
+         * Deliberately NOT allowlisted: `wpUser`, which is a BelongsTo onto the
+         * WordPress users table. It must stay out of this map on its own merit —
+         * the `User::$hidden` fix is a second line of defence, not a licence to
+         * expose the relation. `orders` and `subscriptions` stay off too: they are
+         * billing rows behind other permissions.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `GET /customers`, sent by OrderCustomerInformation.vue when an admin
+         * searches for a customer to attach to an order. The screen prefills both
+         * address blocks, so both sets are loaded in ONE `with()` call — a second
+         * entry issuing its own `with()` would array_merge over this one.
+         *
+         * No further permission bar: the route already requires `customers/view`
+         * and these are the customer's own addresses, which is precisely what that
+         * permission grants.
+         *
+         * No select: CustomerAddresses::$appends is `formatted_address`,
+         * `company_name`, `vat_number` and `legal_registration_id`, and the last
+         * three read stored meta off the loaded row.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminCustomerSearch($query)
+        {
+        }
+        /**
+         * `with[]=shipping_address` — a public entry point. No bar beyond the
+         * route's own `customers/view`: a customer's addresses are customer data.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicShippingAddress($query)
+        {
+        }
+        /**
+         * `with[]=billing_address` — a public entry point, covered by the route's
+         * own `customers/view` for the same reason.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicBillingAddress($query)
+        {
+        }
+        /**
+         * `with[]=primary_shipping_address` — a public entry point. The primary row
+         * is a HasOne narrowing of the same table the route already grants.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicPrimaryShippingAddress($query)
+        {
+        }
+        /**
+         * `with[]=primary_billing_address` — a public entry point, covered by the
+         * route's own `customers/view` for the same reason.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicPrimaryBillingAddress($query)
+        {
+        }
+        /**
+         * `with[]=labels` — a public entry point, and the one on this map that is
+         * NOT covered by the route's own permission. Labels are their own resource
+         * with their own `labels/view` bar, which is what
+         * CustomerController::allowedEagerLoads() applies on the detail route; the
+         * list route states the same bar here so the two doors agree.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return bool|\FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicLabels($query)
         {
         }
         public function applyActiveViewFilter(?string $activeView = null): void
@@ -31439,6 +32498,22 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * Intentionally empty. This filter cannot receive a request `with` today:
+         * its only caller is AdvanceFilterController::getFilterOption(), which
+         * hand-builds a five-key argument array (remote_data_key, search,
+         * include_ids, limit, parent_id) and never forwards the raw request.
+         *
+         * That is the reason the map is empty, NOT an oversight — if this filter is
+         * ever refactored to take `$request->all()`, an empty map is what keeps it
+         * closed, and any relation it then needs must be added here deliberately as
+         * a context key mapped to a callable.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
@@ -31466,6 +32541,82 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * `GET /licensing/licenses` requires `licenses/view`. That says nothing
+         * about customers or products, so those relations carry their own bar
+         * through every door below.
+         *
+         * SCREEN key — `admin_license_list` loads the three columns LicenseTable.js
+         * renders, with the product and variant selects narrowed to the titles the
+         * table actually prints.
+         *
+         * PUBLIC keys — `customer`, `product` and `productVariant` are the plain
+         * relation names a consumer can reasonably ask a licence endpoint for, and
+         * they were accepted values before this allow-list existed. They give the
+         * unnarrowed relation: the screen's two-column select is a property of that
+         * screen, not of the endpoint's published shape.
+         *
+         * `License::variation()` is a byte-identical duplicate of
+         * `productVariant()` and stays refused, so the same data has exactly one
+         * door.
+         *
+         * Deliberately NOT allowlisted: `activations` (site URLs and activation
+         * secrets), `order` and `subscription` (billing rows behind other
+         * permissions).
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `GET /licensing/licenses`, sent by LicenseTable.js — the customer column
+         * plus the product and variant titles.
+         *
+         * No select on the customer: Customer::$appends (`full_name`, `photo`,
+         * `country_name`, `formatted_address`, `user_link`) reads first_name,
+         * last_name, country, state, city, postcode and user_id. The product and
+         * variant selects the client used to send as `product:ID,post_title` and
+         * `productVariant:id,variation_title` live here now — same columns, no
+         * longer client-controlled, and applied INSIDE the relation closures so
+         * they narrow those relations rather than the licence query.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminLicenseList($query)
+        {
+        }
+        /**
+         * `with[]=customer` — a public entry point, carrying the same
+         * `customers/view` bar as the screen key.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return bool|\FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicCustomer($query)
+        {
+        }
+        /**
+         * `with[]=product` — a public entry point, carrying the same
+         * `products/view` bar as the screen key.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return bool|\FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicProduct($query)
+        {
+        }
+        /**
+         * `with[]=productVariant` — a public entry point, carrying the same
+         * `products/view` bar as the screen key.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return bool|\FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicProductVariant($query)
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
@@ -31482,6 +32633,16 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * Intentionally empty, and verified so: LicenseSiteTable.js sends no `with`
+         * at all. In particular `LicenseSite::activations()` must stay denied — it
+         * walks back to the licence keys this list deliberately does not show.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
         {
         }
         public function tabsMap(): array
@@ -31517,6 +32678,47 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * No screen key, because there is no screen: the admin table (LogTable.js)
+         * does not override `Table::with()`, so nothing in the admin sends a `with`
+         * to the activity feed at all. Inventing a context key for a context that
+         * does not exist would be an entry with no reader.
+         *
+         * PUBLIC key — `user` is the relation name a consumer asks an activity
+         * endpoint for, and it is the name the repo's own remaining consumer sends:
+         * the Phase 16 throughput guard (`tests/integration/throughput-guards.php`,
+         * `throughput-activity-feed`) materializes `$activity->user` for every row
+         * inside its query-count boundary and asserts the count does not grow from
+         * 5 rows to 25. Without an eager-load path that guard cannot pass at all —
+         * the actor would be lazily fetched per row — so the only way to drop this
+         * key is to delete the N+1 assertion, which is the gate itself.
+         *
+         * No further permission bar: the feed mounts under `AdminPolicy`, so a
+         * caller here is already a super admin. The grant is narrow anyway —
+         * `Activity::user()` selects exactly ID, display_name and user_email on the
+         * relation itself.
+         *
+         * `Activity::activity()` is a `morphTo()` and MUST NEVER be allowlisted at
+         * any depth. Its target is chosen by the `module_type` column of each row,
+         * so a single `with=activity` would hydrate whatever model the log happens
+         * to point at — orders, subscriptions, licenses — bypassing every
+         * per-model permission check this map exists to enforce.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * The actor behind a log row. No select here: `Activity::user()` already
+         * narrows itself to ID, display_name and user_email.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicUser($query)
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
@@ -31533,6 +32735,21 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * Intentionally empty. Nothing instantiates this filter: the order-bump
+         * list endpoint is Pro's OrderBumpController::index(), which builds its own
+         * OrderPromotion query and hardcodes `->with(['product_variant.product'])`.
+         * OrderBumpTable.js's `product_variant` therefore never reaches this map.
+         *
+         * If the Pro controller is ever moved onto this filter, declare
+         * `product_variant` (and its `.product` child) here — do not widen the map
+         * speculatively before that happens.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
         {
         }
         public function applyActiveViewFilter(?string $activeView = null): void
@@ -31560,6 +32777,101 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * Two tiers of key, and they answer two different questions.
+         *
+         * SCREEN keys — one per calling screen, loading exactly what that screen
+         * renders. This filter serves TWO routes with different permission
+         * baselines: `GET /orders` (`orders/view`) and `GET /customers/{id}/orders`
+         * (`customers/view`). A screen key can be re-scoped for its own screen
+         * without widening anybody else's payload, and each relation is gated
+         * INSIDE the callback rather than inheriting the route's bar.
+         *
+         * PUBLIC keys — the plain relation names an external consumer can
+         * reasonably ask an order endpoint for. `GET /orders` is a REST route with
+         * consumers outside this repo, and `with[]=customer` has always meant "give
+         * me the customer". These are first-class entry points, not aliases of the
+         * screen keys: renaming them would have silently narrowed a published
+         * response shape for everyone who was already sending them.
+         *
+         * Deliberately NOT allowlisted, at any depth: `transactions` (gateway ids,
+         * card metadata), `licenses` (`license_key` serializes verbatim),
+         * `customer.wpUser` (reaches the WordPress users row).
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `GET /orders`, sent by OrderTable.js — the line items under each row plus
+         * the customer popover.
+         *
+         * No select on any segment: OrderItem::$appends is `payment_info`,
+         * `setup_info`, `is_custom` and `variation_display_title`, which read
+         * `other_info` and walk the row's subscription data; Customer::$appends
+         * (`full_name`, `photo`, `country_name`, `formatted_address`, `user_link`)
+         * reads first_name, last_name, country, state, city, postcode and user_id;
+         * and CustomerInfoPopover.vue renders `purchase_count` plus
+         * `primary_billing_address.phone`. Narrowing the columns blanks all of that.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminOrderList($query)
+        {
+        }
+        /**
+         * `GET /customers/{id}/orders`, sent by SingleCustomer.vue — the order
+         * history on a customer's detail screen. The screen renders the line items
+         * and nothing else; the customer is already the page.
+         *
+         * No extra permission check, and that is the decision rather than an
+         * oversight: the route is gated on `customers/view` alone and the line
+         * items carry no bar of their own today. Adding `orders/view` here would
+         * silently strip the history for a role that holds `customers/view` and
+         * nothing else. If the line items ever need `orders/view`, that is a
+         * deliberate behaviour change and this screen has to be re-tested with a
+         * customers-only role.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminCustomerOrders($query)
+        {
+        }
+        /**
+         * `with[]=order_items` — a public entry point.
+         *
+         * UNGATED, deliberately. It was ungated before this allow-list existed, and
+         * the line items are the order the route already authorised. Adding a bar
+         * now would be a silent tightening hiding under a name consumers already
+         * send, which is exactly the failure mode the public tier exists to avoid.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicOrderItems($query)
+        {
+        }
+        /**
+         * `with[]=customer` and `with[]=customer.primary_billing_address` — both
+         * public entry points, both served here.
+         *
+         * One callback for the two keys because the nested path can never be
+         * allowed to reach the parent row without the parent's gate: `with('a.b')`
+         * auto-injects `a`, so a separate ungated entry for the dotted path would
+         * be a way around the check below. Loading the whole subtree from one
+         * `with()` call closes that and the clobbering problem at once.
+         *
+         * Gated: the orders route's `orders/view` says nothing about customers.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return bool|\FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicCustomer($query)
         {
         }
         public static function parseableKeys(): array
@@ -31594,6 +32906,166 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * SCREEN keys — one per calling screen. Four genuinely different screens
+         * read products and each renders a different DEPTH of the same two
+         * relations, so each gets a key it can re-scope without widening the
+         * payload for the other three. Every screen wants both `detail` and
+         * `variants`, which is why there is one key per screen rather than one per
+         * relation per screen — a second key would only ever be sent alongside the
+         * first.
+         *
+         * PUBLIC keys — `detail` and `variants` are the two relations an external
+         * consumer can reasonably ask a product endpoint for, and `GET /products`
+         * is a public REST route where they were accepted values already. They give
+         * the plain, unnested version; the screens' deeper subtrees are properties
+         * of those screens, not of the endpoint's published shape.
+         *
+         * `GET /products` requires `products/view`, and every callback re-states
+         * that same bar rather than inheriting it — the map is also reachable from
+         * `BulkProductUpdateService` and from any add-on that builds the filter
+         * directly, where no route ran.
+         *
+         * Deliberately NOT allowlisted: `downloadable_files` (protected file
+         * paths), `licensesMeta`, `integrations`, `postmeta` and `wpTerms` (raw
+         * meta / taxonomy joins that leak far more than the catalogue),
+         * `orderItems`, and every dotted path.
+         *
+         * `categories` used to be on this map and is gone: three clients requested
+         * it and none of them read it — a three-join hasMany per row for a value
+         * nothing renders.
+         *
+         * No entry declares a select, and that is deliberate. `Product::$appends`
+         * carries `thumbnail`, which reads `detail->featured_media` — itself a
+         * `ProductDetail` append backed by the `galleryImage` relation.
+         * `ProductVariation::$appends` carries `thumbnail`, which lazy-loads `media`
+         * keyed on the variant `id`, and `ProductVariation::booted()` appends
+         * `formatted_total` from `item_price` to every retrieved row. Dropping `id`
+         * blanks every picker thumbnail; dropping `post_id` returns an empty
+         * relation outright.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `utils/table-new/ProductTable.js` — the admin product list. Renders the
+         * detail thumbnail and the min/max price, and the stock column sums
+         * `variants[].available` and reads `manage_stock` per row.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder|bool
+         */
+        protected function adminProductList($query)
+        {
+        }
+        /**
+         * The Gutenberg product pickers — `BlockEditor/Components/SearchableSelect.jsx`
+         * and `BlockEditor/Components/ProductPicker/{ProductDropdownPicker,
+         * ProductSelector,VariationSelector}.jsx`. They render the product
+         * thumbnail, which resolves through `detail->featured_media`, and they list
+         * the variation rows with a per-variant thumbnail.
+         *
+         * `media` comes down in the SAME with() call as `variants` — a later entry
+         * naming `variants.something` would otherwise inject an empty closure over
+         * `variants` and drop whatever this one constrained.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder|bool
+         */
+        protected function blockPicker($query)
+        {
+        }
+        /**
+         * `elementor/VariationSelector/SelectorModel.js` and
+         * `elementor/PricingTable/App.vue`.
+         *
+         * `detail` is loaded in its own right, not as an ORM-injected parent
+         * segment of a dotted path: without it
+         * `elementor/VariationSelector/ListItem.vue` reads
+         * `product.detail.stock_availability`, `min_price` and `max_price` as
+         * undefined and the picker goes silently blank. ListItem.vue also iterates
+         * `product.variants` and calls `model.getVariantThumbnail(variant)`, which
+         * reads `variant.thumbnail` — the append backed by `media`, loaded in one
+         * call for the clobber reason above.
+         *
+         * A separate key from `block_picker` even though the subtree matches today:
+         * either picker must be re-scopable without moving the other.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder|bool
+         */
+        protected function elementorPicker($query)
+        {
+        }
+        /**
+         * `Modules/Orders/Modals/AddProductItemModal.vue` — picking a product to add
+         * to an existing order. The whole subtree is loaded in ONE with() call so no
+         * segment can be clobbered by an empty closure from another entry.
+         *
+         * `bundleChildren` is load-bearing, not decorative: `Bits/productService.js`
+         * assigns `bundle_items = variant.bundle_children`, and the modal calls
+         * `.length` on it with no optional chaining. Dropping it is a TypeError on
+         * every bundle product, not a blank cell. That regression has already
+         * shipped once.
+         *
+         * This is also the only key that loads `detail.variants`, which is what
+         * `AttributeHelper::attachVariationDisplayTitles()` walks in
+         * `ProductController::index()` to resolve `variation_display_title`.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder|bool
+         */
+        protected function adminOrderAddProduct($query)
+        {
+        }
+        /**
+         * `with[]=detail` — a public entry point. The catalogue detail row, gated
+         * on the same `products/view` bar as every screen key: a public name is not
+         * a way around the check.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder|bool
+         */
+        protected function publicDetail($query)
+        {
+        }
+        /**
+         * `with[]=variants` — a public entry point. The variation rows, carrying
+         * the same `products/view` bar.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder|bool
+         */
+        protected function publicVariants($query)
+        {
+        }
+        /**
+         * `cartable` is sent by the Gutenberg and Elementor product pickers to hide
+         * subscription/licensed products from a one-off add-to-cart widget.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedScopes(): array
+        {
+        }
+        /**
+         * Declared `($query)` on purpose: the array request form `scopes[]=['cartable',
+         * 'anything']` would deliver that tail as `$args`, and a one-parameter
+         * callback structurally cannot see it.
+         *
+         * No permission bar here, unlike the `with` entries. `cartable` NARROWS the
+         * result set, so refusing it would return MORE rows, not fewer — a
+         * permission check on a narrowing scope is a widening bug. Access to the
+         * list itself is already gated by the route and by the `with` callbacks.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function applyCartableScope($query)
         {
         }
         //    public static function parseableKeys(): array
@@ -31641,6 +33113,80 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
+        /**
+         * `GET /taxes` mounts under `AdminPolicy` with no per-route permission, so
+         * a caller here is already a super admin and no entry on this map needs a
+         * further bar of its own.
+         *
+         * SCREEN key — `admin_tax_report` loads exactly what the report prints, and
+         * that is why it keeps the narrow `order` select: the report shows a
+         * currency, and a whole order row per line is both wasteful and more than
+         * the screen asked for.
+         *
+         * PUBLIC keys — `tax_rate` and `order` are the two relation names a
+         * consumer can reasonably ask a tax-report endpoint for. They give the
+         * plain, unnarrowed relation; the screen key's select is a property of that
+         * screen, not of the endpoint's published shape.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
+        {
+        }
+        /**
+         * `GET /taxes`, sent by TaxesTable.js — the rate the row was charged at and
+         * the order's currency.
+         *
+         * No select on `tax_rate`: the report prints the rate's country, state,
+         * postcode and name, and the advanced filter matches on the same row. The
+         * `order` select lives INSIDE the relation closure — applied to `$query` it
+         * would narrow the tax-rate query itself, which is a different table.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function adminTaxReport($query)
+        {
+        }
+        /**
+         * `with[]=tax_rate` — a public entry point. Covered by the route's own
+         * AdminPolicy, which admits nobody below a super admin.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicTaxRate($query)
+        {
+        }
+        /**
+         * `with[]=order` — a public entry point, covered by the same AdminPolicy.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function publicOrder($query)
+        {
+        }
+        /**
+         * Sent by TaxesTable.js so the tax report only counts rows whose order was
+         * actually paid.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedScopes(): array
+        {
+        }
+        /**
+         * Declared `($query)` on purpose: the array form of a `scopes` entry would
+         * otherwise hand this callback raw client arguments, and OrderTaxRate's
+         * `scopeValidOrder()` takes none.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function validOrderScope($query)
+        {
+        }
         public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
@@ -31669,6 +33215,22 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getFilterName(): string
+        {
+        }
+        /**
+         * Intentionally empty. This filter cannot receive a request `with` today:
+         * its only caller is AdvanceFilterController::getFilterOption(), which
+         * hand-builds a five-key argument array (remote_data_key, search,
+         * include_ids, limit, parent_id) and never forwards the raw request.
+         *
+         * That is the reason the map is empty, NOT an oversight — if this filter is
+         * ever refactored to take `$request->all()`, an empty map is what keeps it
+         * closed, and any relation it then needs must be added here deliberately as
+         * a context key mapped to a callable.
+         *
+         * @return array<string, callable>
+         */
+        protected function allowedWiths(): array
         {
         }
         public function applyActiveViewFilter(?string $activeView = null): void
@@ -35577,6 +37139,13 @@ namespace FluentCart\App\Services\Renderer {
         private $checkoutRenderer;
         private $cartSummaryRenderer;
         private $customer;
+        /**
+         * Memoised result of the before_payment_methods placement filter. Null until
+         * resolved; see beforePaymentMethodsPlacement() for why it is asked only once.
+         *
+         * @var string|null
+         */
+        private $paymentMethodsHookPlacement = null;
         public function __construct(\FluentCart\App\Models\Cart $cart, $config = [])
         {
         }
@@ -35593,6 +37162,24 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         private function maybePopulateFormDataFromCustomer()
+        {
+        }
+        /**
+         * Where `fluent_cart/before_payment_methods` fires in the modal.
+         *
+         * 'payment' (default) wraps the payment-method list, matching CheckoutRenderer.
+         * 'details' restores the pre-fix position in the address/shipping pane, for a
+         * store whose add-on positioned itself around that spot.
+         *
+         * Resolved ONCE per renderer and memoised. The two call sites are mutually
+         * exclusive, so the hook must fire exactly once — but that only holds if both
+         * sites agree, and a filter is free to be stateful or context-sensitive. Asking
+         * it twice would let it answer differently and either fire the hook twice or
+         * swallow it entirely. Ask once, remember the answer.
+         *
+         * @return string 'payment'|'details'
+         */
+        private function beforePaymentMethodsPlacement(): string
         {
         }
         public function renderCheckoutDetails()
