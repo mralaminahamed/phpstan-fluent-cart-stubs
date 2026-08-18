@@ -7263,6 +7263,25 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    class ProductSkuBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-sku';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null): string
+        {
+        }
+    }
     class ProductTitleBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-title';
@@ -9321,6 +9340,35 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function updateManageStock(\FluentCart\Framework\Http\Request\Request $request, $postId)
+        {
+        }
+        /**
+         * Suggest a unique SKU based on product title and optional variant title.
+         *
+         * @param \FluentCart\Framework\Http\Request\Request $request
+         * @return \WP_REST_Response
+         */
+        public function suggestSku(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        /**
+         * Generate a SKU string from a product title and optional variant title.
+         *
+         * @param string $title
+         * @param string $variantTitle
+         * @return string
+         */
+        private function generateSkuFromTitle($title, $variantTitle = '')
+        {
+        }
+        /**
+         * Ensure the SKU is unique in the database, appending a numeric suffix if needed.
+         *
+         * @param string $sku
+         * @param int|null $excludeId
+         * @return string
+         */
+        private function ensureUniqueSku($sku, $excludeId = null)
         {
         }
     }
@@ -34252,6 +34300,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderStockAvailability($wrapper_attributes = '')
+        {
+        }
+        public function renderSku($wrapper_attributes = '', $showLabel = true, $label = '', $variant = null)
         {
         }
         public function renderExcerpt()
