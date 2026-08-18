@@ -3024,7 +3024,7 @@ namespace FluentCart\Api\Resource {
          *  ];
          * @param array $params Additional parameters for the update process.
          *  $params = [
-         *          'triggerable_action'  => (string) Required. This param will help to update detail based on the specific action i.e: all_column(Triggers when  multiple columns'll update), specific_column(Triggers when specific column'll update).
+         *          'action'  => (string) Required. This param will help to update detail based on the specific action i.e: variant_modified(Triggers when variant modified which covers all mutations), change_variation_type(Triggers when variation type will change).
          *  ];
          */
         public static function update($data, $id, $params = [])
@@ -6761,6 +6761,44 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    class ExcerptBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'excerpt';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
+    class PriceRangeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'price-range';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class PricingTableBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-pricing-table';
@@ -7277,7 +7315,7 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         public static function register()
         {
         }
-        public function render(?array $viewData = null): string
+        public function render(?array $viewData = null)
         {
         }
         protected function getStyles(): array
@@ -14622,6 +14660,13 @@ namespace FluentCart\App\Models {
         protected $table = 'fct_carts';
         protected $hidden = ['order_id', 'customer_id', 'user_id'];
         /**
+         * Static cache for loaded cart data with bundle children
+         * Keyed by cart_hash (primary key)
+         *
+         * @var array
+         */
+        private static $cache = [];
+        /**
          * The attributes that are mass assignable.
          *
          * @var array
@@ -15893,6 +15938,12 @@ namespace FluentCart\App\Models {
         {
         }
         public function getStockAvailability($variationId = null)
+        {
+        }
+        public function getMinPriceAttribute()
+        {
+        }
+        public function getMaxPriceAttribute()
         {
         }
     }
@@ -33232,7 +33283,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderComparePriceWrapperEnd()
         {
         }
-        public function renderVariationComparePrice($variant, $atts = [])
+        public function renderVariationComparePrice($variant)
         {
         }
         public function renderVariantPricingWrapperStart($variant)
@@ -33268,7 +33319,7 @@ namespace FluentCart\App\Services\Renderer {
         protected function renderVariantImage($variant)
         {
         }
-        protected function renderSubscriptionInfo($variant)
+        protected function renderSubscriptionInfo($variant = null)
         {
         }
         protected function renderAttributes($atts = [])
