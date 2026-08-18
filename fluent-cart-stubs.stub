@@ -5038,6 +5038,112 @@ namespace FluentCart\App\Helpers {
         {
         }
     }
+    /**
+     * Helper for the store attribute library and per-item attribute snapshots.
+     *
+     * @package FluentCart\App\Helpers
+     *
+     * @version 1.0.0
+     */
+    class AttributeHelper
+    {
+        /**
+         * Return the store attribute library, or a single group set by slug.
+         *
+         * Loads every attribute group (with its terms) ONCE per request into a
+         * static cache, then serves all later calls from memory — so resolving
+         * variant attributes for many cart/order items never re-queries the DB.
+         *
+         * Shape — groups keyed by slug; each group carries its meta plus every term
+         * keyed by slug DIRECTLY on the group, so `color.red` resolves the term:
+         *   [
+         *     'color' => [
+         *       'title' => 'Color',
+         *       'slug'  => 'color',
+         *       'type'  => 'color',
+         *       'red'   => ['title' => 'Red',  'slug' => 'red',  'settings' => [...]],
+         *       'blue'  => ['title' => 'Blue', 'slug' => 'blue', 'settings' => [...]],
+         *     ],
+         *   ]
+         *
+         * Note: term slugs share the group array with the reserved meta keys
+         * `title`/`slug`/`type`; product attribute terms never use those slugs.
+         *
+         * @param string $attrSlug Group slug (e.g. 'color', 'size'). Empty = all.
+         * @return array Single group set, the whole library keyed by group slug when
+         *               $attrSlug is empty, or [] when the slug is not found.
+         */
+        public static function getStoreProductAttributeSet($attrSlug = '')
+        {
+        }
+        /**
+         * Build the `item_attributes` snapshot for a single cart/order line item.
+         *
+         * Stored at `other_info['item_attributes']` on cart_data items and order_items.
+         * FluentCart's own attributes are keyed `pa_{group_slug}`; the value is the
+         * term TITLE and slug is the term SLUG — frozen at the moment it is written so
+         * later renames in the attribute library never rewrite past orders. Third-party
+         * providers append their own entries (WITHOUT the `pa_` prefix) via the
+         * `fluent_cart/item_attributes` filter — they supply their own group slug as
+         * the key plus value/slug.
+         *
+         * Output shape:
+         *   [
+         *     'pa_color'             => ['value' => 'Red',  'slug' => 'red'],
+         *     'pa_size'              => ['value' => 'XS',   'slug' => 'xs'],
+         *     'fluent_booking_start' => ['value' => '2026-06-29 12:12:00', 'slug' => 'fluent_booking'],
+         *   ]
+         *
+         * @param int $variationId Product variation id (order/cart item object_id).
+         * @param int $productId   Owning product id (passed to the filter for context).
+         * @return array
+         */
+        public static function getProductItemAttributes($variationId, $productId = 0)
+        {
+        }
+        /**
+         * The store's attribute groups as a lightweight slug => label/type map.
+         *
+         * Sourced from the request-cached `getStoreProductAttributeSet()` registry,
+         * so this is only the current (live) group labels — used to resolve the
+         * display title of a frozen `pa_{slug}` snapshot entry.
+         *
+         * @return array e.g. ['color' => ['title' => 'Color', 'slug' => 'color', 'type' => 'color']]
+         */
+        public static function getMainAttributes()
+        {
+        }
+        /**
+         * Resolve a line item's stored `item_attributes` snapshot into display rows.
+         *
+         * FluentCart attributes (keyed `pa_{group_slug}`) are resolved against the
+         * live group library for their display title; the term value/slug come from
+         * the frozen snapshot. A `pa_*` entry whose group no longer exists is
+         * skipped. Third-party (un-prefixed) entries are resolved through the
+         * `fluent_cart/item_display_attr_{key}` filter so the owning plugin can
+         * shape its own label/value.
+         *
+         * @param array  $itemAttributes other_info['item_attributes'] snapshot.
+         * @param mixed  $item           Owning cart/order item (passed to filters).
+         * @param string $scope          'cart' | 'order_item' (passed to filters).
+         * @return array Keyed by attr key: ['display_title','attr_key','slug','display_value','is_system']
+         */
+        public static function getDisplayAttributes(array $itemAttributes, $item = null, $scope = 'cart')
+        {
+        }
+        /**
+         * Render a line item's attributes as a single inline string.
+         *
+         * @param array  $itemAttributes other_info['item_attributes'] snapshot.
+         * @param mixed  $item           Owning cart/order item (passed to filters).
+         * @param string $scope          'cart' | 'order_item'.
+         * @param string $separator      Glue between pairs (default ' | ').
+         * @return string e.g. "Color: Red | Size: XS"
+         */
+        public static function getDisplayAttributesString(array $itemAttributes, $item = null, $scope = 'cart', $separator = ' | ')
+        {
+        }
+    }
     class CartCheckoutHelper implements \FluentCart\Framework\Support\ArrayableInterface
     {
         private $cart;
@@ -16120,6 +16226,19 @@ namespace FluentCart\App\Models {
         public function getCartDataAttribute($data): array
         {
         }
+        /**
+         * Attach a resolved `variation_display_title` to each cart item — the cart-side
+         * mirror of OrderItem's appended accessor. Holds the labeled attribute
+         * combination ("Color: Red | Size: XS") resolved from the item's frozen
+         * other_info['item_attributes'] snapshot, falling back to the variation
+         * title when no attributes resolve.
+         *
+         * @param array $items
+         * @return array
+         */
+        protected static function appendVariationDisplayTitle(array $items): array
+        {
+        }
         public function setUtmDataAttribute($utmData)
         {
         }
@@ -17181,7 +17300,7 @@ namespace FluentCart\App\Models {
          * @var array
          */
         protected $fillable = ['order_id', 'post_id', 'fulfillment_type', 'fulfilled_quantity', 'post_title', 'title', 'object_id', 'cart_index', 'quantity', 'unit_price', 'cost', 'subtotal', 'tax_amount', 'discount_total', 'refund_total', 'line_total', 'rate', 'other_info', 'line_meta', 'referrer', 'object_type', 'payment_type', 'created_at'];
-        protected $appends = ['payment_info', 'setup_info', 'is_custom'];
+        protected $appends = ['payment_info', 'setup_info', 'is_custom', 'variation_display_title'];
         protected $casts = ['unit_price' => 'double', 'cost' => 'double', 'subtotal' => 'double', 'tax_amount' => 'double', 'shipping_charge' => 'double', 'discount_total' => 'double', 'line_total' => 'double', 'refund_total' => 'double'];
         protected static function booted()
         {
@@ -17263,6 +17382,17 @@ namespace FluentCart\App\Models {
         {
         }
         public function getDisplayTitle()
+        {
+        }
+        /**
+         * Labeled attribute combination resolved from the frozen
+         * other_info['item_attributes'] snapshot, e.g. "Color: Red | Size: XS".
+         * Falls back to the stored variation title when no attribute snapshot
+         * resolves (custom/simple items, or attrs whose groups were removed).
+         *
+         * @return string
+         */
+        public function getVariationDisplayTitleAttribute()
         {
         }
     }
@@ -21322,9 +21452,6 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public static function prepareSettingToSave($credentials, $mode = 'live')
         {
         }
-        public static function verifyAuthorizeSuccess($data)
-        {
-        }
         private static function getAccountInfo($settings, $mode)
         {
         }
@@ -21422,6 +21549,24 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         {
         }
         public function confirmPayPalSubscription()
+        {
+        }
+        protected function getPayPalSubscription($subscriptionId)
+        {
+        }
+        protected function verifyPayPalPayment($payPalReferenceId)
+        {
+        }
+        protected function hasExistingPayPalCapture(\FluentCart\App\Models\OrderTransaction $transaction, $chargeId)
+        {
+        }
+        protected function acquirePayPalCaptureLock($chargeId)
+        {
+        }
+        protected function releasePayPalCaptureLock($chargeId)
+        {
+        }
+        protected function getPayPalCaptureLockName($chargeId)
         {
         }
         public function getClientId($value, $args)
