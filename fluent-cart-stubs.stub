@@ -4894,19 +4894,18 @@ namespace FluentCart\App\Helpers {
         public static function getShippingMethods($country, $state = null, $timezone = null)
         {
         }
+        /**
+         * Get shipping methods for a specific shipping class (or General if null).
+         *
+         * @param string $country Country code
+         * @param string|null $state State code
+         * @param int|null $shippingClassId Shipping class ID (null for General zones)
+         * @return array|\WP_Error
+         */
+        public static function getShippingMethodsForClass($country, $state = null, $shippingClassId = null)
+        {
+        }
         public static function getCustomerValidatedAddresses($config, $customer): array
-        {
-        }
-        private static function resolveAddressNameFields(array $address): array
-        {
-        }
-        private static function isAddressFieldsValid(array $address, array $requirementsFields, \FluentCart\App\Services\Localization\LocalizationManager $localization): bool
-        {
-        }
-        private static function isFieldValid(string $field, $value, string $requirement, ?string $country, \FluentCart\App\Services\Localization\LocalizationManager $localization): bool
-        {
-        }
-        private static function isStateValid($value, string $requirement, ?string $country, \FluentCart\App\Services\Localization\LocalizationManager $localization): bool
         {
         }
         public static function getPrimaryAddress(array $addresses, array $config, $customer, $type = 'billing')
@@ -5166,6 +5165,21 @@ namespace FluentCart\App\Helpers {
         {
         }
         public static function calculateShippingMethodCharge(\FluentCart\App\Models\ShippingMethod $method, ?array $items = null, $returnType = 'amount')
+        {
+        }
+        /**
+         * Calculate shipping charges using the profile-based approach.
+         * Groups cart items by shipping class, finds applicable methods per profile,
+         * falls back to General zones when no class-specific zones exist.
+         *
+         * @param int $shippingMethodId The selected shipping method ID
+         * @param array $cartItems Cart items
+         * @param string $country Country code
+         * @param string|null $state State code
+         * @param string $returnType 'amount' or 'items'
+         * @return int|array
+         */
+        public static function calculateShippingByProfile($shippingMethodId, $cartItems, $country, $state = null, $returnType = 'amount')
         {
         }
         public static function resetShippingCharge()
@@ -5603,6 +5617,42 @@ namespace FluentCart\App\Helpers {
         public static function shopConfig($key = false)
         {
         }
+        /**
+         * Convert weight between units using grams as base.
+         *
+         * @param float $value
+         * @param string $fromUnit
+         * @param string $toUnit
+         * @return float
+         */
+        public static function convertWeight($value, $fromUnit, $toUnit)
+        {
+        }
+        /**
+         * Get all shipping packages from store settings.
+         *
+         * @return array
+         */
+        public static function getShippingPackages()
+        {
+        }
+        /**
+         * Get the default shipping package.
+         *
+         * @return array|null
+         */
+        public static function getDefaultPackage()
+        {
+        }
+        /**
+         * Find a shipping package by slug.
+         *
+         * @param string $slug
+         * @return array|null
+         */
+        public static function getPackageBySlug($slug)
+        {
+        }
         public static function invoiceSettings($key = false)
         {
         }
@@ -5776,7 +5826,7 @@ namespace FluentCart\App\Helpers {
         public static function getSubscriptionTermText(array $data, $asHtml = false): string
         {
         }
-        public static function getTranslatedIntervalUnit(string $unit): string
+        public static function getTranslatedIntervalUnit(string $unit, int $count = 1): string
         {
         }
         public static function generateSubscriptionInfo($otherInfo, $itemPrice): ?string
@@ -17907,21 +17957,16 @@ namespace FluentCart\App\Models {
          *
          * @var array
          */
-        protected $fillable = ['name', 'cost', 'type', 'per_item'];
+        protected $fillable = ['name', 'description', 'cost', 'type', 'per_item'];
         /**
          * The attributes that should be cast.
          *
          * @var array
          */
         protected $casts = ['cost' => 'float'];
-        /**
-         * Get products that belong to this shipping class
-         * This relationship will need to be implemented once you add the shipping_class_id to products
-         */
-        // public function products()
-        // {
-        //     return $this->hasMany(Product::class, 'shipping_class_id', 'id');
-        // }
+        public function zones(): \FluentCart\Framework\Database\Orm\Relations\HasMany
+        {
+        }
     }
     /**
      * Shipping Method Model - DB Model for Shipping Methods
@@ -17992,11 +18037,23 @@ namespace FluentCart\App\Models {
          *
          * @var array
          */
-        protected $fillable = ['name', 'region', 'meta', 'order'];
+        protected $fillable = ['name', 'region', 'order', 'shipping_class_id', 'meta'];
         /**
          * Get the shipping methods for this zone.
          */
         public function methods(): \FluentCart\Framework\Database\Orm\Relations\HasMany
+        {
+        }
+        public function shippingClass(): \FluentCart\Framework\Database\Orm\Relations\BelongsTo
+        {
+        }
+        /**
+         * Check if this zone applies to a given country.
+         *
+         * @param string $country
+         * @return bool
+         */
+        public function appliesToCountry(string $country): bool
         {
         }
         public function setMetaAttribute($value)
@@ -18006,12 +18063,6 @@ namespace FluentCart\App\Models {
         {
         }
         public function getFormattedRegionAttribute()
-        {
-        }
-        /**
-         * Check if this zone applies to a given country code.
-         */
-        public function appliesToCountry(string $country): bool
         {
         }
     }
@@ -21078,6 +21129,15 @@ namespace FluentCart\App\Modules\Shipping\Http\Controllers {
         public function destroy($id)
         {
         }
+        public function getProfile($id)
+        {
+        }
+        public function getPackages()
+        {
+        }
+        public function savePackages(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
     }
     class ShippingMethodController extends \FluentCart\App\Http\Controllers\Controller
     {
@@ -21111,18 +21171,10 @@ namespace FluentCart\App\Modules\Shipping\Http\Controllers {
         public function updateOrder(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
-        public function getCountriesByContinent()
-        {
-        }
         public function getZoneStates(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
-        /**
-         * Build meta array by merging new country selection data into existing meta.
-         * For 'selection' regions, sets countries and selection_type.
-         * For other regions, removes country selection keys but preserves any other meta.
-         */
-        private function buildMeta(array $existing, $incoming, $region): array
+        public function getCountriesByContinent()
         {
         }
     }
@@ -21380,6 +21432,12 @@ namespace FluentCart\App\Services\Filter {
          */
         public ?string $userTz = null;
         /**
+         * The resolved SavedView model when active_view is a saved view slug.
+         *
+         * @var SavedView|null
+         */
+        protected $activeSavedView = null;
+        /**
          * BaseFilter constructor.
          *
          * @param array $args Filtering arguments.
@@ -21435,6 +21493,8 @@ namespace FluentCart\App\Services\Filter {
         }
         /**
          * Parses and validates the accepted view.
+         * First checks static tabs; if not found, fires a filter so Pro can resolve
+         * the slug to a saved view (returns an object/array with query_params).
          *
          * @return string|null
          */
@@ -21446,7 +21506,7 @@ namespace FluentCart\App\Services\Filter {
          *
          * @return array
          */
-        protected function parseSearchGroups(): array
+        protected function parseSearchGroups(?string $json = null): array
         {
         }
         /**
@@ -21464,6 +21524,18 @@ namespace FluentCart\App\Services\Filter {
          * @return \FluentCart\Framework\Database\Orm\Builder
          */
         public function buildQuery(): \FluentCart\Framework\Database\Orm\Builder
+        {
+        }
+        protected function applyCurrentFilterLayer(): void
+        {
+        }
+        protected function applySavedViewFilter(?array $params = null): void
+        {
+        }
+        protected function getSavedViewParams(): array
+        {
+        }
+        protected function getSavedViewSearchGroups(array $params): array
         {
         }
         /**
@@ -21503,7 +21575,7 @@ namespace FluentCart\App\Services\Filter {
          *
          * @return void
          */
-        protected function applyAdvancedFilter()
+        protected function applyAdvancedFilter(?array $searchGroups = null): void
         {
         }
         private function handleAdvanceFilter($query, $filterItem)
@@ -21523,8 +21595,8 @@ namespace FluentCart\App\Services\Filter {
          *
          * @return void
          */
-        abstract public function applySimpleFilter();
-        abstract public function applyActiveViewFilter();
+        abstract public function applySimpleFilter(?string $search = null): void;
+        abstract public function applyActiveViewFilter(?string $activeView = null): void;
         /**
          * Return the maps of [table-column, tabs-name]
          *
@@ -21556,7 +21628,7 @@ namespace FluentCart\App\Services\Filter {
         public function getSimpleOperators($except = []): array
         {
         }
-        public function applySimpleOperatorFilter(): bool
+        public function applySimpleOperatorFilter(?string $search = null): bool
         {
         }
         public function shouldApplyMatchFilter(string $operator): bool
@@ -21644,7 +21716,7 @@ namespace FluentCart\App\Services\Filter {
 namespace FluentCart\App\Modules\Shipping\Services\Filter {
     class ShippingClassFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -21656,7 +21728,7 @@ namespace FluentCart\App\Modules\Shipping\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getAdvanceFilterOptions(): ?array
@@ -21665,7 +21737,7 @@ namespace FluentCart\App\Modules\Shipping\Services\Filter {
     }
     class ShippingZoneFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function getModel(): string
@@ -21680,7 +21752,7 @@ namespace FluentCart\App\Modules\Shipping\Services\Filter {
         public static function getAdvanceFilterOptions(): ?array
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public function tabsMap(): array
@@ -21704,6 +21776,9 @@ namespace FluentCart\App\Modules\Shipping {
         {
         }
         private function getRecalculatedCartDataArr($fillData, $cart)
+        {
+        }
+        private function cartHasShippingClasses($cartData)
         {
         }
     }
@@ -22028,7 +22103,7 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
 namespace FluentCart\App\Modules\Subscriptions\Services\Filter {
     class SubscriptionFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -22040,7 +22115,7 @@ namespace FluentCart\App\Modules\Subscriptions\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSearchableFields(): array
@@ -25800,7 +25875,7 @@ namespace FluentCart\App\Services\FileSystem {
 namespace FluentCart\App\Services\Filter {
     class CouponFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25812,13 +25887,13 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
     }
     class CustomerFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25830,7 +25905,7 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSearchableFields(): array
@@ -25848,7 +25923,7 @@ namespace FluentCart\App\Services\Filter {
     }
     class LabelFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25860,7 +25935,7 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSelectFilterOptions(array $args): array
@@ -25875,7 +25950,7 @@ namespace FluentCart\App\Services\Filter {
     }
     class LicenseFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25887,7 +25962,7 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSearchableFields(): array
@@ -25899,7 +25974,7 @@ namespace FluentCart\App\Services\Filter {
     }
     class LogFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25911,13 +25986,13 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
     }
     class OrderBumpFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25929,7 +26004,7 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSearchableFields(): array
@@ -25941,7 +26016,10 @@ namespace FluentCart\App\Services\Filter {
     }
     class OrderFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        protected static function statusFilterKeys(): array
+        {
+        }
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25956,7 +26034,7 @@ namespace FluentCart\App\Services\Filter {
         public static function parseableKeys(): array
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSearchableFields(): array
@@ -25972,7 +26050,7 @@ namespace FluentCart\App\Services\Filter {
     class ProductFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
         public string $defaultSortBy = "ID";
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -25991,7 +26069,7 @@ namespace FluentCart\App\Services\Filter {
         //            ['payment_statuses', 'order_statuses', 'shipping_statuses']
         //        );
         //    }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getSearchableFields(): array
@@ -26017,7 +26095,7 @@ namespace FluentCart\App\Services\Filter {
     }
     class TaxFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         public function tabsMap(): array
@@ -26029,7 +26107,7 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function advanceFilterOptions(): array
@@ -26044,7 +26122,7 @@ namespace FluentCart\App\Services\Filter {
     }
     class VariationFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
-        public function applySimpleFilter()
+        public function applySimpleFilter(?string $search = null): void
         {
         }
         protected function applyMustLoadIds()
@@ -26059,7 +26137,7 @@ namespace FluentCart\App\Services\Filter {
         public static function getFilterName(): string
         {
         }
-        public function applyActiveViewFilter()
+        public function applyActiveViewFilter(?string $activeView = null): void
         {
         }
         public static function getTreeFilterOptions(array $args): array
@@ -35075,6 +35153,13 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderShippingOptions()
+        {
+        }
+        /**
+         * Get available shipping methods considering cart's shipping classes.
+         * This is used by the frontend to display profile-aware methods.
+         */
+        public function getProfileAwareShippingMethods($countryCode, $stateCode)
         {
         }
         public function renderPaymentMethods($atts = [])
