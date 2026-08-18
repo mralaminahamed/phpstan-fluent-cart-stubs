@@ -1543,6 +1543,9 @@ namespace FluentCart\Api\Resource {
         public static function getCurrentCustomer(bool $createIfNotExists = false): ?object
         {
         }
+        private static function resolveCustomerName(array $data): array
+        {
+        }
         private static function updateUser($data, $userId)
         {
         }
@@ -3331,9 +3334,6 @@ namespace FluentCart\Api\Resource {
         public static function delete($postId, $params = [])
         {
         }
-        public static function setThumbnail($productId, $data = [])
-        {
-        }
         /**
          *
          * @param $productId
@@ -3585,7 +3585,16 @@ namespace FluentCart\Api\Resource {
          * @param int $id The ID of the post.
          *
          */
-        public static function getSimilarProducts($id, $asArray = true)
+        public static function getSimilarProducts($id, $asArray = true, $config = [])
+        {
+        }
+        private static function applyPriceOrdering(string $orderDir): \Closure
+        {
+        }
+        private static function buildTaxQuery($productId, $postType, $relatedBy): ?array
+        {
+        }
+        private static function parseOrderBy(string $orderBy): array
         {
         }
         public static function create($data, $params = [])
@@ -3703,7 +3712,7 @@ namespace FluentCart\Api\Sanitizer {
         public static function getDefaultSanitizerMap(): array
         {
         }
-        public static function sanitize(array $data, array $sanitizeMap = null): array
+        public static function sanitize(array $data, ?array $sanitizeMap = null): array
         {
         }
     }
@@ -4757,6 +4766,39 @@ namespace FluentCart\App\Events\Subscription {
         {
         }
     }
+    class SubscriptionValidityExpired extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/subscription_expired_validity';
+        protected array $listeners = [];
+        /**
+         * @var $subscription Subscription
+         */
+        public \FluentCart\App\Models\Subscription $subscription;
+        /**
+         * @var $customer Customer|null
+         */
+        public ?\FluentCart\App\Models\Customer $customer;
+        /**
+         * @var $order Order|null
+         */
+        public ?\FluentCart\App\Models\Order $order;
+        public string $reason;
+        public function __construct(\FluentCart\App\Models\Subscription $subscription, $order = null, $customer = null, $reason = '')
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        /**
+         * @return \FluentCart\App\Models\Subscription
+         */
+        public function getActivityEventModel()
+        {
+        }
+        public function shouldCreateActivity(): bool
+        {
+        }
+    }
 }
 namespace FluentCart\App\Events {
     class UserCreated extends \FluentCart\App\Events\EventDispatcher
@@ -5784,6 +5826,17 @@ namespace FluentCart\App\Helpers {
         public static function isAdminUser(): bool
         {
         }
+        /**
+         * Convert string/boolean to actual boolean value.
+         * Handles shortcode string attributes like "true"/"false"
+         *
+         * @param mixed $value The value to convert to boolean
+         * @param bool $default Default value if conversion fails
+         * @return bool The boolean result
+         */
+        public static function toBool($value, bool $default = false): bool
+        {
+        }
     }
     class OrderItemHelper
     {
@@ -5863,6 +5916,8 @@ namespace FluentCart\App\Helpers {
         public const ORDER_ON_HOLD = 'on-hold';
         public const ORDER_CANCELED = 'canceled';
         public const ORDER_FAILED = 'failed';
+        public const ORDER_MODE_TEST = 'test';
+        public const ORDER_MODE_LIVE = 'live';
         // Payment Statuses
         public const PAYMENT_PENDING = 'pending';
         public const PAYMENT_PAID = 'paid';
@@ -5896,6 +5951,8 @@ namespace FluentCart\App\Helpers {
         public const SUBSCRIPTION_FAILING = 'failing';
         public const SUBSCRIPTION_EXPIRING = 'expiring';
         public const SUBSCRIPTION_COMPLETED = 'completed';
+        public const SUBSCRIPTION_AUTHENTICATED = 'authenticated';
+        public const SUBSCRIPTION_CREATED = 'created';
         // billing interval
         public const BILLING_YEARLY = 'yearly';
         public const BILLING_HALF_YEARLY = 'half_yearly';
@@ -6535,6 +6592,17 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         public function useContext()
         {
         }
+        /**
+         * Whether to skip automatic inner block rendering in WP_Block::render().
+         *
+         * Override to return true in blocks that manually render their inner blocks
+         * in the render callback. This prevents WordPress from auto-rendering inner
+         * blocks before the callback runs (which causes double rendering and can
+         * trigger WP 6.x's empty-block script dequeue mechanism).
+         */
+        protected function skipInnerBlocks(): bool
+        {
+        }
         public function render_block($attributes, $content, $block)
         {
         }
@@ -6624,6 +6692,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout {
         {
         }
         protected function localizeData(): array
+        {
+        }
+        protected function skipInnerBlocks(): bool
         {
         }
         public function render(array $shortCodeAttribute, $block = null, $content = null): string
@@ -6802,6 +6873,25 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout\InnerBlocks {
     }
 }
 namespace FluentCart\App\Hooks\Handlers\BlockEditors {
+    class CustomerDashboardButtonBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'customer-dashboard-button';
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class CustomerProfileBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'customer-profile';
@@ -6837,25 +6927,89 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\MediaCarousel\InnerBlocks {
+    class InnerBlocks
+    {
+        use \FluentCart\Api\Contracts\CanEnqueue;
+        public static $parentBlock = 'fluent-cart/media-carousel';
+        public array $blocks = [];
+        public static function register()
+        {
+        }
+        public function getInnerBlocks(): array
+        {
+        }
+        public function renderImage($attributes, $content, $block): string
+        {
+        }
+        public function getProductFromBlockContext($block)
+        {
+        }
+        protected static function getDefaultCarouselSettings(): array
+        {
+        }
+        protected function getCarouselSettingsFromContext($block): array
+        {
+        }
+        protected function isSlideBlock($block): bool
+        {
+        }
+        public function renderMediaCarouselLoop($attributes, $content, $block): string
+        {
+        }
+        public function renderCarouselControls($attributes, $content, $block): string
+        {
+        }
+        public function renderCarouselPagination($attributes, $content, $block): string
+        {
+        }
+        protected function getLocalizationKey(): string
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function generateEnqueueSlug(): string
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\MediaCarousel {
     class MediaCarouselBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'media-carousel';
-        public function supports(): array
-        {
-        }
+        protected ?string $localizationKey = 'fluent_cart_media_carousel_block_editor_data';
         protected function getScripts(): array
         {
         }
         protected function getStyles(): array
         {
         }
+        public function init(): void
+        {
+        }
+        public function registerInnerBlocks()
+        {
+        }
         protected function localizeData(): array
         {
         }
-        public function render(array $shortCodeAttribute, $block = null)
+        public function provideContext(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null, $content = null): string
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class MiniCartBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'mini-cart';
@@ -6888,6 +7042,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         protected function localizeData(): array
+        {
+        }
+        public function useContext()
         {
         }
         public function render(array $shortCodeAttribute, $block = null)
@@ -7080,6 +7237,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         protected function localizeData(): array
         {
         }
+        protected function skipInnerBlocks(): bool
+        {
+        }
         public function render(array $shortCodeAttribute, $block = null)
         {
         }
@@ -7094,6 +7254,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         protected function localizeData(): array
+        {
+        }
+        protected function skipInnerBlocks(): bool
         {
         }
         public function render(array $shortCodeAttribute, $block = null)
@@ -7119,6 +7282,52 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\RelatedProduct\InnerBlocks {
+    class InnerBlocks
+    {
+        public static $parentBlock = 'fluent-cart/related-product';
+        private const MIN_COLUMNS = 1;
+        private const MAX_COLUMNS = 6;
+        public static function register()
+        {
+        }
+        public function getInnerBlocks(): array
+        {
+        }
+        public function renderProductTemplate($attributes, $content, $block): string
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\RelatedProduct {
+    class RelatedProductBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'related-product';
+        public function init(): void
+        {
+        }
+        public function registerInnerBlocks()
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function provideContext(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null, $content = null): string
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class SearchBarBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'fluent-products-search-bar';
@@ -7208,12 +7417,6 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp\InnerBlocks {
         public function renderProductLoop($attributes, $content, $block): string
         {
         }
-        public function renderProductCarousel1($attributes, $content, $block): string
-        {
-        }
-        public function renderProductCarousel($attributes, $content, $block): string
-        {
-        }
         public function renderProductContainer($attributes, $content, $block): string
         {
         }
@@ -7287,6 +7490,22 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         public function supports(): array
         {
         }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
+    class StoreLogoBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'store-logo';
         protected function getScripts(): array
         {
         }
@@ -7655,6 +7874,16 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes\Checkout {
     }
 }
 namespace FluentCart\App\Hooks\Handlers\ShortCodes {
+    class CustomerDashboardButtonShortcode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_customer_dashboard_button';
+        protected function getStyles(): array
+        {
+        }
+        public function render(?array $viewData = null)
+        {
+        }
+    }
     class CustomerLoginHandler extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
     {
         const SHORT_CODE = 'fluent_cart_login_form';
@@ -7798,6 +8027,20 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         {
         }
     }
+    class ProductImageShortCode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_product_image';
+        public function render(?array $viewData = null)
+        {
+        }
+    }
+    class ProductTitleShortCode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_product_title';
+        public function render(?array $viewData = null)
+        {
+        }
+    }
     class ReceiptHandler
     {
         protected string $slug = '';
@@ -7922,6 +8165,13 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         {
         }
     }
+    class StoreLogoShortCode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_store_logo';
+        public function render(?array $viewData = null)
+        {
+        }
+    }
 }
 namespace FluentCart\App\Hooks\Handlers {
     class TemplateLoader
@@ -8003,6 +8253,7 @@ namespace FluentCart\App\Hooks\Scheduler\AutoSchedules {
     }
     class HourlyScheduler
     {
+        private $startTimeStamp = null;
         public function register(): void
         {
         }
@@ -8010,6 +8261,9 @@ namespace FluentCart\App\Hooks\Scheduler\AutoSchedules {
         {
         }
         private function removeCompleteTasks()
+        {
+        }
+        private function checkAndExpireSubscriptions()
         {
         }
     }
@@ -8436,6 +8690,9 @@ namespace FluentCart\App\Http\Controllers {
         public function detachCustomer(\FluentCart\Framework\Http\Request\Request $request, $customerId): \WP_REST_Response
         {
         }
+        public function recalculateLtv(\FluentCart\Framework\Http\Request\Request $request, $customerId): \WP_REST_Response
+        {
+        }
     }
     class DashboardController extends \FluentCart\App\Http\Controllers\Controller
     {
@@ -8751,6 +9008,12 @@ namespace FluentCart\App\Http\Controllers {
         public function activatePluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
+        public function checkPluginAddonUpdate(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
+        public function updatePluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
         private function getRegisteredPluginAddons(): array
         {
         }
@@ -8820,7 +9083,7 @@ namespace FluentCart\App\Http\Controllers {
         /**
          * Delete order related data (transactions, items, meta, addresses, orders)
          */
-        private function deleteOrderRelatedData(array $orderIds, $type = 'renewal')
+        private function deleteOrderRelatedData(array $orderIds, $type = 'renewal', $isTestMode = false)
         {
         }
         public function getDetails($orderId)
@@ -8864,6 +9127,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function acceptDispute(\FluentCart\Framework\Http\Request\Request $request, $order, $transaction)
+        {
+        }
+        public function syncOrderStatuses(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Order $order)
         {
         }
     }
@@ -8923,6 +9189,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function find(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Product $product): array
+        {
+        }
+        public function getRelatedProducts(\FluentCart\Framework\Http\Request\Request $request, $productId): \WP_REST_Response
         {
         }
         /**
@@ -8991,16 +9260,6 @@ namespace FluentCart\App\Http\Controllers {
         public function getPricingWidgets(\FluentCart\Framework\Http\Request\Request $request, $productId)
         {
         }
-        /**
-         * Set thumbnail from a product gallery
-         *
-         * @param \FluentCart\Framework\Http\Request\Request $request
-         * @param $variantId
-         * @return mixed
-         */
-        public function setProductImage(\FluentCart\Framework\Http\Request\Request $request, $variantId)
-        {
-        }
         public function updateProductDetail(\FluentCart\Framework\Http\Request\Request $request, $id)
         {
         }
@@ -9056,6 +9315,12 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function createDummyProducts(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function updateInventory(\FluentCart\Framework\Http\Request\Request $request, $postId, $variantId)
+        {
+        }
+        public function updateManageStock(\FluentCart\Framework\Http\Request\Request $request, $postId)
         {
         }
     }
@@ -9627,12 +9892,6 @@ namespace FluentCart\App\Http\Policies {
         {
         }
     }
-    class FilePolicy extends \FluentCart\Framework\Foundation\Policy
-    {
-        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-    }
     class IntegrationPolicy extends \FluentCart\App\Http\Policies\Policy
     {
         public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
@@ -9654,24 +9913,6 @@ namespace FluentCart\App\Http\Policies {
     class LabelPolicy extends \FluentCart\App\Http\Policies\Policy
     {
         public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request): bool
-        {
-        }
-    }
-    class LicensePolicy extends \FluentCart\App\Http\Policies\Policy
-    {
-        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function index(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function store(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function update(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function delete(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -9712,18 +9953,6 @@ namespace FluentCart\App\Http\Policies {
         {
         }
     }
-    class StorePolicy extends \FluentCart\App\Http\Policies\Policy
-    {
-        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function settings(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function sensitive(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-    }
     class StoreSensitivePolicy extends \FluentCart\App\Http\Policies\Policy
     {
         public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
@@ -9736,40 +9965,9 @@ namespace FluentCart\App\Http\Policies {
         {
         }
     }
-    class SubscriptionPolicy extends \FluentCart\App\Http\Policies\Policy
+    class UserPolicy extends \FluentCart\App\Http\Policies\Policy
     {
-        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function index(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function store(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function update(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function delete(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-    }
-    class UserPolicy extends \FluentCart\Framework\Foundation\Policy
-    {
-        /**
-         * Check user permission for any method
-         * @param  FluentCart\Framework\Http\Request\Request $request
-         * @return Boolean
-         */
-        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        /**
-         * Check user permission for any method
-         * @param  FluentCart\Framework\Http\Request\Request $request
-         * @return Boolean
-         */
-        public function create(\FluentCart\Framework\Http\Request\Request $request)
+        public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request): bool
         {
         }
     }
@@ -10605,15 +10803,6 @@ namespace FluentCart\App\Http\Requests {
     }
 }
 namespace FluentCart\App\Http\Routes {
-    class AjaxRoute
-    {
-        public static function register()
-        {
-        }
-        public static function callback($route, $callback)
-        {
-        }
-    }
     class WebRoutes
     {
         public static function register()
@@ -16257,6 +16446,9 @@ namespace FluentCart\App\Models {
         protected function performDuplicate(array $options = []): int
         {
         }
+        public function integrations(): \FluentCart\Framework\Database\Orm\Relations\HasMany
+        {
+        }
     }
     /**
      *  Product Details Model - DB Model for Product Details
@@ -16432,7 +16624,7 @@ namespace FluentCart\App\Models {
     {
         use \FluentCart\App\Models\Concerns\CanSearch, \FluentCart\App\Models\Concerns\CanUpdateBatch;
         protected $table = 'fct_product_variations';
-        protected $fillable = ['post_id', 'media_id', 'serial_index', 'sold_individually', 'variation_title', 'variation_identifier', 'manage_stock', 'payment_type', 'stock_status', 'backorders', 'total_stock', 'available', 'committed', 'on_hold', 'fulfillment_type', 'item_status', 'manage_cost', 'item_price', 'item_cost', 'compare_price', 'other_info', 'downloadable', 'shipping_class'];
+        protected $fillable = ['post_id', 'media_id', 'serial_index', 'sold_individually', 'variation_title', 'variation_identifier', 'sku', 'manage_stock', 'payment_type', 'stock_status', 'backorders', 'total_stock', 'available', 'committed', 'on_hold', 'fulfillment_type', 'item_status', 'manage_cost', 'item_price', 'item_cost', 'compare_price', 'other_info', 'downloadable', 'shipping_class'];
         /**
          * The attributes that should be cast.
          *
@@ -17411,6 +17603,41 @@ namespace FluentCart\App\Models {
         {
         }
         public function guessNextBillingDate($forced = false)
+        {
+        }
+        /**
+        * Check and expire subscriptions past their grace period
+        *
+        * This method is called by the hourly scheduler to automatically expire
+        * subscriptions that have missed payments and are past their grace period.
+        *
+        * Processes all candidates in batches to avoid memory issues.
+        * The query example works as follows:
+        * SELECT * FROM subscriptions WHERE
+               status IN ('active', 'trialing', 'canceled')
+               AND next_billing_date IS NOT NULL
+               AND id > 0                          -- last processed ID for batch cursor
+               AND next_billing_date < DATE_SUB(
+                   '2026-02-17 10:00:00',
+                   INTERVAL (
+                       CASE billing_interval
+                           WHEN 'daily'       THEN 1
+                           WHEN 'weekly'      THEN 3
+                           WHEN 'monthly'     THEN 7
+                           WHEN 'quarterly'   THEN 15
+                           WHEN 'half_yearly' THEN 15
+                           WHEN 'yearly'      THEN 15
+                           ELSE 7
+                       END
+                   ) DAY
+               )
+           ORDER BY id ASC
+           LIMIT 100;
+        *
+        * @param int $batchSize Number of subscriptions to process per batch
+        * @return array Statistics about processed subscriptions
+        */
+        public static function checkAndExpireSubscriptions($batchSize = 100)
         {
         }
     }
@@ -19197,6 +19424,42 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
         {
         }
     }
+    class FlutterwaveAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'flutterwave-for-fluent-cart';
+        private $addonFile = 'flutterwave-for-fluent-cart/flutterwave-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        /**
+         * Get Flutterwave-specific notice configuration
+         */
+        private function getNoticeConfig()
+        {
+        }
+        /**
+         * Generate addon notice message
+         */
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
     class MercadoPagoAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         public array $supportedFeatures = [];
@@ -20698,6 +20961,12 @@ namespace FluentCart\App\Services\Filter {
         public function applySimpleOperatorFilter(): bool
         {
         }
+        public function shouldApplyMatchFilter(string $operator): bool
+        {
+        }
+        public function applyMatchFilter(\FluentCart\Framework\Database\Orm\Builder $query, string $column, $value, string $operator = '='): \FluentCart\Framework\Database\Orm\Builder
+        {
+        }
         public function centColumns(): array
         {
         }
@@ -20837,6 +21106,35 @@ namespace FluentCart\App\Modules\Shipping {
         {
         }
         private function getRecalculatedCartDataArr($fillData, $cart)
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\StockManagement {
+    class StockManagement
+    {
+        public function register($app)
+        {
+        }
+        public function filterShopQuery($query, $params)
+        {
+        }
+        public function manageStockOnOrderCreated($event)
+        {
+        }
+        public function manageStockOnShippingStatusChanged($event)
+        {
+        }
+        public function manageStockOnOrderStatusChanged($event)
+        {
+        }
+        public function manageStockOnOrderRefunded($data)
+        {
+        }
+        public function manageStockOnOrderPaid($event)
+        {
+        }
+        public function manageStockOnOrderUpdated($event)
         {
         }
     }
@@ -22918,6 +23216,36 @@ namespace FluentCart\App\Services\Coupon {
         {
         }
         public function apply(\FluentCart\App\Models\Coupon $coupon)
+        {
+        }
+        private function checkCanUseCoupon(\FluentCart\App\Models\Coupon $coupon, array $cartItems)
+        {
+        }
+        private function filterApplicableItems(array $cartItems, \FluentCart\App\Models\Coupon $coupon)
+        {
+        }
+        private function calculateItemsSubtotal(array $items)
+        {
+        }
+        private function calculateExistingCouponDiscount(array $items)
+        {
+        }
+        private function calculateDiscountPercent(\FluentCart\App\Models\Coupon $coupon, $totalAfterDiscount)
+        {
+        }
+        private function applyDiscountToItems(array $items, $percent, \FluentCart\App\Models\Coupon $coupon)
+        {
+        }
+        private function correctFixedCouponRounding(array $items, \FluentCart\App\Models\Coupon $coupon, $couponDiscountTotal)
+        {
+        }
+        private function mergeValidatedItems(array $cartItems, array $validatedItems)
+        {
+        }
+        private function updateItemTotals(array $cartItems)
+        {
+        }
+        private function getItemEffectiveSubtotal(array $item)
         {
         }
         public function saveCart()
@@ -32941,6 +33269,9 @@ namespace FluentCart\App\Services\Payments {
         public static function checkTrailDaysLoopHole($subscription, $trialDays)
         {
         }
+        public static function getSubscriptionsGracePeriodDays()
+        {
+        }
     }
 }
 namespace FluentCart\App\Services\Permission {
@@ -33016,45 +33347,18 @@ namespace FluentCart\App\Services {
 namespace FluentCart\App\Services\PluginInstaller {
     class AddonManager
     {
-        public function installAddon($sourceType, $sourceLink, $pluginSlug)
+        public function installAddon($sourceType, $sourceLink, $pluginSlug, $path = 'zipball_url')
         {
         }
         public function activateAddon($pluginFile)
         {
         }
-        public function getAddonStatus($pluginSlug, $pluginFile)
-        {
-        }
-    }
-    class BackgroundInstaller
-    {
-        public function installPlugin($pluginSlug)
-        {
-        }
-        private function backgroundInstaller($plugin_to_install)
-        {
-        }
-        public function installFromGithub($githubUrl, $pluginSlug)
-        {
-        }
-        private function getLatestReleaseDownloadUrl($releasesUrl)
-        {
-        }
-    }
-    class PaymentAddonManager
-    {
         public static function getAddonStatus($pluginSlug, $pluginFile)
-        {
-        }
-        public function installAddon($sourceType, $sourceLink, $pluginSlug)
-        {
-        }
-        public function activateAddon($pluginFile)
         {
         }
         /**
          * Check for updates based on source type
-         * 
+         *
          * @param string $sourceType Source type (github, wordpress, other)
          * @param string $sourceLink Source URL (for github, other sources)
          * @param string $pluginFile Plugin file path
@@ -33066,7 +33370,7 @@ namespace FluentCart\App\Services\PluginInstaller {
         }
         /**
          * Check for updates from GitHub
-         * 
+         *
          * @param string $sourceLink releases/latest URL
          * @param string $currentVersion Current plugin version
          * @return array|\WP_Error
@@ -33074,25 +33378,39 @@ namespace FluentCart\App\Services\PluginInstaller {
         private function checkUpdateFromGitHub($sourceLink, $currentVersion)
         {
         }
+        /**
+         * Check for updates from WordPress.org
+         *
+         * @param string $pluginFile Plugin file path
+         * @param string $currentVersion Current plugin version
+         * @return array|\WP_Error
+         */
         private function checkUpdateFromWordPress($pluginFile, $currentVersion)
         {
         }
         /**
          * Check for updates from other sources (placeholder)
-         * 
+         *
          * @param string $sourceType Source type
+         * @param string $sourceLink Source link
          * @param string $currentVersion Current plugin version
          * @return array|\WP_Error
          */
         private function checkUpdateFromOther($sourceType, $sourceLink, $currentVersion)
         {
         }
+        /**
+         * Get latest version info from GitHub
+         *
+         * @param string $releasesUrl GitHub releases URL
+         * @return array|\WP_Error
+         */
         private function getLatestGitHubVersion($releasesUrl)
         {
         }
         /**
          * Update addon based on source type
-         * 
+         *
          * @param string $sourceType Source type (github, wordpress, other)
          * @param string $sourceLink Source URL (for github)
          * @param string $pluginSlug Plugin slug
@@ -33102,15 +33420,53 @@ namespace FluentCart\App\Services\PluginInstaller {
         public function updateAddon($sourceType, $sourceLink, $pluginSlug, $pluginFile)
         {
         }
+        /**
+         * Update addon from GitHub
+         *
+         * @param string $sourceLink GitHub releases URL
+         * @param string $pluginSlug Plugin slug
+         * @param string $pluginFile Plugin file path
+         * @return bool|\WP_Error
+         */
         private function updateFromGitHub($sourceLink, $pluginSlug, $pluginFile)
         {
         }
+        /**
+         * Update addon from WordPress.org
+         *
+         * @param string $pluginFile Plugin file path
+         * @return bool|\WP_Error
+         */
         private function updateFromWordPress($pluginFile)
         {
         }
+        /**
+         * Update addon from other sources (placeholder)
+         *
+         * @param string $sourceType Source type
+         * @return \WP_Error
+         */
         private function updateFromOther($sourceType)
         {
         }
+    }
+    class BackgroundInstaller
+    {
+        public function installPlugin($pluginSlug)
+        {
+        }
+        private function backgroundInstaller($plugin_to_install)
+        {
+        }
+        public function installFromGithub($githubUrl, $pluginSlug, $path = 'zipball_url')
+        {
+        }
+        private function getLatestReleaseDownloadUrl($releasesUrl, $path = 'zipball_url')
+        {
+        }
+    }
+    class PaymentAddonManager extends \FluentCart\App\Services\PluginInstaller\AddonManager
+    {
     }
 }
 namespace FluentCart\App\Services {
@@ -33147,14 +33503,14 @@ namespace FluentCart\App\Services {
         {
         }
     }
-    class RateLimitter
+    class RateLimiter
     {
         public static function isActive()
         {
         }
         /**
          * Checks if the action identified by $identifier is being spammed. This will only work if an external object cache is enabled.
-         * Usage: FluentCart\App\Services\RateLimitter::isSpamming('checkout_attempt', 5, 60); // allows 5 attempts per 60 seconds
+         * Usage: FluentCart\App\Services\RateLimiter::isSpamming('checkout_attempt', 5, 60); // allows 5 attempts per 60 seconds
          *
          * @param $identifier string A unique identifier for the action being rate limited. For example: checkout_attempt
          * @param $limit Number of allowed attempts within the time window
@@ -33202,6 +33558,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderAddAddressForm()
+        {
+        }
+        public function renderNameFields()
         {
         }
     }
@@ -33382,6 +33741,12 @@ namespace FluentCart\App\Services\Renderer {
     }
     class CheckoutFieldsSchema
     {
+        public static function titleMap(): array
+        {
+        }
+        public static function typeMap(): array
+        {
+        }
         public static function getNameEmailFieldsSchema($cart = null, $scope = 'render')
         {
         }
@@ -33407,6 +33772,18 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public static function getTermsText()
+        {
+        }
+        public static function isFirstNameEnabled(): bool
+        {
+        }
+        public static function isLastNameEnabled(): bool
+        {
+        }
+        public static function isLastNameRequired(): bool
+        {
+        }
+        public static function isFullNameRequired(): bool
         {
         }
     }
@@ -33483,6 +33860,21 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         private function renderSummaryFragment()
+        {
+        }
+    }
+    class CustomerDashboardButtonRenderer
+    {
+        public function render(array $atts = []): void
+        {
+        }
+        protected function renderButton($atts = []): void
+        {
+        }
+        protected function getUserIcon(): string
+        {
+        }
+        protected function renderAttributes($atts = []): void
         {
         }
     }
@@ -33815,6 +34207,8 @@ namespace FluentCart\App\Services\Renderer {
         protected $viewType = '';
         protected $columnType = '';
         protected $defaultVariationId = '';
+        protected $defaultGalleryImageId = 0;
+        protected $galleryActiveSet = false;
         protected $paymentTypes = [];
         protected $variantsByPaymentTypes = [];
         protected $activeTab = 'onetime';
@@ -33842,19 +34236,16 @@ namespace FluentCart\App\Services\Renderer {
         public function renderVariationDisplay($atts = [])
         {
         }
-        public function renderGalleryCarousel(array $carouselSettings = [])
-        {
-        }
-        public function renderCarousel($args = [])
-        {
-        }
         public function renderGalleryThumb()
         {
         }
-        public function renderGalleryThumbControls()
+        public function renderGalleryThumbControls($maxThumbnails = null)
         {
         }
-        public function renderGalleryThumbControl()
+        public function renderGalleryThumbControl($maxThumbnails = null)
+        {
+        }
+        public function renderGallerySeeMoreButton($remainingCount)
         {
         }
         public function renderGalleryThumbControlButton($item, $imageId)
@@ -34284,6 +34675,37 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderPerPageSelector()
+        {
+        }
+    }
+    class StoreLogoRenderer
+    {
+        protected $storeSettings;
+        public function __construct()
+        {
+        }
+        public function getStoreLogo(): string
+        {
+        }
+        public function getStoreName(): string
+        {
+        }
+        public function render(array $atts = []): void
+        {
+        }
+        protected function renderWithLink(array $atts): void
+        {
+        }
+        protected function renderWithoutLink(array $atts): void
+        {
+        }
+        protected function renderLogoContent(array $atts): void
+        {
+        }
+        protected function renderImage(array $atts): void
+        {
+        }
+        protected function renderTextFallback(string $storeName): void
         {
         }
     }
