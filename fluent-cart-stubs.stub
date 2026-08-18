@@ -5776,7 +5776,7 @@ namespace FluentCart\App\Helpers {
         public static function getSubscriptionTermText(array $data, $asHtml = false): string
         {
         }
-        public static function getTranslatedIntervalUnit(string $unit, int $count = 1): string
+        public static function getTranslatedIntervalUnit(string $unit): string
         {
         }
         public static function generateSubscriptionInfo($otherInfo, $itemPrice): ?string
@@ -16464,7 +16464,10 @@ namespace FluentCart\App\Models {
         public function getDownloadsById($orderId): array
         {
         }
-        public function getReceiptUrl()
+        public function getReceiptViewUrl()
+        {
+        }
+        public function getReceiptDownloadUrl()
         {
         }
         public function addLog($title, $description = '', $type = 'info', $by = '')
@@ -18123,6 +18126,9 @@ namespace FluentCart\App\Models {
         {
         }
         public function updateMeta($metaKey, $metaValue)
+        {
+        }
+        public function deleteMeta($metaKey)
         {
         }
         public function getLatestTransaction()
@@ -21985,9 +21991,6 @@ namespace FluentCart\App\Modules\Subscriptions\Http\Handlers {
         public function register()
         {
         }
-        public function addSubscriptionAdminMenu($items, $args)
-        {
-        }
     }
 }
 namespace FluentCart\App\Modules\Subscriptions\Http\Policies {
@@ -22171,6 +22174,9 @@ namespace FluentCart\App\Modules\Tax {
         {
         }
         public function getSettings()
+        {
+        }
+        public function isEnabled()
         {
         }
         public function calculateCartTax($fillData)
@@ -22895,6 +22901,9 @@ namespace FluentCart\App\Modules\Turnstile {
          * This should ALWAYS work since wp_footer fires on every page
          */
         public function injectWidgetViaFooter()
+        {
+        }
+        private function isCheckoutContext()
         {
         }
         /**
@@ -33801,6 +33810,9 @@ namespace FluentCart\App\Services {
         public static function transformTransaction(\FluentCart\App\Models\OrderTransaction $transaction)
         {
         }
+        public static function canGenerateReceiptPdf(): bool
+        {
+        }
     }
     class OrdersQuery
     {
@@ -33940,34 +33952,6 @@ namespace FluentCart\App\Services\PDF {
          * Serialize blocks array to Gutenberg block comment format.
          */
         public static function blocksToContent(array $blocks): string
-        {
-        }
-    }
-    class OrderReceiptPdfService
-    {
-        /**
-         * Generate a PDF receipt for the given order.
-         *
-         * @param \FluentCart\App\Models\Order $order Order model with relations loaded
-         * @return string|null Absolute path to the generated temp PDF file, or null on failure
-         */
-        public function generateReceiptPdf(\FluentCart\App\Models\Order $order, string $templateId = 'order_receipt'): ?string
-        {
-        }
-        /**
-         * Parse Gutenberg block content to HTML for PDF rendering.
-         *
-         * Dynamic blocks (fluent-cart/* PDF blocks) are rendered server-side via
-         * render_block() so their render() methods generate HTML from attributes.
-         * Static blocks (core/html, etc.) use innerHTML directly.
-         */
-        private function parseBlocksToHtml(string $content): string
-        {
-        }
-        /**
-         * Wrap parsed block HTML in a simple document structure for PDF rendering.
-         */
-        private function wrapHtmlForPdf(string $body): string
         {
         }
     }
@@ -35222,6 +35206,9 @@ namespace FluentCart\App\Services\Renderer {
         public function renderCheckoutSummary()
         {
         }
+        public function renderPaymentTypeInfo()
+        {
+        }
         public function renderPromoCode()
         {
         }
@@ -35468,6 +35455,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function render()
+        {
+        }
+        public function renderProductMeta()
         {
         }
         public function renderBuySectionWrapperStart()
