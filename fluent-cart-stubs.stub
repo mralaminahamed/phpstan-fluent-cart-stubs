@@ -19397,7 +19397,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
         protected function renderFeatureItem($text, $mode = 'light')
         {
         }
-        protected function renderInstallButton($addonSlug, $addonFile, $addonSource, $mode = 'light')
+        protected function renderInstallButton($addonSlug, $addonFile, $addonSource, $repoLink, $mode = 'light')
         {
         }
         protected function renderActivateButton($addonFile, $mode = 'light')
@@ -33415,7 +33415,7 @@ namespace FluentCart\App\Services\PluginInstaller {
          * @param string $sourceLink Source URL (for github)
          * @param string $pluginSlug Plugin slug
          * @param string $pluginFile Plugin file path
-         * @return bool|\WP_Error
+         * @return bool|\WP_Error|array
          */
         public function updateAddon($sourceType, $sourceLink, $pluginSlug, $pluginFile)
         {
@@ -33428,9 +33428,6 @@ namespace FluentCart\App\Services\PluginInstaller {
          * @param string $pluginFile Plugin file path
          * @return bool|\WP_Error
          */
-        private function updateFromGitHub($sourceLink, $pluginSlug, $pluginFile)
-        {
-        }
         /**
          * Update addon from WordPress.org
          *
@@ -33459,9 +33456,6 @@ namespace FluentCart\App\Services\PluginInstaller {
         {
         }
         public function installFromGithub($githubUrl, $pluginSlug, $path = 'zipball_url')
-        {
-        }
-        private function getLatestReleaseDownloadUrl($releasesUrl, $path = 'zipball_url')
         {
         }
     }
