@@ -818,7 +818,7 @@ namespace FluentCart\Api {
          *
          * All active payment methods
          */
-        public static function getActiveMethodInstance($checkCustomSupport = false): array
+        public static function getActiveMethodInstance($cart = null): array
         {
         }
         public static function getActiveMeta(): array
@@ -17989,7 +17989,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     class PayPal extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'paypal';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method', 'dispute_handler'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method', 'dispute_handler', 'subscriptions'];
         public function __construct()
         {
         }
@@ -18825,7 +18825,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     class Stripe extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'stripe';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method', 'dispute_handler'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method', 'dispute_handler', 'subscriptions'];
         public \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings $settings;
         public function __construct()
         {
@@ -40564,6 +40564,15 @@ namespace FluentCart\App\Services\Renderer {
         public static function getFieldsSettings()
         {
         }
+        public static function isTermsRequired(): bool
+        {
+        }
+        public static function isTermsVisible(): bool
+        {
+        }
+        public static function getTermsText()
+        {
+        }
     }
     class CheckoutRenderer
     {
@@ -40580,7 +40589,7 @@ namespace FluentCart\App\Services\Renderer {
         public function render($config = [])
         {
         }
-        public function getFragment($framgemntName)
+        public function getFragment($fragmentName)
         {
         }
         public function wrapperStart()
@@ -40623,6 +40632,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         private function maybeRearrangeAddressFields($fields)
+        {
+        }
+        public function agreeTerms()
         {
         }
         private function renderSummaryFragment()
