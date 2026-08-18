@@ -4766,6 +4766,23 @@ namespace FluentCart\App\Events\Subscription {
         {
         }
     }
+    class SubscriptionReactivated extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/subscription_reactivated';
+        protected array $listeners = [];
+        public \FluentCart\App\Models\Subscription $subscription;
+        public ?\FluentCart\App\Models\Order $order;
+        public ?\FluentCart\App\Models\Customer $customer;
+        public function __construct(\FluentCart\App\Models\Subscription $subscription, \FluentCart\App\Models\Order $order = null, \FluentCart\App\Models\Customer $customer = null)
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        public function getActivityEventModel()
+        {
+        }
+    }
     class SubscriptionRenewed extends \FluentCart\App\Events\EventDispatcher
     {
         public string $hook = 'fluent_cart/subscription_renewed';
@@ -5165,6 +5182,12 @@ namespace FluentCart\App\Helpers {
         {
         }
         public static function calculateShippingCharge(\FluentCart\App\Models\ProductVariation $variation, int $quantity = 1)
+        {
+        }
+        private static function itemHasFreeShipping($item): bool
+        {
+        }
+        private static function excludeFreeShippingPhysicalItems(array &$items, array &$physicalItems): void
         {
         }
         public static function calculateShippingMethodCharge(\FluentCart\App\Models\ShippingMethod $method, ?array $items = null, $returnType = 'amount')
@@ -22763,6 +22786,9 @@ namespace FluentCart\App\Modules\Templating\Bricks {
         public function preloadProductCollectionsAjax($view, $args)
         {
         }
+        public function addDynamicFieldClassesScript()
+        {
+        }
     }
     class DynamicData
     {
@@ -22936,6 +22962,42 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         public function render()
         {
         }
+        /**
+         * Normalize columns count.
+         */
+        private function normalizeColumns($columns)
+        {
+        }
+        /**
+         * Store settings in transient.
+         */
+        private function storeSettingsTransient($settings)
+        {
+        }
+        /**
+         * Build query args.
+         */
+        private function buildQueryArgs($settings, $isMainQuery, $perPage, $viewMode)
+        {
+        }
+        /**
+         * Render product loop.
+         */
+        private function renderProducts($products)
+        {
+        }
+        /**
+         * Render pagination.
+         */
+        private function renderPagination($products, $defaultFilters, $paginationType, $perPage, $viewMode)
+        {
+        }
+        /**
+         * Get available product filters.
+         */
+        private function getFilters(array $settings): array
+        {
+        }
         private function setBricksQuery()
         {
         }
@@ -22943,6 +23005,9 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         {
         }
         public function renderAjaxContents($products, $settings)
+        {
+        }
+        private function getAjaxDefaultFilters(array $defaultFilters, array $settings): array
         {
         }
     }
@@ -26176,6 +26241,33 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public function applyActiveViewFilter(?string $activeView = null): void
+        {
+        }
+        public static function getSearchableFields(): array
+        {
+        }
+        public static function advanceFilterOptions(): array
+        {
+        }
+    }
+    class LicenseSiteFilter extends \FluentCart\App\Services\Filter\BaseFilter
+    {
+        public function getModel(): string
+        {
+        }
+        public static function getFilterName(): string
+        {
+        }
+        public function tabsMap(): array
+        {
+        }
+        public function applySimpleFilter(?string $search = null): void
+        {
+        }
+        public function applyActiveViewFilter(?string $activeView = null): void
+        {
+        }
+        public function customQuery()
         {
         }
         public static function getSearchableFields(): array
@@ -36211,6 +36303,7 @@ namespace FluentCart\App\Services\Renderer {
         protected $products = [];
         protected $customFilters = [];
         protected $total = 0;
+        protected $isWildcardFilterEnabled = false;
         public function __construct($products = [], $config = [])
         {
         }
@@ -37588,6 +37681,15 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function getItemCount(): string
+        {
+        }
+        public function getPaymentMethodTitle(): string
+        {
+        }
+        public function getTaxBreakdown(): string
+        {
+        }
+        private function resolveTaxRateLabel($orderTaxRate): string
         {
         }
         public function getSubscriptions()
