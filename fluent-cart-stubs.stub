@@ -4926,6 +4926,9 @@ namespace FluentCart\App\Helpers {
         public static function getProductMenu($product, $echo = false, $activeMenu = '')
         {
         }
+        private static function getProductsMenu($baseUrl)
+        {
+        }
         public static function getAdminMenu($echo = false, $activeNav = '')
         {
         }
@@ -5826,7 +5829,7 @@ namespace FluentCart\App\Helpers {
         public static function getSubscriptionTermText(array $data, $asHtml = false): string
         {
         }
-        public static function getTranslatedIntervalUnit(string $unit, int $count = 1): string
+        public static function getTranslatedIntervalUnit(string $unit): string
         {
         }
         public static function generateSubscriptionInfo($otherInfo, $itemPrice): ?string
@@ -20707,7 +20710,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public function savePaymentMethodToCustomerMeta($vendorCustomer, $paymentMethodId, $order)
         {
         }
-        public function confirmSetupIntent($setupIntent)
+        public function confirmSetupIntent($setupIntent, $trxHash = null)
         {
         }
         public function getPaymentMethodDetails($methodId)
@@ -21637,6 +21640,14 @@ namespace FluentCart\App\Services\Filter {
          * @return void
          */
         protected function applyAdvancedFilter(?array $searchGroups = null): void
+        {
+        }
+        /**
+         * Merge relation filter items that target the same relation field with compatible operators.
+         * This prevents multiple whereHas() subqueries ANDed together for the same relation column,
+         * which would return no results (e.g., license status IN ('active') AND license status IN ('expired')).
+         */
+        private function mergeRelationFilters(array $items): array
         {
         }
         private function handleAdvanceFilter($query, $filterItem)
@@ -25260,6 +25271,17 @@ namespace FluentCart\App\Services\DateTime {
          * @return static
          */
         public static function gmtToTimezone($datetime = null, $timezone = null): \FluentCart\App\Services\DateTime\DateTime
+        {
+        }
+        /**
+         * Safely resolve a timezone string to a DateTimeZone object.
+         *
+         * PHP 8.4 throws on deprecated aliases like Asia/Saigon, so we validate
+         * with timezone_open() before constructing. Old orders may carry such aliases
+         * from the browser-captured user_tz stored in order config at checkout time.
+         * Falls back to the supplied $fallback, or wp_timezone() if none given.
+         */
+        private static function resolveTimezone($timezone, $fallback = null): \DateTimeZone
         {
         }
         public function getDefaultTimezone()
@@ -37573,7 +37595,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         //        'payment_summary' => 'getPaymentSummary',
         //        'payment_receipt' => 'getPaymentReceipt',
         //    ];
-        protected array $methodMap = ['item_count' => 'getItemCount', 'is_digital' => 'getIsDigital'];
+        protected array $methodMap = ['item_count' => 'getItemCount', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName'];
         protected array $attributeMap = ['id' => 'order.id', 'status' => 'order.status', 'created_at' => 'order.created_at', 'updated_at' => 'order.updated_at'];
         protected array $centColumns = ['total_amount', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'total_paid', 'total_refund'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
@@ -37643,6 +37665,26 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function getSubscriptions()
+        {
+        }
+        /**
+         * Returns formatted store VAT display string, e.g. "VAT: NL123456789B01".
+         * Returns empty string if no store VAT is configured for this order.
+         */
+        public function getStoreVatDisplay(): string
+        {
+        }
+        /**
+         * Returns formatted buyer VAT display string, e.g. "VAT/Tax ID: XX123456".
+         * Checks OrderMeta vat_tax_id first, then falls back to EU VAT reverse charge number.
+         */
+        public function getBuyerVatDisplay(): string
+        {
+        }
+        /**
+         * Returns buyer company name from billing address meta or VAT reverse charge data.
+         */
+        public function getBuyerCompanyName(): string
         {
         }
     }
