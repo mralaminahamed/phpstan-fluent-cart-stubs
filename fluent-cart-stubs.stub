@@ -227,7 +227,7 @@ namespace FluentCart\Api {
         }
         /**
          * @param string $currencyCode like 'USD'
-         * @return Boolean
+         * @return bool
          *
          * check if currency is zero decimal
          */
@@ -5760,6 +5760,7 @@ namespace FluentCart\App\Helpers {
         public const PAYMENT_AUTHORIZED = 'authorized';
         // Transaction Statuses
         public const TRANSACTION_SUCCEEDED = 'succeeded';
+        public const TRANSACTION_AUTHORIZED = 'authorized';
         public const TRANSACTION_PENDING = 'pending';
         public const TRANSACTION_REFUNDED = 'refunded';
         public const TRANSACTION_FAILED = 'failed';
@@ -6628,6 +6629,12 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp\InnerBlocks {
         {
         }
         public function renderFilter($attributes, $content, $block)
+        {
+        }
+        public function renderFilterSortBy($attributes, $content, $block)
+        {
+        }
+        public function renderProductActionContainer($attributes, $content, $block)
         {
         }
         public function renderFilterViewSwitcher($attributes, $content, $block)
@@ -8190,6 +8197,9 @@ namespace FluentCart\App\Http\Controllers {
         public function getSettings(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Hooks\Handlers\GlobalPaymentHandler $globalHandler)
         {
         }
+        public function saveDesign(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
         public function connectInfo(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Hooks\Handlers\GlobalPaymentHandler $globalHandler)
         {
         }
@@ -8200,6 +8210,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function checkPayPalWebhook(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function reorder(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -8222,7 +8235,16 @@ namespace FluentCart\App\Http\Controllers {
         public function delete(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Product $product)
         {
         }
-        public function update(\FluentCart\App\Http\Requests\ProductRequest $request, $postId)
+        public function update(\FluentCart\App\Http\Requests\ProductUpdateRequest $request, $postId)
+        {
+        }
+        public function updateLongDescEditorMode(\FluentCart\Framework\Http\Request\Request $request, $postId)
+        {
+        }
+        public function updateTaxClass(\FluentCart\Framework\Http\Request\Request $request, $postId)
+        {
+        }
+        public function removeTaxClass(\FluentCart\Framework\Http\Request\Request $request, $postId)
         {
         }
         /**
@@ -8559,6 +8581,13 @@ namespace FluentCart\App\Http\Controllers\Reports {
         {
         }
         public function getRevenueByGroup(\FluentCart\Framework\Http\Request\Request $request): array
+        {
+        }
+    }
+    class SourceReportController extends \FluentCart\App\Http\Controllers\Controller
+    {
+        protected $params = ['orderTypes', 'paymentStatus'];
+        public function index(\FluentCart\Framework\Http\Request\Request $request): array
         {
         }
     }
@@ -8911,18 +8940,6 @@ namespace FluentCart\App\Http\Policies {
     class ProductPolicy extends \FluentCart\App\Http\Policies\Policy
     {
         public function verifyRequest(\FluentCart\Framework\Http\Request\Request $request): bool
-        {
-        }
-        public function index(\FluentCart\Framework\Http\Request\Request $request): bool
-        {
-        }
-        public function store(\FluentCart\Framework\Http\Request\Request $request): bool
-        {
-        }
-        public function update(\FluentCart\Framework\Http\Request\Request $request): bool
-        {
-        }
-        public function delete(\FluentCart\Framework\Http\Request\Request $request): bool
         {
         }
     }
@@ -9554,7 +9571,7 @@ namespace FluentCart\App\Http\Requests {
         /**
          * @return array
          */
-        public function sanitize()
+        public function sanitize(): array
         {
         }
     }
@@ -9653,6 +9670,66 @@ namespace FluentCart\App\Http\Requests {
          * @return array
          */
         public function sanitize(): array
+        {
+        }
+    }
+    class ProductUpdateRequest extends \FluentCart\Framework\Foundation\RequestGuard
+    {
+        /**
+         * Prepare and normalize the incoming data before validation.
+         *
+         * This method ensures that each variant in the request payload has the necessary structure
+         * expected for processing, particularly focusing on the `other_info` attribute.
+         *
+         * If `other_info` is missing from a variant (common during data migration scenarios),
+         * this method sets default values to prevent validation or processing errors.
+         *
+         * It also ensures that:
+         * - `fulfillment_type` is consistently applied across all variants, defaulting to 'physical'.
+         * - `payment_type` is set (defaulting to 'onetime') and injected into `other_info`.
+         * - `other_info` is populated with a consistent structure containing default billing and setup fee options.
+         *
+         * @return array The normalized request data ready for validation.
+         */
+        public function beforeValidation()
+        {
+        }
+        function validateShippingClassId($attribute, $value): ?string
+        {
+        }
+        function validateTaxClassId($attribute, $value): ?string
+        {
+        }
+        public function validatePostDate($attribute, $value): ?string
+        {
+        }
+        /**
+         * @return array
+         */
+        public function rules(): array
+        {
+        }
+        public function afterValidation($validator): array
+        {
+        }
+        /**
+         * @return array
+         */
+        public function messages(): array
+        {
+        }
+        /**
+         * @return array
+         */
+        public function sanitize(): array
+        {
+        }
+        /**
+         * Only return sanitizers for fields that actually exist in the request
+         *
+         * @return array
+         */
+        private function getSanitizersForExistingFields(): array
         {
         }
     }
@@ -15535,6 +15612,9 @@ namespace FluentCart\App\Models {
          */
         protected $casts = ['post_id' => 'integer', 'media_id' => 'integer', 'item_cost' => 'double', 'item_price' => 'double', 'compare_price' => 'double', 'backorders' => 'integer', 'total_stock' => 'integer', 'available' => 'integer', 'committed' => 'integer', 'on_hold' => 'integer', 'sold_individually' => 'integer', 'serial_index' => 'integer', 'other_info' => 'array'];
         protected $appends = ['thumbnail'];
+        public function getOtherInfoAttribute($value)
+        {
+        }
         protected static function booted()
         {
         }
@@ -16307,6 +16387,9 @@ namespace FluentCart\App\Modules\Integrations\FluentPlugins {
     {
         protected $runOnBackgroundForProduct = false;
         public function __construct()
+        {
+        }
+        public function maybeSetNameEmailAtCheckout($fields)
         {
         }
         public function isConfigured()
@@ -17460,92 +17543,6 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         }
     }
 }
-namespace FluentCart\App\Modules\PaymentMethods\MollieGateway {
-    class Mollie extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
-    {
-        public array $supportedFeatures = ['payment', 'refund', 'webhook'];
-        public function __construct()
-        {
-        }
-        public function meta(): array
-        {
-        }
-        public function boot()
-        {
-        }
-        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
-        {
-        }
-        public function refund($refundInfo, $order, $transaction)
-        {
-        }
-        public function handleIPN()
-        {
-        }
-        public function getOrderInfo(array $data)
-        {
-        }
-        public function fields(): array
-        {
-        }
-        public static function validateSettings($data): array
-        {
-        }
-        public function getEnqueueScriptSrc($hasSubscription = 'no'): array
-        {
-        }
-        public function getEnqueueStyleSrc(): array
-        {
-        }
-        private function createMolliePayment($data)
-        {
-        }
-        private function processMollieRefund($paymentId, $refundData)
-        {
-        }
-        private function getMolliePayment($paymentId)
-        {
-        }
-        private static function testApiConnection($apiKey)
-        {
-        }
-        public function webHookPaymentMethodName()
-        {
-        }
-        private function getWebhookUrl()
-        {
-        }
-        private function getReturnUrl($order)
-        {
-        }
-        private function handlePaymentSuccess($payment, $order)
-        {
-        }
-        private function handlePaymentFailure($payment, $order)
-        {
-        }
-    }
-    class MollieSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
-    {
-        public $settings;
-        public $methodHandler = 'fluent_cart_payment_settings_mollie';
-        public static function getDefaults()
-        {
-        }
-        public function isActive(): bool
-        {
-        }
-        public function get($key = '')
-        {
-        }
-        public function getMode()
-        {
-        }
-        public function getApiKey()
-        {
-        }
-    }
-}
 namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
     class API
     {
@@ -18236,6 +18233,28 @@ namespace FluentCart\App\Modules\PaymentMethods\PaystackGateway {
     }
 }
 namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
+    class MolliePromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        public function fields()
+        {
+        }
+    }
     class PaddlePromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         public array $supportedFeatures = [];
@@ -22703,6 +22722,14 @@ namespace FluentCart\App\Services\DateTime {
         }
     }
 }
+namespace FluentCart\App\Services\Email\Editor {
+    class Blocks
+    {
+        public function register()
+        {
+        }
+    }
+}
 namespace FluentCart\App\Services\Email {
     class EmailNotificationMailer
     {
@@ -22774,6 +22801,210 @@ namespace FluentCart\App\Services\Email {
         {
         }
         private static function updateCache(): void
+        {
+        }
+    }
+    /**
+     * Gutenberg Block Parser for Email
+     * Converts Gutenberg blocks to email-compatible HTML
+     */
+    class FluentBlockParser
+    {
+        private $data = [];
+        public function __construct($data = [])
+        {
+        }
+        /**
+         * Parse Gutenberg blocks and convert to email HTML
+         *
+         * @param string $content The post content with Gutenberg blocks
+         * @return string Email-compatible HTML
+         */
+        public function parse($content)
+        {
+        }
+        /**
+         * Manual block parser (fallback if parse_blocks not available)
+         */
+        private function parseBlocksManually($content)
+        {
+        }
+        /**
+         * Render blocks to email HTML
+         */
+        private function renderBlocks($blocks, $nested = false, $isRoot = false)
+        {
+        }
+        /**
+         * Render individual block
+         */
+        private function renderBlock($block, $isRoot = false)
+        {
+        }
+        public function renderOrderWrapper($innerBlocks, $attrs, $innerHTML)
+        {
+        }
+        public function renderOrderItemsTable($innerHTML, $attrs)
+        {
+        }
+        public function renderOrderSubscriptionsDetails($innerHTML, $attrs)
+        {
+        }
+        public function renderOrderLicenseDetails($innerHTML, $attrs)
+        {
+        }
+        public function renderOrderDownloadsDetails($innerHTML, $attrs)
+        {
+        }
+        public function renderOrderAddressesDetails($innerHTML, $attrs)
+        {
+        }
+        public function renderEmailHeader($innerHTML, $attrs)
+        {
+        }
+        /**
+         * Render paragraph block
+         */
+        private function renderParagraph($block, $content, $attrs)
+        {
+        }
+        /**
+         * Render heading block
+         */
+        private function renderHeading($content, $attrs)
+        {
+        }
+        /**
+         * Render image block
+         */
+        private function renderImage($attrs, $innerHTML = '')
+        {
+        }
+        /**
+         * Render list block
+         */
+        private function renderList($content, $innerBlocks, $attrs)
+        {
+        }
+        /**
+         * Render list item
+         */
+        private function renderListItem($content, $attrs)
+        {
+        }
+        /**
+         * Render quote block
+         */
+        private function renderQuote($content, $attrs)
+        {
+        }
+        /**
+         * Render buttons container
+         */
+        private function renderButtons($block, $innerBlocks, $attrs)
+        {
+        }
+        /**
+         * Render button block
+         */
+        private function renderButton($content, $attrs)
+        {
+        }
+        /**
+         * Render columns block
+         */
+        private function renderColumns($innerBlocks, $attrs)
+        {
+        }
+        /**
+         * Render column block
+         */
+        private function renderColumn($innerBlocks, $attrs, $innerHTML)
+        {
+        }
+        /**
+         * Render cover block
+         */
+        private function renderCover($innerBlocks, $attrs, $innerHTML)
+        {
+        }
+        /**
+         * Render separator block
+         */
+        private function renderSeparator($attrs)
+        {
+        }
+        /**
+         * Render spacer block
+         */
+        private function renderSpacer($attrs)
+        {
+        }
+        /**
+         * Render group block
+         */
+        private function renderGroup($innerBlocks, $attrs, $innerHTML, $isRoot = false)
+        {
+        }
+        /**
+         * Render table block
+         */
+        private function renderTable($content, $attrs)
+        {
+        }
+        /**
+         * Render social links block
+         */
+        private function renderSocialLinks($innerBlocks, $attrs, $innerHTML)
+        {
+        }
+        /**
+         * Get social media icon HTML (with better styling)
+         */
+        private function getSocialIconHtml($service, $label = '')
+        {
+        }
+        /**
+         * Get social media icon SVG or text representation
+         */
+        private function getSocialIconSVG($service)
+        {
+        }
+        /**
+         * Get color from WordPress color slug
+         */
+        private function getColorFromSlug($slug)
+        {
+        }
+        private function getThemeColorPalette()
+        {
+        }
+        private function getThemePrefScheme()
+        {
+        }
+        /**
+         * Debug helper: Log all theme colors (for development only)
+         * Uncomment the call in getColorFromSlug() to use
+         */
+        private function debugThemeColors()
+        {
+        }
+        /**
+         * Wrap content in email-safe table structure
+         */
+        private function wrapInTable($content)
+        {
+        }
+        /**
+         * Generate complete email HTML with wrapper
+         */
+        public function generateEmailHtml($content, $title = '')
+        {
+        }
+        public function getCommonStyles()
+        {
+        }
+        public function replaceCssVars($content = '')
         {
         }
     }
@@ -40664,10 +40895,10 @@ namespace FluentCart\App\Services\Renderer {
         public function render()
         {
         }
-        public function renderExcerpt()
+        public function renderExcerpt($atts = '')
         {
         }
-        public function renderTitle($atts = '')
+        public function renderTitle($atts = '', $config = [])
         {
         }
         public function renderProductImage()
@@ -40679,10 +40910,13 @@ namespace FluentCart\App\Services\Renderer {
         /*
          * @todo: Implement Stock Check
          */
-        public function showBuyButton($atts = [])
+        public function showBuyButton($atts = '')
         {
         }
         protected function renderAttributes($atts = [])
+        {
+        }
+        private function parseAttributes($atts)
         {
         }
     }
@@ -40867,6 +41101,7 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         protected $is_first_time = false;
         protected $order_operation = null;
         protected $settings = null;
+        protected $vat_tax_id = null;
         public function __construct($config = [])
         {
         }
@@ -41121,6 +41356,7 @@ namespace FluentCart\App\Services\Renderer {
         protected $filters = [];
         protected $products = [];
         protected $customFilters = [];
+        protected $total = 0;
         public function __construct($products = [], $config = [])
         {
         }
@@ -41128,6 +41364,15 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderViewSwitcher()
+        {
+        }
+        public function renderViewSwitcherButton()
+        {
+        }
+        public function renderSortByFilter()
+        {
+        }
+        public function renderFilter($renderer)
         {
         }
         public function renderProduct()
@@ -41149,6 +41394,12 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderPaginator()
+        {
+        }
+        public function renderPaginatorResultWrapper($atts = '')
+        {
+        }
+        public function renderPerPageSelector()
         {
         }
     }
@@ -41742,6 +41993,18 @@ namespace FluentCart\App\Services\Report {
         {
         }
         public function getFluctuations($currentMetrics, $previousMetrics)
+        {
+        }
+    }
+    class SourceReportService extends \FluentCart\App\Services\Report\ReportService
+    {
+        public function getSourceReportData($params = [])
+        {
+        }
+        public function calculateFluctuations($currentData, $comparisonData)
+        {
+        }
+        protected function calculatePercentageChange($oldValue, $newValue)
         {
         }
     }
@@ -42488,6 +42751,12 @@ namespace FluentCart\App\Services\Translations {
         {
         }
         public static function paymentsString()
+        {
+        }
+        public static function elStrings(): array
+        {
+        }
+        public static function dateTimeStrings(): array
         {
         }
     }
