@@ -5,12 +5,11 @@
  * @see https://github.com/mralaminahamed/phpstan-fluent-cart-stubs
  */
 
-\define('ABSPATH', \dirname(__FILE__) . '/');
-\define('FLUENTCART_VERSION', '1.2.6');
+\define('FLUENTCART_VERSION', '1.3.0');
 \define('FLUENTCART_DB_VERSION', '1.0.31');
 \define('FLUENTCART_PLUGIN_PATH', \plugin_dir_path(__FILE__));
 \define('FLUENTCART_URL', \plugin_dir_url(__FILE__));
 \define('FLUENTCART_PLUGIN_FILE_PATH', __FILE__);
 \define('FLUENTCART_UPLOAD_DIR', 'fluent_cart');
 \define('FLUENT_CART_DIR_FILE', __FILE__);
-\define('FLUENTCART_MIN_PRO_VERSION', '1.2.3');
+\define('FLUENTCART_MIN_PRO_VERSION', '1.3.0');
