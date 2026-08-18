@@ -5845,6 +5845,18 @@ namespace FluentCart\App\Helpers {
         const OUT_OF_STOCK = 'out-of-stock';
         const ROLE_CAPABILITY_PREFIX = 'fluent_cart/permissions/';
         const USER_ROLE = 'fluent_cart_customer';
+        const MIN_INSTALLMENT_TIMES = 2;
+        /**
+         * An installment plan must bill at least twice. times = 0 means unlimited
+         * (a plain recurring subscription) and times = 1 collects a single payment,
+         * which is a one-time purchase, not an installment plan.
+         *
+         * @param array $otherInfo A variant's other_info payload
+         * @return string|null Error message, or null when valid
+         */
+        public static function installmentTimesError($otherInfo)
+        {
+        }
         public static function getUidSerial()
         {
         }
@@ -6508,7 +6520,23 @@ namespace FluentCart\App\Helpers {
         public static function allowedUtmParameterKey(): array
         {
         }
+        /**
+         * Hostnames that belong to the same store network (e.g. child/product sites
+         * that redirect visitors here for checkout). Referrers from these hosts are
+         * treated as internal navigation and never recorded as refer_url — the real
+         * source arrives as query params (refer_url, utm_*) appended by the child site.
+         */
+        public static function getInternalDomains(): array
+        {
+        }
         public static function addUtmToOrder($orderId, $data = [])
+        {
+        }
+        /**
+         * Reduce a referrer (full URL or bare host) to its bare domain:
+         * no scheme, no www. prefix, no path — e.g. "google.com"
+         */
+        public static function normalizeReferUrl($value): string
         {
         }
         public static function getUtmDataOfRequest(): array
@@ -19773,9 +19801,10 @@ namespace FluentCart\App\Modules\MCP {
      * Single source of truth for every FluentCart MCP ability.
      *
      * Each tool class owns its own `definitions()` slice (schema next to code);
-     * this class merges them, wraps every execute_callback so unhandled exceptions
-     * become structured WP_Errors the agent can read (instead of the adapter's
-     * generic "Tool execution failed"), and registers each as a WP ability.
+     * this class merges them, wraps every execute_callback — rejecting undeclared
+     * input params up front and converting unhandled exceptions into structured
+     * WP_Errors the agent can read (instead of the adapter's generic "Tool
+     * execution failed") — and registers each as a WP ability.
      *
      * Pro tools are NOT listed here — FluentCart Pro pushes its abilities via the
      * `fluent_cart/mcp_loaded` action + `fluent_cart/mcp_ability_names` filter.
@@ -19818,27 +19847,40 @@ namespace FluentCart\App\Modules\MCP {
         {
         }
         /**
-         * Portable params an agent naturally carries from one tool to a sibling but
-         * which only some tools accept. input_schema sets no additionalProperties, so
-         * an unsupported one is silently ignored and the agent gets a full,
-         * wrong-shaped result with no signal it wasn't filtered. We surface exactly
-         * these as meta.warnings. We deliberately do NOT warn on every unknown key:
-         * that risks false positives against a param a tool reads but doesn't declare,
-         * and would turn a typo into noise instead of a helpful correction.
-         */
-        const PORTABLE_PARAMS = ['product_id', 'variation_id', 'summary_only', 'fields', 'mode'];
-        /**
-         * Append a meta.warnings entry for each portable param the caller passed that
-         * this tool does not declare (and therefore ignored). Untouched when the
-         * result isn't a success envelope (e.g. a WP_Error) or nothing was ignored,
-         * so a tool's own warnings (list-reference-data) are preserved.
+         * Reject any input param this tool does not declare, instead of executing
+         * with it silently dropped. input_schema sets no additionalProperties, so an
+         * unknown key would otherwise pass validation and the agent would get a
+         * full, plausible-looking result that is NOT filtered the way it asked —
+         * the worst failure mode for an agent (a wrong number reads as a right one;
+         * an error is recoverable). Sibling tools also name overlapping concepts
+         * differently (list-orders: created_after/type; query-orders: start_date/
+         * order_type dimension), so carried-over names are a common, realistic slip,
+         * not a rare typo. The error lists the accepted params so the agent can
+         * self-correct in one step — richer than the schema validator's message,
+         * which is why this is enforced here rather than via additionalProperties.
          *
-         * @param mixed $result         the tool's return value
-         * @param mixed $params         the raw input params
-         * @param array $declaredParams input_schema property names this tool declares
+         * @param string $toolName
+         * @param mixed  $params         the raw input params
+         * @param array  $declaredParams input_schema property names this tool declares
+         * @return \WP_Error|null null when all params are declared
+         */
+        private static function rejectUnknownParams($toolName, $params, $declaredParams)
+        {
+        }
+        /**
+         * Append a meta.warnings entry when a requested per_page exceeded the tool's
+         * ceiling and was clamped (the descriptions state each cap, but a stated cap
+         * still deserves a runtime signal — the agent asked for 500 rows and must
+         * know it got a 100-row page, not the full set). Detected generically by
+         * comparing the request against meta.page.per_page, so every list and
+         * query tool is covered without per-tool changes. Untouched when the result
+         * isn't a paged success envelope.
+         *
+         * @param mixed $result the tool's return value
+         * @param mixed $params the raw input params
          * @return mixed
          */
-        private static function annotateIgnoredParams($result, $params, $declaredParams)
+        private static function annotateClampedPerPage($result, $params)
         {
         }
         /**
@@ -19959,6 +20001,196 @@ namespace FluentCart\App\Modules\MCP {
     }
 }
 namespace FluentCart\App\Modules\MCP\Support {
+    /**
+     * Bridge between MCP tools and the admin UI's advanced filter engine
+     * (BaseFilter + per-entity subclasses) — the same condition-group search the
+     * admin list pages offer.
+     *
+     * Why a bridge instead of passing the raw payload through: the engine SILENTLY
+     * skips malformed conditions (parseSearchGroups drops them) and SILENTLY
+     * no-ops without Pro (applyAdvancedFilter early-returns) — both are the
+     * "confidently wrong result" failure mode an agent can't detect. So this class
+     * (1) validates every condition against the entity's live catalog and returns
+     * a structured error the agent can self-correct from, (2) errors loudly when
+     * Pro is absent, and (3) lets the agent send a lean {property, operator,
+     * value} triple — the engine-internal fields (filter_type, relation, column)
+     * are filled in from the catalog, never trusted from input.
+     *
+     * The catalog is derived live from each filter's advanceFilterOptions()
+     * through the same `fluent_cart/{name}_filter_options` hook the engine itself
+     * applies, so Pro/add-on providers (license, labels) appear automatically and
+     * the schema can never drift from what actually executes.
+     */
+    class AdvancedSearch
+    {
+        const MAX_GROUPS = 5;
+        const MAX_CONDITIONS_PER_GROUP = 10;
+        // Upper bound on the number of values inside a single condition, so a huge
+        // whereIn / in_all fan-out cannot be built from one condition.
+        const MAX_VALUES_PER_CONDITION = 100;
+        // Catalog operator labels the SQL layer can't execute, mapped to what it
+        // can (searchFromString would emit WHERE col equals ... otherwise).
+        // Applied on non-custom conditions only: custom callbacks (searchByFullName,
+        // searchByPayerEmail) consume their advertised labels verbatim.
+        const OPERATOR_ALIASES = ['equals' => '=', 'not_equals' => '!='];
+        /**
+         * Entities that expose advanced search, keyed by the public MCP name.
+         * Each maps to its admin filter class, the capability that gates reading
+         * it, and the list tool that accepts advanced_filters.
+         *
+         * @return array
+         */
+        public static function entities(): array
+        {
+        }
+        /** Entity names, for input_schema enums. */
+        public static function entityNames(): array
+        {
+        }
+        private static function licensingAvailable(): bool
+        {
+        }
+        // -----------------------------------------------------------------
+        // Schema (what get-search-schema returns)
+        // -----------------------------------------------------------------
+        /**
+         * The agent-facing search schema for one entity: every filterable property
+         * with its operators, value type, options and hints, plus the payload
+         * format and a worked example.
+         *
+         * @param string $entity
+         * @return array|\WP_Error
+         */
+        public static function schemaFor($entity)
+        {
+        }
+        // -----------------------------------------------------------------
+        // Query building (what the list tools call)
+        // -----------------------------------------------------------------
+        /**
+         * Validate an agent-supplied advanced_filters payload and return a query
+         * for the entity with the condition groups applied — ready for the calling
+         * tool to add its own named filters, eager loads, sort, and pagination.
+         *
+         * @param string $entity
+         * @param mixed  $raw the advanced_filters input
+         * @return array|\WP_Error { query: Builder, warnings: string[] }
+         */
+        public static function buildQuery($entity, $raw)
+        {
+        }
+        // -----------------------------------------------------------------
+        // Catalog — live property map per entity
+        // -----------------------------------------------------------------
+        /**
+         * provider.property => { provider, property, def } for one filter class,
+         * through the same fluent_cart/{name}_filter_options hook the engine
+         * applies, so Pro/add-on providers appear here exactly as they execute.
+         */
+        private static function catalog($filterClass): array
+        {
+        }
+        /** Money columns for the entity, so values can be documented/validated as store-currency decimals. */
+        private static function centColumnsFor($filterClass): array
+        {
+        }
+        /** The column the engine will actually compare (relation column, explicit column, or the property itself). */
+        private static function effectiveColumn(array $def)
+        {
+        }
+        /** Normalize the catalog's UI widget type into an agent-facing value kind. */
+        private static function valueKind(array $def, array $centColumns): string
+        {
+        }
+        /**
+         * The operators a property accepts — the same resolution the admin filter
+         * UI applies (custom operator map first, then by widget type), constrained
+         * to what the SQL layer actually executes.
+         */
+        private static function resolveOperators(array $def): array
+        {
+        }
+        // -----------------------------------------------------------------
+        // Validation + translation to the engine payload
+        // -----------------------------------------------------------------
+        /**
+         * Validate the raw agent payload and translate it into the exact structure
+         * BaseFilter::parseSearchGroups() consumes. Returns
+         * { groups: array, warnings: string[] } or a WP_Error naming the first
+         * offending condition — never a silently-trimmed payload.
+         */
+        private static function normalize($entity, $filterClass, $raw)
+        {
+        }
+        /** True when every element looks like a condition object (flat list form). */
+        private static function isConditionList(array $raw): bool
+        {
+        }
+        /**
+         * Validate one condition and build the engine item. The engine-internal
+         * fields (filter_type / relation / column) always come from the catalog
+         * definition, never from the caller.
+         *
+         * @return array|\WP_Error
+         */
+        private static function normalizeCondition($entity, $condition, array $catalog, array $centColumns, $groupNo, $conditionNo, array &$warnings)
+        {
+        }
+        /**
+         * Coerce/validate the value for the property's kind. Numeric scalars are
+         * stringified deliberately: HandleRelationalFilter silently drops values
+         * that are neither string nor array, so an integer 0 through a relation
+         * filter would otherwise vanish without a trace.
+         *
+         * @return mixed|\WP_Error
+         */
+        private static function normalizeValue(array $def, array $centColumns, $property, $operator, $value, array &$warnings)
+        {
+        }
+        /** Cap a per-condition value array so a huge whereIn / in_all fan-out can't be built. */
+        private static function capValueArray($property, array $values, array &$warnings): array
+        {
+        }
+        /**
+         * The engine's mergeRelationFilters() unions same relation+property 'in'
+         * conditions within a group into one whereIn (OR), which contradicts the
+         * "conditions within a group are AND-ed" contract. Warn once per property so
+         * the agent knows to use in_all for AND semantics.
+         */
+        private static function warnOrMergedRelations(array $engineGroup, array &$warnings)
+        {
+        }
+        /** A value outside the documented options isn't fatal (the engine matches it as-is) — but say so. */
+        private static function warnUnknownOption($property, array $values, array $known, array &$warnings)
+        {
+        }
+        // -----------------------------------------------------------------
+        // Errors & hints
+        // -----------------------------------------------------------------
+        private static function unknownEntityError($entity)
+        {
+        }
+        private static function structureError($entity)
+        {
+        }
+        private static function limitError($entity)
+        {
+        }
+        private static function valueError($property, $expected)
+        {
+        }
+        private static function idListHint(array $def): string
+        {
+        }
+        /** Flatten a nested {value,label,children} option tree to a bounded [{id,label}] list. */
+        private static function flattenTree($tree, $cap = 100): array
+        {
+        }
+        /** A worked, copy-adaptable example per core entity (null for add-on entities). */
+        private static function exampleFor($entity)
+        {
+        }
+    }
     /**
      * Shared formatting + validation utilities for the FluentCart MCP module.
      *
@@ -21385,6 +21617,26 @@ namespace FluentCart\App\Modules\MCP\Tools {
         }
     }
     /**
+     * Advanced-search discovery.
+     *
+     * The admin UI's advanced filter catalogs are large (30+ properties across
+     * entities, each with operators, options and value formats) — inlining them
+     * into every list tool's input_schema would bloat every session's context.
+     * Instead the list tools carry ONE lean advanced_filters parameter, and this
+     * tool serves the full per-entity reference on demand: the agent fetches the
+     * schema for the one entity it is about to search, exactly like the existing
+     * get-store-context → list-reference-data progressive-disclosure split.
+     */
+    class SearchTools
+    {
+        public static function definitions()
+        {
+        }
+        public static function getSearchSchema($params = [])
+        {
+        }
+    }
+    /**
      * Subscription tools — find recurring plans, then load one fully.
      *
      * Parameter design:
@@ -21410,7 +21662,7 @@ namespace FluentCart\App\Modules\MCP\Tools {
          * set. Two lightweight GROUP BY / SUM scans, no row hydration. Money is in the
          * store currency (subscriptions are not currency-scoped), matching formatRow.
          */
-        private static function summaryResponse($query)
+        private static function summaryResponse($query, array $advWarnings = [])
         {
         }
         private static function formatRow($sub)
@@ -22061,11 +22313,10 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
          * @param string $method HTTP method ex: GET, POST, DELETE (Optional)
          * @param array $args API request arguments (Optional)
          * @param string $mode PayPal mode ex: live, test (Optional)
-         * @param string|null $requestId Idempotency id sent as PayPal-Request-Id (Optional)
          * @return mixed $response API response
          * @throws \Exception if error occurs
          */
-        public static function makeRequest($path, $version = 'v1', $method = 'POST', $args = [], $mode = '', $requestId = null)
+        public static function makeRequest($path, $version = 'v1', $method = 'POST', $args = [], $mode = '')
         {
         }
         public static function getResource($path, $data = [], $mode = '')
@@ -22080,7 +22331,16 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
         public static function getRequest($url, $accessToken = null, $mode = '')
         {
         }
-        public static function createOrder($purchaseUnit, $requestId = null)
+        /**
+         * Two-step order: no payment_source in the body, so the buyer approves and the JS SDK
+         * captures. PayPal-Request-Id is optional here and deliberately omitted — see
+         * .claude/skills/coding-rules/payment-idempotency.md.
+         *
+         * Adding payment_source (card, vault_id, billing_agreement_id) makes this a single-step
+         * call that moves money on create. PayPal then REQUIRES PayPal-Request-Id (max 108 chars,
+         * keys stored 6h), and the idempotency design must be revisited before doing so.
+         */
+        public static function createOrder($purchaseUnit)
         {
         }
         public static function verifyPayment($paymentId)
@@ -25620,7 +25880,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-buy-section';
-        public $icon = 'ti-shopping-cart fluent-cart-element-icon';
+        public $icon = 'ti-bag fluent-cart-element-icon';
         public function enqueue_scripts()
         {
         }
@@ -25771,12 +26031,6 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         {
         }
         public function render()
-        {
-        }
-        /**
-         * Normalize columns count.
-         */
-        private function normalizeColumns($columns)
         {
         }
         /**
@@ -32163,7 +32417,7 @@ namespace FluentCart\App\Services\PDF {
         /**
          * Two-column FROM / BILL TO address block.
          */
-        private static function addressColumns(string $billingLabel = 'BILL TO'): array
+        private static function addressColumns(?string $billingLabel = null): array
         {
         }
         /**
@@ -34401,6 +34655,9 @@ namespace FluentCart\App\Services\Renderer {
         public static function renderAtts($atts = [])
         {
         }
+        public static function renderPriceSuffix($product, $variant, $scope)
+        {
+        }
         public static function getBlockWrapperAttributes(array $attributes = [])
         {
         }
@@ -35320,6 +35577,16 @@ namespace FluentCart\App\Services\Report {
         {
         }
         public static function processParams($params = [], $additional = []): array
+        {
+        }
+        /**
+         * Whitelist a groupKey value used to build raw SQL (SELECT/GROUP BY clauses)
+         * so an unrecognized or missing value never reaches the query builder.
+         *
+         * @param mixed $value
+         * @return string
+         */
+        public static function sanitizeGroupKey($value)
         {
         }
         protected static function sanitizeParams($params)
