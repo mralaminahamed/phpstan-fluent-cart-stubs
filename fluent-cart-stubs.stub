@@ -1601,7 +1601,7 @@ namespace FluentCart\Api\Resource\FrontendResource {
         public static function getQuery(): \FluentCart\Framework\Database\Orm\Builder
         {
         }
-        public static function generateCartForInstantCheckout($variationId, $quantity = 1)
+        public static function generateCartForInstantCheckout($variationId, $quantity = 1, $params = [])
         {
         }
         /**
@@ -5091,6 +5091,23 @@ namespace FluentCart\App\Helpers {
         {
         }
         /**
+         * Normalize custom item fields to standard cart variation format.
+         *
+         * NOTE:
+         * - Custom items may originate from external sources (filters, adjustments, migrations)
+         * - Some sources provide `id`, others only provide `item_id`
+         * - For cart consistency, `id` is required and will fall back to `item_id` when missing
+         * - This method intentionally mutates the provided object to normalize field names.
+         *   The variation object is treated as a transient data structure and is not reused
+         *   elsewhere after normalization.
+         *
+         * @param object $variation
+         * @return object
+         */
+        public static function normalizeCustomFields(object $variation): object
+        {
+        }
+        /**
          * @param \FluentCart\App\Models\ProductVariation $variation
          * @param int|string $updatedQuantity
          * @return bool
@@ -5761,6 +5778,9 @@ namespace FluentCart\App\Helpers {
         public static function isModalCheckoutEnabled(): bool
         {
         }
+        public static function isAdminUser(): bool
+        {
+        }
     }
     class OrderItemHelper
     {
@@ -6429,7 +6449,7 @@ namespace FluentCart\App\Hooks\Handlers {
          * Default addon gateways to register
          * @var array
          */
-        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class];
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class];
         public function register()
         {
         }
@@ -6531,6 +6551,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Buttons {
         {
         }
         protected function getStyles(): array
+        {
+        }
+        public function supports(): array
         {
         }
         protected function localizeData(): array
@@ -7336,6 +7359,58 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\ShortCodes\Buttons {
+    class AddToCartShortcode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_add_to_cart_button';
+        protected function getStyles(): array
+        {
+        }
+        /**
+         * Example:
+         * [fluent_cart_add_to_cart_button
+         *   button_text="Add to Cart"
+         *   variation_id="123"
+         * ]
+         *
+         * Supported attributes:
+         * - button_text
+         * - variation_id
+         */
+        public function render(?array $viewData = null)
+        {
+        }
+    }
+    class DirectCheckoutShortcode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_checkout_button';
+        protected function getStyles(): array
+        {
+        }
+        /*
+         * Example:
+         * [fluent_cart_checkout_button
+         *   button_text="Buy Now"
+         *   variation_id="123"
+         *   instant_checkout="yes"
+         * ]
+         *
+         * Supported attributes:
+         * - button_text
+         * - variation_id
+         * - target
+         * - instant_checkout (yes|no)
+         */
+        public function render(?array $viewData = null)
+        {
+        }
+        protected function renderAttributes($atts = [])
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\ShortCodes {
     class CartShortcode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
     {
         const SHORT_CODE = 'fluent_cart_cart';
@@ -14774,6 +14849,9 @@ namespace FluentCart\App\Models {
         public function addByVariation(\FluentCart\App\Models\ProductVariation $variation, $config = [])
         {
         }
+        public function addByCustom(array $variation, array $config = [])
+        {
+        }
         public function guessCustomer()
         {
         }
@@ -14810,7 +14888,7 @@ namespace FluentCart\App\Models {
         public function getEstimatedRecurringTotal()
         {
         }
-        protected function findExistingItemAndIndex($objectId, $extraArgs = [])
+        public function findExistingItemAndIndex($objectId, $extraArgs = [])
         {
         }
         public function getShippingAddress()
@@ -14823,6 +14901,19 @@ namespace FluentCart\App\Models {
         {
         }
         public function isShipToDifferent()
+        {
+        }
+        // Unique hook handling
+        protected function uniqueHooks($hooks)
+        {
+        }
+        public function addDraftCreatedActions($hooks)
+        {
+        }
+        public function addSuccessActions($hooks)
+        {
+        }
+        public function addCartNotices($notices)
         {
         }
     }
@@ -14918,7 +15009,7 @@ namespace FluentCart\App\Models {
         }
     }
     /**
-     *  Order Model - DB Model for Orders
+     *  Customer Model - DB Model for Customers
      *
      *  Database Model
      *
@@ -15526,7 +15617,7 @@ namespace FluentCart\App\Models {
          * @var array
          */
         protected $fillable = ['order_id', 'post_id', 'fulfillment_type', 'fulfilled_quantity', 'post_title', 'title', 'object_id', 'cart_index', 'quantity', 'unit_price', 'cost', 'subtotal', 'tax_amount', 'discount_total', 'refund_total', 'line_total', 'rate', 'other_info', 'line_meta', 'referrer', 'object_type', 'payment_type', 'created_at'];
-        protected $appends = ['payment_info', 'setup_info'];
+        protected $appends = ['payment_info', 'setup_info', 'is_custom'];
         protected $casts = ['unit_price' => 'double', 'cost' => 'double', 'subtotal' => 'double', 'tax_amount' => 'double', 'shipping_charge' => 'double', 'discount_total' => 'double', 'line_total' => 'double', 'refund_total' => 'double'];
         protected static function booted()
         {
@@ -15596,6 +15687,12 @@ namespace FluentCart\App\Models {
         {
         }
         public function variantImages(): \FluentCart\Framework\Database\Orm\Relations\HasOne
+        {
+        }
+        public function getIsCustomAttribute()
+        {
+        }
+        public function getViewUrlAttribute()
         {
         }
     }
@@ -18854,6 +18951,42 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
         {
         }
     }
+    class MercadoPagoAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'mercado-pago-for-fluent-cart';
+        private $addonFile = 'mercado-pago-for-fluent-cart/mercado-pago-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        /**
+         * Get Mercado Pago-specific notice configuration
+         */
+        private function getNoticeConfig()
+        {
+        }
+        /**
+         * Generate addon notice message
+         */
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
     class PaystackAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         public array $supportedFeatures = [];
@@ -20092,6 +20225,12 @@ namespace FluentCart\App\Services\Filter {
          */
         public int $perPage = 10;
         /**
+         * Current page number
+         *
+         * @var ?int
+         */
+        public ?int $page = null;
+        /**
          * The offset for paginated results.
          *
          * @var ?int
@@ -20166,6 +20305,9 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         protected function parsePerPage()
+        {
+        }
+        protected function parsePageNumber(): ?int
         {
         }
         /**
@@ -32729,6 +32871,18 @@ namespace FluentCart\App\Services {
         {
         }
     }
+    class ProductItemService
+    {
+        /**
+         * Return product and variation item (custom or normal)
+         *
+         * @param array $data
+         * @return object|null
+         */
+        public static function getItem(array $data)
+        {
+        }
+    }
     class RateLimitter
     {
         public static function isActive()
@@ -33431,6 +33585,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderAddToCartButton($atts = [])
+        {
+        }
+        public function renderAddToCartButtonBlock($atts = [])
         {
         }
         public static function renderNoProductFound()
