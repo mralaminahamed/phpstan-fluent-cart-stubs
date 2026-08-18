@@ -3376,6 +3376,9 @@ namespace FluentCart\Api\Resource {
         public static function deleteTaxonomyTerms($data, $postId = '', $params = [])
         {
         }
+        public static function findByProductAndVariants(array $params = [])
+        {
+        }
     }
     class ProductVariationResource extends \FluentCart\Api\Resource\BaseResourceApi
     {
@@ -6355,6 +6358,9 @@ namespace FluentCart\App\Hooks\Cart {
         public function init(): void
         {
         }
+        public static function initCartDrawer(): void
+        {
+        }
         public function registerDependency(): void
         {
         }
@@ -6831,6 +6837,44 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    class MediaCarouselBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'media-carousel';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
+    class MiniCartBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'mini-cart';
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class PriceRangeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'price-range';
@@ -6885,6 +6929,126 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\ProductCarousel\InnerBlocks {
+    class InnerBlocks
+    {
+        use \FluentCart\Api\Contracts\CanEnqueue;
+        public static $parentBlock = 'fluent-cart/product-carousel';
+        public array $blocks = [];
+        public static function textBlockSupport(): array
+        {
+        }
+        public static function buttonBlockSupport(): array
+        {
+        }
+        public static function register()
+        {
+        }
+        public function getInnerBlocks(): array
+        {
+        }
+        public function getProductFromBlockContext($block)
+        {
+        }
+        protected static function getDefaultCarouselSettings(): array
+        {
+        }
+        protected function getCarouselSettingsFromContext($block): array
+        {
+        }
+        public function renderTitle($attributes, $content, $block): string
+        {
+        }
+        public function renderPrice($attributes, $content, $block): string
+        {
+        }
+        public function renderImage($attributes, $content, $block): string
+        {
+        }
+        public function renderButtons($attributes, $content, $block): string
+        {
+        }
+        public function renderExcerpt($attributes, $content, $block): string
+        {
+        }
+        protected function isSlideBlock($block): bool
+        {
+        }
+        public function renderProductCarouselLoop($attributes, $content, $block): string
+        {
+        }
+        public function renderCarouselControls($attributes, $content, $block): string
+        {
+        }
+        public function renderCarouselPagination($attributes, $content, $block): string
+        {
+        }
+        protected function getLocalizationKey(): string
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function generateEnqueueSlug(): string
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\ProductCarousel {
+    class ProductCarouselBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-carousel';
+        protected ?string $localizationKey = 'fluent_cart_product_carousel_block_editor_data';
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        public function init(): void
+        {
+        }
+        public function registerInnerBlocks()
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function provideContext(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null, $content = null): string
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors {
+    class ProductCategoriesListBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-categories-list';
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class ProductGalleryBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-gallery';
@@ -6901,9 +7065,47 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    class ProductImageBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-image';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class ProductInfoBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-info';
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
+    class ProductTitleBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-title';
+        public function supports(): array
+        {
+        }
         protected function getScripts(): array
         {
         }
@@ -7004,6 +7206,12 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp\InnerBlocks {
         {
         }
         public function renderProductLoop($attributes, $content, $block): string
+        {
+        }
+        public function renderProductCarousel1($attributes, $content, $block): string
+        {
+        }
+        public function renderProductCarousel($attributes, $content, $block): string
         {
         }
         public function renderProductContainer($attributes, $content, $block): string
@@ -7530,6 +7738,16 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         {
         }
     }
+    class MiniCartShortcode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_mini_cart';
+        protected function getStyles(): array
+        {
+        }
+        public function render(?array $viewData = null)
+        {
+        }
+    }
     class PricingTableShortCode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
     {
         const SHORT_CODE = 'fluent_cart_pricing_table';
@@ -7561,6 +7779,19 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         {
         }
         public function viewData(): ?array
+        {
+        }
+        public function render(?array $viewData = null)
+        {
+        }
+    }
+    class ProductCategoriesListShortcode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
+    {
+        protected static string $shortCodeName = 'fluent_cart_product_categories';
+        protected function getStyles(): array
+        {
+        }
+        protected function getScripts(): array
         {
         }
         public function render(?array $viewData = null)
@@ -7943,6 +8174,9 @@ namespace FluentCart\App\Http\Controllers {
     class AddonsController extends \FluentCart\App\Http\Controllers\Controller
     {
         public function getAddons(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function getPremiumIntegrations()
         {
         }
         public function installAndActivate(\FluentCart\Framework\Http\Request\Request $request)
@@ -8506,6 +8740,18 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function saveSettings(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function getPluginAddons(): \WP_REST_Response
+        {
+        }
+        public function installPluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
+        public function activatePluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
+        private function getRegisteredPluginAddons(): array
         {
         }
     }
@@ -21086,6 +21332,9 @@ namespace FluentCart\App\Modules\Templating {
         public static function loadSingleProductAssets()
         {
         }
+        public static function loadAddToCartCss()
+        {
+        }
         public static function loadModalCheckoutAssets()
         {
         }
@@ -21117,6 +21366,9 @@ namespace FluentCart\App\Modules\Templating {
         {
         }
         public static function enqueueThankYouPageAssets()
+        {
+        }
+        public static function loadMiniCartAssets()
         {
         }
     }
@@ -32762,12 +33014,30 @@ namespace FluentCart\App\Services {
     }
 }
 namespace FluentCart\App\Services\PluginInstaller {
+    class AddonManager
+    {
+        public function installAddon($sourceType, $sourceLink, $pluginSlug)
+        {
+        }
+        public function activateAddon($pluginFile)
+        {
+        }
+        public function getAddonStatus($pluginSlug, $pluginFile)
+        {
+        }
+    }
     class BackgroundInstaller
     {
         public function installPlugin($pluginSlug)
         {
         }
         private function backgroundInstaller($plugin_to_install)
+        {
+        }
+        public function installFromGithub($githubUrl, $pluginSlug)
+        {
+        }
+        private function getLatestReleaseDownloadUrl($releasesUrl)
         {
         }
     }
@@ -32777,12 +33047,6 @@ namespace FluentCart\App\Services\PluginInstaller {
         {
         }
         public function installAddon($sourceType, $sourceLink, $pluginSlug)
-        {
-        }
-        private function installFromGithub($githubUrl, $pluginSlug)
-        {
-        }
-        private function getLatestReleaseDownloadUrl($releasesUrl)
         {
         }
         public function activateAddon($pluginFile)
@@ -32961,7 +33225,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderHeader()
         {
         }
-        public function renderCartIconButton()
+        public function renderCartIconButton($skipIfLoaded = true)
         {
         }
         public function renderFooter()
@@ -33261,6 +33525,29 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
     }
+    class MiniCartRenderer
+    {
+        protected $cartItems;
+        protected $itemCount = 0;
+        public function __construct($cartItems, $config = [])
+        {
+        }
+        public function renderMiniCart($atts = [])
+        {
+        }
+        public function renderCartIcon(string $cartIcon = 'cart')
+        {
+        }
+        public function renderShoppingCartIcon()
+        {
+        }
+        public function renderShoppingBagIcon()
+        {
+        }
+        public function renderShoppingBagAltIcon()
+        {
+        }
+    }
     class ModalCheckoutRenderer
     {
         private $cart;
@@ -33401,6 +33688,46 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
     }
+    class ProductCategoriesListRenderer
+    {
+        /**
+         * Convert string/boolean to actual boolean value
+         * Handles shortcode string attributes like "true"/"false"
+         */
+        private function toBool($value, bool $default = false): bool
+        {
+        }
+        public static function getCategories(): array
+        {
+        }
+        public function render(array $atts = []): void
+        {
+        }
+        public function renderButton()
+        {
+        }
+        public function renderDropdown(array $categories, array $atts): void
+        {
+        }
+        public function renderDropdownOptions(array $categories, array $atts, int $depth = 0): void
+        {
+        }
+        public function renderList(array $categories, array $atts)
+        {
+        }
+        public function renderChildrenList(array $children, array $atts, int $depth = 0)
+        {
+        }
+        public function renderListItems(array $categories, array $atts, int $depth = 0): void
+        {
+        }
+        public function renderCategoryItem($category, $atts, $depth = 0)
+        {
+        }
+        public function renderEmpty(string $wrapperAttributes = '')
+        {
+        }
+    }
     class ProductCollectionRenderer
     {
         protected $products = [];
@@ -33515,6 +33842,12 @@ namespace FluentCart\App\Services\Renderer {
         public function renderVariationDisplay($atts = [])
         {
         }
+        public function renderGalleryCarousel(array $carouselSettings = [])
+        {
+        }
+        public function renderCarousel($args = [])
+        {
+        }
         public function renderGalleryThumb()
         {
         }
@@ -33599,7 +33932,7 @@ namespace FluentCart\App\Services\Renderer {
         protected function renderTooltip($variant)
         {
         }
-        protected function renderVariantImage($variant)
+        public function renderVariantImage($variant)
         {
         }
         protected function renderSubscriptionInfo($variant = null)
