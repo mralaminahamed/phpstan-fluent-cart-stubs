@@ -24585,6 +24585,9 @@ namespace FluentCart\App\Services {
         public static function renderForPrint($content, $params = [])
         {
         }
+        public static function getLocalizeData(): array
+        {
+        }
     }
     class Integration
     {
@@ -32745,6 +32748,9 @@ namespace FluentCart\App\Services\Renderer {
         public function renderHeader()
         {
         }
+        public function renderCartIconButton()
+        {
+        }
         public function renderFooter()
         {
         }
@@ -32957,7 +32963,7 @@ namespace FluentCart\App\Services\Renderer {
         public function wrapperEnd()
         {
         }
-        public function renderCreateAccountField($attr_title = '')
+        public function renderCreateAccountField($atts = [])
         {
         }
         public function renderNameFields()
@@ -32972,7 +32978,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderBillingAddressFields($section_title = '')
         {
         }
-        public function renderShipToDifferentField($attr_title = '')
+        public function renderShipToDifferentField($atts = [])
         {
         }
         public function renderShippingAddressFields($section_title = '')
@@ -32996,7 +33002,7 @@ namespace FluentCart\App\Services\Renderer {
         private function maybeRearrangeAddressFields($fields)
         {
         }
-        public function agreeTerms($attr_title = '')
+        public function agreeTerms($atts = [])
         {
         }
         private function renderSummaryFragment()
