@@ -3985,6 +3985,9 @@ namespace FluentCart\Api {
         public static function getTermIdsFromTerms(array $terms): array
         {
         }
+        public static function getTermIdsBySlugs($slugs, $taxonomy = 'product-categories'): array
+        {
+        }
         public static function addTaxonomyTerms(string $taxonomy, array $terms, array $args = [])
         {
         }
@@ -6512,7 +6515,7 @@ namespace FluentCart\App\Hooks\Handlers {
          * Default addon gateways to register
          * @var array
          */
-        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class];
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class];
         public function register()
         {
         }
@@ -6558,6 +6561,7 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         const PARENT_BLOCK_DATA_NAME = 'fluent_cart_parent_block_data';
         protected static string $editorName;
         private static bool $isReactSupportAdded = false;
+        private static bool $blockSupportStylesEnqueued = false;
         public function __construct()
         {
         }
@@ -6604,6 +6608,16 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         public function render_block($attributes, $content, $block)
+        {
+        }
+        /**
+         * Ensure WordPress global styles (preset colors, typography, spacing) are available
+         * on the frontend. Some themes (e.g., Bricks) strip the global-styles stylesheet,
+         * which breaks block support classes like .has-vivid-red-color.
+         *
+         * This outputs a minimal inline fallback only if global styles aren't already loaded.
+         */
+        private static function getBlockSupportFallbackStyles(): string
         {
         }
         protected function getStyles(): array
@@ -7206,6 +7220,25 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    class ProductDescriptionBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-description';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class ProductGalleryBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-gallery';
@@ -7347,6 +7380,25 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\RelatedProduct {
     }
 }
 namespace FluentCart\App\Hooks\Handlers\BlockEditors {
+    class SaleBadgeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'sale-badge';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null): string
+        {
+        }
+    }
     class SearchBarBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'fluent-products-search-bar';
@@ -7503,6 +7555,25 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp {
     }
 }
 namespace FluentCart\App\Hooks\Handlers\BlockEditors {
+    class SoldOutBadgeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'sold-out-badge';
+        public function supports(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null): string
+        {
+        }
+    }
     class StockBlock extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'stock';
@@ -8937,6 +9008,12 @@ namespace FluentCart\App\Http\Controllers\FrontendControllers {
         public function cancelAutoRenew(\FluentCart\Framework\Http\Request\Request $request, $subscription_uuid)
         {
         }
+        public function initiateEarlyPayment(\FluentCart\Framework\Http\Request\Request $request, $subscription_uuid)
+        {
+        }
+        private function canEarlyPay(\FluentCart\App\Models\Subscription $subscription): bool
+        {
+        }
         public function getSetupIntentRemainingAttempts($subscription_uuid)
         {
         }
@@ -9025,12 +9102,6 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function activatePluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
-        {
-        }
-        public function checkPluginAddonUpdate(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
-        {
-        }
-        public function updatePluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
         private function getRegisteredPluginAddons(): array
@@ -9187,20 +9258,6 @@ namespace FluentCart\App\Http\Controllers {
         public function activateAddon(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
-        /*
-         * Check for addon update (for now, github,wordpress only), later we'll add support for other sources if needed
-         * @param Request $request
-         */
-        public function checkAddonUpdate(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        /*
-         * Update addon (for now, github, wordpress only), later we'll add support for other sources if needed
-         * @param Request $request
-         */
-        public function updateAddon(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
     }
     class ProductController extends \FluentCart\App\Http\Controllers\Controller
     {
@@ -9219,6 +9276,15 @@ namespace FluentCart\App\Http\Controllers {
          * @return \WP_REST_Response
          */
         public function create(\FluentCart\App\Http\Requests\ProductCreateRequest $request): \WP_REST_Response
+        {
+        }
+        /**
+         * Bulk insert products from import/manual entry.
+         *
+         * @param \FluentCart\Framework\Http\Request\Request $request
+         * @return \WP_REST_Response
+         */
+        public function bulkInsert(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
         /**
@@ -9369,6 +9435,18 @@ namespace FluentCart\App\Http\Controllers {
          * @return string
          */
         private function ensureUniqueSku($sku, $excludeId = null)
+        {
+        }
+        /**
+         * Fetch products formatted for bulk editing.
+         */
+        public function bulkEditFetch(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
+        /**
+         * Bulk update products from the bulk edit spreadsheet.
+         */
+        public function bulkUpdate(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
     }
@@ -21430,6 +21508,9 @@ namespace FluentCart\App\Modules\Subscriptions\Http\Controllers {
         public function resumeSubscription(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Order $order, \FluentCart\App\Models\Subscription $subscription)
         {
         }
+        public function generateEarlyPaymentLink(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Order $order, \FluentCart\App\Models\Subscription $subscription)
+        {
+        }
     }
 }
 namespace FluentCart\App\Modules\Subscriptions\Http\Handlers {
@@ -21460,6 +21541,17 @@ namespace FluentCart\App\Modules\Subscriptions\Http\Policies {
          * @return Boolean
          */
         public function create(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\Subscriptions\Services {
+    class EarlyPaymentFeature
+    {
+        public static function isEnabled(): bool
+        {
+        }
+        public static function canPay(\FluentCart\App\Models\Subscription $subscription): bool
         {
         }
     }
@@ -22366,6 +22458,21 @@ namespace FluentCart\App\Modules\Turnstile {
         }
     }
 }
+namespace FluentCart\App\Modules\Wishlist {
+    class WishlistModule
+    {
+        public function register()
+        {
+        }
+        /**
+         * @param string $userLogin
+         * @param \WP_User $user
+         */
+        public function mergeGuestWishlistOnLogin($userLogin, $user)
+        {
+        }
+    }
+}
 namespace FluentCart\App\Modules\WooCommerceMigrator\Contracts {
     interface MigrationServiceInterface
     {
@@ -23039,6 +23146,150 @@ namespace FluentCart\App\Services {
         {
         }
     }
+    class BulkProductInsertService
+    {
+        /**
+         * Insert a chunk of products within a database transaction.
+         * Each product is validated before insert — valid ones are inserted,
+         * invalid ones are skipped with an error keyed by _cid.
+         *
+         * @param array $products
+         * @return array { created: array[], errors: array[] }
+         */
+        public function insertChunk(array $products): array
+        {
+        }
+        /**
+         * Validate product data before insertion using the framework Validator.
+         *
+         * @param array $data
+         * @return array|null Field-keyed error messages if invalid, null if valid
+         */
+        protected function validateProduct(array $data): ?array
+        {
+        }
+        /**
+         * Insert a single product with its detail and all variants.
+         *
+         * @param array $productData
+         * @return int The created post ID
+         */
+        protected function insertSingleProduct(array $productData): int
+        {
+        }
+        /**
+         * Create a product variant from import data.
+         */
+        protected function createVariant(int $postId, array $variantData, int $serialIndex, string $fulfillmentType, string $productTitle = ''): int
+        {
+        }
+        /**
+         * Create a default variant for a product (when no variants are provided).
+         */
+        protected function createDefaultVariant(int $postId, string $title, string $fulfillmentType, array $extra = []): int
+        {
+        }
+        /**
+         * Assign categories to a product, supporting hierarchy via ">" syntax.
+         * e.g. ["Clothing", "Clothing > T-Shirts", "Sale"]
+         */
+        protected function assignCategories(int $postId, array $categoryPaths): void
+        {
+        }
+        /**
+         * Sanitize a price value to ensure it's a valid integer (cents).
+         */
+        protected function sanitizePrice($value): int
+        {
+        }
+        /**
+         * Normalize media array — uploaded attachments keep their id, external URLs get id 0.
+         *
+         * @return array
+         */
+        protected function normalizeMedia(array $media): array
+        {
+        }
+    }
+    class BulkProductUpdateService
+    {
+        /**
+         * Fetch products formatted for bulk editing.
+         * Returns products with decimal prices and category terms.
+         */
+        public function fetchForBulkEdit(\FluentCart\Framework\Http\Request\Request $request): array
+        {
+        }
+        /**
+         * Format a single product for the bulk edit spreadsheet.
+         * Converts prices from cents to decimal and attaches categories.
+         */
+        protected function formatProductForEdit(\FluentCart\App\Models\Product $product): array
+        {
+        }
+        /**
+         * Build category path strings like ["Clothing > T-Shirts", "Sale"]
+         */
+        protected function buildCategoryPaths(int $postId): array
+        {
+        }
+        /**
+         * Get the full hierarchical path for a term.
+         */
+        protected function getTermPath($term): string
+        {
+        }
+        /**
+         * Validate product data before update using the framework Validator.
+         *
+         * @param array $data
+         * @return array|null Field-keyed error messages if invalid, null if valid
+         */
+        protected function validateProduct(array $data): ?array
+        {
+        }
+        /**
+         * Update a chunk of products (max 10).
+         *
+         * @param array $products
+         * @return array { updated: int[], errors: array[] }
+         */
+        public function updateChunk(array $products): array
+        {
+        }
+        /**
+         * Update a single product with its variants and categories.
+         */
+        protected function updateSingleProduct(array $productData): int
+        {
+        }
+        /**
+         * Create a new variant for an existing product (used when duplicating a variant in bulk edit).
+         */
+        protected function createVariantForProduct(int $postId, \FluentCart\App\Models\Product $product, array $variantData): void
+        {
+        }
+        /**
+         * Sync categories for a product.
+         * Accepts mixed input: term ID integers, objects with term_id, or path strings.
+         */
+        public function syncCategories(int $postId, array $categories): void
+        {
+        }
+        /**
+         * Convert cents-based fields in other_info to dollars for frontend display.
+         */
+        protected function formatOtherInfoForEdit(array $otherInfo): array
+        {
+        }
+        /**
+         * Resolve a category path string to a term ID, creating terms as needed.
+         * Reuses the same pattern as BulkProductInsertService::assignCategories.
+         */
+        protected function resolveTermPath(string $path): int
+        {
+        }
+    }
     class Cache
     {
         public static function get($key, $callback = false, $expire = 3600)
@@ -23303,6 +23554,9 @@ namespace FluentCart\App\Services\Coupon {
         {
         }
         protected function isCouponValid($coupon)
+        {
+        }
+        protected function resolveCustomerForUsageLimit()
         {
         }
         public function setCustomer(\FluentCart\App\Models\Customer $customer)
@@ -33457,26 +33711,6 @@ namespace FluentCart\App\Services\PluginInstaller {
         {
         }
         /**
-         * Update addon based on source type
-         *
-         * @param string $sourceType Source type (github, wordpress, other)
-         * @param string $sourceLink Source URL (for github)
-         * @param string $pluginSlug Plugin slug
-         * @param string $pluginFile Plugin file path
-         * @return bool|\WP_Error|array
-         */
-        public function updateAddon($sourceType, $sourceLink, $pluginSlug, $pluginFile)
-        {
-        }
-        /**
-         * Update addon from GitHub
-         *
-         * @param string $sourceLink GitHub releases URL
-         * @param string $pluginSlug Plugin slug
-         * @param string $pluginFile Plugin file path
-         * @return bool|\WP_Error
-         */
-        /**
          * Update addon from WordPress.org
          *
          * @param string $pluginFile Plugin file path
@@ -33501,6 +33735,9 @@ namespace FluentCart\App\Services\PluginInstaller {
         {
         }
         private function backgroundInstaller($plugin_to_install)
+        {
+        }
+        public function installFromCdn($cdnUrl, $pluginSlug)
         {
         }
         public function installFromGithub($githubUrl, $pluginSlug, $path = 'zipball_url')
@@ -34109,9 +34346,6 @@ namespace FluentCart\App\Services\Renderer {
         public function renderPrices($wrapper_attributes = '')
         {
         }
-        /*
-         * @todo: Implement Stock Check
-         */
         public function showBuyButton($atts = '')
         {
         }
