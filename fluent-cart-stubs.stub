@@ -7513,6 +7513,28 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    class ProductPackageDescriptionBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-package-description';
+        public function ancestor(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        public function getScripts(): array
+        {
+        }
+        public function getStyles(): array
+        {
+        }
+        public function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null): string
+        {
+        }
+    }
     class ProductSkuBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-sku';
@@ -9379,6 +9401,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function saveSettings(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        private function hasModuleSettingsChanged($newData, $oldData)
         {
         }
         public function getPluginAddons(): \WP_REST_Response
@@ -20814,6 +20839,9 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         public function getEnqueueScriptSrc($hasSubscription = 'no'): array
+        {
+        }
+        private function getStripeLocale(): string
         {
         }
         public function getLocalizeData(): array
@@ -35166,6 +35194,9 @@ namespace FluentCart\App\Services\Renderer {
         protected function maybeRenderPaymentTypeInfo()
         {
         }
+        protected function maybeRenderPackageInfo()
+        {
+        }
         public function renderChildVariants()
         {
         }
@@ -35613,6 +35644,21 @@ namespace FluentCart\App\Services\Renderer {
         public function render()
         {
         }
+        /**
+         * Build package info string from snapshotted other_info fields.
+         *
+         * @param array $otherInfo Order item's other_info array
+         * @return string e.g. "Gift (Box) · 30 × 20 × 15 cm · Wt: 2 kg · Shipping: 2.5 kg"
+         */
+        public static function buildPackageInfoFromOtherInfo($otherInfo)
+        {
+        }
+        public function renderPackageDescription($wrapper_attributes = '', $showName = true, $showDimensions = true, $showProductWeight = true, $showTotalWeight = true, $variant = null)
+        {
+        }
+        private function renderPackageDescriptionForVariant(\FluentCart\App\Models\ProductVariation $variant, $wrapper_attributes, $showName, $showDimensions, $showProductWeight, $showTotalWeight)
+        {
+        }
         public function renderExcerpt($atts = '')
         {
         }
@@ -35819,6 +35865,15 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderSku($wrapper_attributes = '', $showLabel = true, $label = '', $variant = null)
+        {
+        }
+        public function renderPackageDescription($wrapper_attributes = '', $showName = true, $showDimensions = true, $showProductWeight = true, $showTotalWeight = true, $variant = null)
+        {
+        }
+        /**
+         * Build a JSON string of package info for a variant (used as data attribute for JS switching).
+         */
+        private function getVariantPackageInfoJson(\FluentCart\App\Models\ProductVariation $variant)
         {
         }
         public function renderExcerpt()
@@ -36182,6 +36237,12 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderLoader()
+        {
+        }
+        /**
+         * Get inline SVG icon for a package type.
+         */
+        public static function getPackageTypeIcon($type)
         {
         }
     }
@@ -37440,6 +37501,48 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function parse($accessor = null, $code = null, $transformer = null): ?string
+        {
+        }
+        /**
+         * Get the item's other_info array.
+         */
+        private function getOtherInfo()
+        {
+        }
+        /**
+         * Get a value from other_info.
+         */
+        private function getFromOtherInfo($key, $default = '')
+        {
+        }
+        /**
+         * Get translated package type from other_info.
+         */
+        private function getPackageType()
+        {
+        }
+        /**
+         * Get formatted dimensions from other_info.
+         */
+        private function getFormattedDimensions()
+        {
+        }
+        /**
+         * Get formatted product weight from other_info.
+         */
+        private function getFormattedProductWeight()
+        {
+        }
+        /**
+         * Get formatted shipping weight (product + package) from other_info.
+         */
+        private function getFormattedShippingWeight()
+        {
+        }
+        /**
+         * Get the store's weight unit, cached per request.
+         */
+        private function getStoreWeightUnit()
         {
         }
     }
