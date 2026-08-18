@@ -5758,6 +5758,9 @@ namespace FluentCart\App\Helpers {
         public static function translateNumber($number): string
         {
         }
+        public static function isModalCheckoutEnabled(): bool
+        {
+        }
     }
     class OrderItemHelper
     {
@@ -6235,6 +6238,9 @@ namespace FluentCart\App\Hooks\CLI {
         public function generate_retention_snapshots($args, $assoc_args)
         {
         }
+        public function sync_stripe_renwals($args, $assoc_args)
+        {
+        }
     }
     class OrderCloneCommand
     {
@@ -6518,16 +6524,38 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     }
 }
 namespace FluentCart\App\Hooks\Handlers\BlockEditors\Buttons {
-    class AddToCartButtonEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    class AddToCartButtonBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'add-to-cart-button';
+        protected function getScripts(): array
+        {
+        }
         protected function getStyles(): array
         {
         }
         protected function localizeData(): array
         {
         }
-        public function render(array $shortCodeAttribute, $block = null): string
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
+    class BuyNowButtonBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'buy-now-button';
+        protected function getScripts(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
         {
         }
     }
@@ -8584,6 +8612,16 @@ namespace FluentCart\App\Http\Controllers {
         public function create(\FluentCart\App\Http\Requests\ProductCreateRequest $request): \WP_REST_Response
         {
         }
+        /**
+         * Duplicate a product with selected options
+         *
+         * @param \FluentCart\Framework\Http\Request\Request $request
+         * @param int $productId
+         * @return \WP_REST_Response
+         */
+        public function duplicate(\FluentCart\Framework\Http\Request\Request $request, $productId): \WP_REST_Response
+        {
+        }
         public function delete(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Product $product)
         {
         }
@@ -10260,10 +10298,16 @@ namespace FluentCart\App\Http\Routes {
         public static function register()
         {
         }
+        public static function renderModalCheckout()
+        {
+        }
         public static function registerRoutes()
         {
         }
         private static function handleMainRoutes($page): bool
+        {
+        }
+        private static function handleModalCheckout(): bool
         {
         }
         private static function handlePrintRoute($method): bool
@@ -15864,6 +15908,12 @@ namespace FluentCart\App\Models {
         public function scopeNonBundle($query)
         {
         }
+        public static function duplicateProduct($productId, array $options = []): int
+        {
+        }
+        protected function performDuplicate(array $options = []): int
+        {
+        }
     }
     /**
      *  Product Details Model - DB Model for Product Details
@@ -20894,6 +20944,9 @@ namespace FluentCart\App\Modules\Templating {
         public static function loadSingleProductAssets()
         {
         }
+        public static function loadModalCheckoutAssets()
+        {
+        }
         public static function loadProductCardAssets()
         {
         }
@@ -24162,6 +24215,9 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         private function createCanonicalUrl(array $params = []): string
         {
         }
+        private function getHostOld(): string
+        {
+        }
         private function getHost(): string
         {
         }
@@ -24232,6 +24288,9 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
          * @throws \Exception
          */
         private function createCanonicalUrl(): string
+        {
+        }
+        private function getUploadHostOld(): string
         {
         }
         private function getUploadHost(): string
@@ -32884,7 +32943,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderTotal($atts = '')
         {
         }
-        protected function maybeShowCustomCartSummaries()
+        public function maybeShowCustomCartSummaries()
         {
         }
         public function renderDiscountDetailRow()
@@ -32990,7 +33049,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderShippingOptions()
         {
         }
-        public function renderPaymentMethods()
+        public function renderPaymentMethods($atts = [])
         {
         }
         public function renderCheckoutButton($atts = '')
@@ -33045,6 +33104,64 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         private function renderSelectField($fieldData)
+        {
+        }
+    }
+    class ModalCheckoutRenderer
+    {
+        private $cart;
+        private $requireShipping;
+        private $hasSubscription = false;
+        private $config = [];
+        private $storeSettings;
+        private $productMeta;
+        private $matchedVariation;
+        private $checkoutRenderer;
+        private $cartSummaryRenderer;
+        private $customer;
+        public function __construct(\FluentCart\App\Models\Cart $cart, $config = [])
+        {
+        }
+        public function getFragment($fragmentName)
+        {
+        }
+        public function render()
+        {
+        }
+        public function renderIframe()
+        {
+        }
+        public function renderForm()
+        {
+        }
+        public function renderCheckoutDetails()
+        {
+        }
+        public function renderCheckoutSummary()
+        {
+        }
+        public function renderPromoCode()
+        {
+        }
+        public function renderSummaryGroup()
+        {
+        }
+        public function showCouponApplied()
+        {
+        }
+        public function renderCheckoutReviews()
+        {
+        }
+        public function renderCheckoutBilling()
+        {
+        }
+        public function renderPaymentMethods()
+        {
+        }
+        public function renderPaymentMethod($method, $config = [])
+        {
+        }
+        public function renderPaymentMethodContent($method, $config = [])
         {
         }
     }
@@ -33308,6 +33425,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderBuyNowButton($atts = [])
+        {
+        }
+        public function renderBuyNowButtonBlock($atts = [])
         {
         }
         public function renderAddToCartButton($atts = [])
@@ -34982,16 +35102,19 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         public function parse($accessor = null, $code = null): ?string
         {
         }
-        public function getUserId()
+        public function getID()
         {
         }
-        public function getUserFirstName()
+        public function getFirstName()
         {
         }
-        public function getUserLastName()
+        public function getLastName()
         {
         }
-        public function getUserDisplayName()
+        public function getDisplayName()
+        {
+        }
+        public function getEmail()
         {
         }
         public function getUserEmail()
