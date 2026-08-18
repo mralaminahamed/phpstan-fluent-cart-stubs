@@ -5490,6 +5490,9 @@ namespace FluentCart\App\Helpers {
          *
          * @dev Note: If you don't want the thousand separator to be applied,
          * you need to set $formatted to true and $thousand_separator to false.
+         * 
+         * @hook fluent_cart/hide_unnecessary_decimals - Filter to control whether unnecessary decimals (like .00) should be hidden.
+         * Usage: add_filter('fluent_cart/hide_unnecessary_decimals', '__return_true'); // This will show 10 instead of 10.00
          */
         public static function toDecimal($amount, $withCurrency = true, $currencyCode = null, $formatted = true, $showDecimals = true, $thousand_separator = true)
         {
@@ -6334,12 +6337,6 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
     }
-    class AdminScriptHandler
-    {
-        public function init()
-        {
-        }
-    }
 }
 namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     abstract class BlockEditor
@@ -6936,6 +6933,15 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
         public function handleOrderDeleted($data)
+        {
+        }
+    }
+    class PromoGatewaysHandler
+    {
+        public function register()
+        {
+        }
+        public function registerPromoGateways()
         {
         }
     }
@@ -8034,6 +8040,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function installPlugin()
+        {
+        }
+        public function getDynamicOptions(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -14189,155 +14198,6 @@ namespace FluentCart\App\Models\BatchQuery {
         }
     }
 }
-namespace FluentCart\Framework\Database\Orm {
-    /**
-     * @method static static|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder withTrashed(bool $withTrashed = true)
-     * @method static static|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder onlyTrashed()
-     * @method static static|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder withoutTrashed()
-     */
-    trait SoftDeletes
-    {
-        /**
-         * Indicates if the model is currently force deleting.
-         *
-         * @var bool
-         */
-        protected $forceDeleting = false;
-        /**
-         * Boot the soft deleting trait for a model.
-         *
-         * @return void
-         */
-        public static function bootSoftDeletes()
-        {
-        }
-        /**
-         * Initialize the soft deleting trait for an instance.
-         *
-         * @return void
-         */
-        public function initializeSoftDeletes()
-        {
-        }
-        /**
-         * Force a hard delete on a soft deleted model.
-         *
-         * @return bool|null
-         */
-        public function forceDelete()
-        {
-        }
-        /**
-         * Force a hard delete on a soft deleted model without raising any events.
-         *
-         * @return bool|null
-         */
-        public function forceDeleteQuietly()
-        {
-        }
-        /**
-         * Destroy the models for the given IDs.
-         *
-         * @param  \FluentCart\Framework\Support\Collection|array|int|string  $ids
-         * @return int
-         */
-        public static function forceDestroy($ids)
-        {
-        }
-        /**
-         * Perform the actual delete query on this model instance.
-         *
-         * @return mixed
-         */
-        protected function performDeleteOnModel()
-        {
-        }
-        /**
-         * Perform the actual delete query on this model instance.
-         *
-         * @return void
-         */
-        protected function runSoftDelete()
-        {
-        }
-        /**
-         * Restore a soft-deleted model instance.
-         *
-         * @return bool|null
-         */
-        public function restore()
-        {
-        }
-        /**
-         * Determine if the model instance has been soft-deleted.
-         *
-         * @return bool
-         */
-        public function trashed()
-        {
-        }
-        /**
-         * Register a "softDeleted" model event callback with the dispatcher.
-         *
-         * @param  \Closure|string  $callback
-         * @return void
-         */
-        public static function softDeleted($callback)
-        {
-        }
-        /**
-         * Register a "restoring" model event callback with the dispatcher.
-         *
-         * @param  \Closure|string  $callback
-         * @return void
-         */
-        public static function restoring($callback)
-        {
-        }
-        /**
-         * Register a "restored" model event callback with the dispatcher.
-         *
-         * @param  \Closure|string  $callback
-         * @return void
-         */
-        public static function restored($callback)
-        {
-        }
-        /**
-         * Register a "forceDeleted" model event callback with the dispatcher.
-         *
-         * @param  \Closure|string  $callback
-         * @return void
-         */
-        public static function forceDeleted($callback)
-        {
-        }
-        /**
-         * Determine if the model is currently force deleting.
-         *
-         * @return bool
-         */
-        public function isForceDeleting()
-        {
-        }
-        /**
-         * Get the name of the "deleted at" column.
-         *
-         * @return string
-         */
-        public function getDeletedAtColumn()
-        {
-        }
-        /**
-         * Get the fully qualified "deleted at" column.
-         *
-         * @return string
-         */
-        public function getQualifiedDeletedAtColumn()
-        {
-        }
-    }
-}
 namespace FluentCart\App\Models {
     /**
      *  Cart Session Model - DB Model for Carts
@@ -14350,7 +14210,7 @@ namespace FluentCart\App\Models {
      */
     class Cart extends \FluentCart\App\Models\Model
     {
-        use \FluentCart\Framework\Database\Orm\SoftDeletes, \FluentCart\App\Models\Concerns\CanSearch;
+        use \FluentCart\App\Models\Concerns\CanSearch;
         protected $primaryKey = 'cart_hash';
         public $incrementing = false;
         protected $table = 'fct_carts';
@@ -15035,6 +14895,12 @@ namespace FluentCart\App\Models {
         {
         }
         public function generateReceiptNumber()
+        {
+        }
+        public function orderOperation(): \FluentCart\Framework\Database\Orm\Relations\HasOne
+        {
+        }
+        public function canBeDeleted()
         {
         }
     }
@@ -16392,7 +16258,7 @@ namespace FluentCart\App\Modules\Integrations {
         protected $runOnBackgroundForProduct = true;
         protected $runOnBackgroundForGlobal = true;
         public $logo = '';
-        public $hasGlobalMenu = true;
+        public $hasGlobalMenu = false;
         public $category = 'crm';
         public $disableGlobalSettings = false;
         public $installable = '';
@@ -17046,6 +16912,9 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         {
         }
         public function getSuccessUrl($transaction, $args = [])
+        {
+        }
+        public static function getCancelUrl(): string
         {
         }
         public function paymentFailedNote($content, $data)
@@ -18362,6 +18231,49 @@ namespace FluentCart\App\Modules\PaymentMethods\PaystackGateway {
         {
         }
         public function getWebhookSecret()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
+    class PaddlePromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        public function fields()
+        {
+        }
+    }
+    class PromoGatewaySettings extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
+    {
+        protected $gatewaySlug;
+        public function __construct($gatewaySlug)
+        {
+        }
+        public static function getDefaults()
+        {
+        }
+        public function get($key = null)
+        {
+        }
+        public function getMode()
+        {
+        }
+        public function isActive(): bool
         {
         }
     }
@@ -20273,6 +20185,9 @@ namespace FluentCart\App\Modules\Templating {
         {
         }
         public static function enqueueProductInfoFrontendStyles()
+        {
+        }
+        public static function enqueueThankYouPageAssets()
         {
         }
     }
@@ -40785,6 +40700,7 @@ namespace FluentCart\App\Services\Renderer {
     {
         protected $product;
         protected $filters = [];
+        protected $currency = 'USD';
         protected $urlFilters = [];
         protected bool $shouldLoadRangePlugin = false;
         public function __construct($config = [])
@@ -40947,7 +40863,86 @@ namespace FluentCart\App\Services\Renderer {
 namespace FluentCart\App\Services\Renderer\Receipt {
     class ReceiptRenderer
     {
-        public function render()
+        protected $config = null;
+        protected $is_first_time = false;
+        protected $order_operation = null;
+        protected $settings = null;
+        public function __construct($config = [])
+        {
+        }
+        public function wrapperStart()
+        {
+        }
+        public function wrapperEnd()
+        {
+        }
+        public function render($hideWrapper = false)
+        {
+        }
+        public function renderHeader()
+        {
+        }
+        public function renderHeaderLogo()
+        {
+        }
+        public function renderStoreTaxInformation()
+        {
+        }
+        public function renderHeaderOrderDate()
+        {
+        }
+        public function renderHeaderInvoiceNo()
+        {
+        }
+        public function renderAddresses()
+        {
+        }
+        public function renderStoreAddress($title_border = false)
+        {
+        }
+        public function renderBillToAddress()
+        {
+        }
+        public function renderShipToAddress()
+        {
+        }
+        public function renderOrderItems()
+        {
+        }
+        public function renderOrderItemsTable()
+        {
+        }
+        public function renderOrderItemsFooter()
+        {
+        }
+        public function renderSubtotal()
+        {
+        }
+        public function renderDiscount()
+        {
+        }
+        public function renderShipping()
+        {
+        }
+        public function renderTaxTotal()
+        {
+        }
+        public function renderShippingTax()
+        {
+        }
+        public function renderRefund()
+        {
+        }
+        public function renderTotal()
+        {
+        }
+        public function renderAmountPaid()
+        {
+        }
+        public function renderTaxNote()
+        {
+        }
+        public function renderPaymentHistory()
         {
         }
         public function renderConfirmationError($errorData)
@@ -40956,7 +40951,104 @@ namespace FluentCart\App\Services\Renderer\Receipt {
     }
     class ThankYouRender
     {
-        public function render()
+        protected $config = null;
+        protected $settings = null;
+        protected $is_first_time = false;
+        protected $order_operation = null;
+        public function __construct($config)
+        {
+        }
+        public function renderWrapperStart()
+        {
+        }
+        public function renderWrapperEnd()
+        {
+        }
+        public function render($hide_wrapper = false)
+        {
+        }
+        public function renderHeader()
+        {
+        }
+        public function renderBody()
+        {
+        }
+        public function renderOrderHeader()
+        {
+        }
+        public function renderStoreTaxInformation()
+        {
+        }
+        public function renderOrderItems()
+        {
+        }
+        public function renderOrderItemsHeader()
+        {
+        }
+        public function renderOrderItemsBody()
+        {
+        }
+        public function renderOrderTotal()
+        {
+        }
+        public function renderTaxNote()
+        {
+        }
+        public function renderSubtotal()
+        {
+        }
+        public function renderDiscount()
+        {
+        }
+        public function renderShipping()
+        {
+        }
+        public function renderTaxTotal()
+        {
+        }
+        public function renderShippingTax()
+        {
+        }
+        public function renderRefund()
+        {
+        }
+        public function renderTotal()
+        {
+        }
+        public function renderPaymentMethod()
+        {
+        }
+        public function renderSubscriptionItems()
+        {
+        }
+        public function renderDownloads()
+        {
+        }
+        public function renderDownloadsNotice($show_notice = false)
+        {
+        }
+        public function renderLicenseNotice($show_notice = false)
+        {
+        }
+        public function renderLicenses()
+        {
+        }
+        public function renderAddress()
+        {
+        }
+        public function renderBillToAddress()
+        {
+        }
+        public function renderShipToAddress()
+        {
+        }
+        public function renderFooter()
+        {
+        }
+        public function renderViewOrderButton()
+        {
+        }
+        public function renderDownloadReceiptButton()
         {
         }
     }
@@ -55328,6 +55420,153 @@ namespace FluentCart\Framework\Database\Orm {
          * @throws \Exception
          */
         public function scopeSearch($query, $value)
+        {
+        }
+    }
+    /**
+     * @method static static|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder withTrashed(bool $withTrashed = true)
+     * @method static static|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder onlyTrashed()
+     * @method static static|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder withoutTrashed()
+     */
+    trait SoftDeletes
+    {
+        /**
+         * Indicates if the model is currently force deleting.
+         *
+         * @var bool
+         */
+        protected $forceDeleting = false;
+        /**
+         * Boot the soft deleting trait for a model.
+         *
+         * @return void
+         */
+        public static function bootSoftDeletes()
+        {
+        }
+        /**
+         * Initialize the soft deleting trait for an instance.
+         *
+         * @return void
+         */
+        public function initializeSoftDeletes()
+        {
+        }
+        /**
+         * Force a hard delete on a soft deleted model.
+         *
+         * @return bool|null
+         */
+        public function forceDelete()
+        {
+        }
+        /**
+         * Force a hard delete on a soft deleted model without raising any events.
+         *
+         * @return bool|null
+         */
+        public function forceDeleteQuietly()
+        {
+        }
+        /**
+         * Destroy the models for the given IDs.
+         *
+         * @param  \FluentCart\Framework\Support\Collection|array|int|string  $ids
+         * @return int
+         */
+        public static function forceDestroy($ids)
+        {
+        }
+        /**
+         * Perform the actual delete query on this model instance.
+         *
+         * @return mixed
+         */
+        protected function performDeleteOnModel()
+        {
+        }
+        /**
+         * Perform the actual delete query on this model instance.
+         *
+         * @return void
+         */
+        protected function runSoftDelete()
+        {
+        }
+        /**
+         * Restore a soft-deleted model instance.
+         *
+         * @return bool|null
+         */
+        public function restore()
+        {
+        }
+        /**
+         * Determine if the model instance has been soft-deleted.
+         *
+         * @return bool
+         */
+        public function trashed()
+        {
+        }
+        /**
+         * Register a "softDeleted" model event callback with the dispatcher.
+         *
+         * @param  \Closure|string  $callback
+         * @return void
+         */
+        public static function softDeleted($callback)
+        {
+        }
+        /**
+         * Register a "restoring" model event callback with the dispatcher.
+         *
+         * @param  \Closure|string  $callback
+         * @return void
+         */
+        public static function restoring($callback)
+        {
+        }
+        /**
+         * Register a "restored" model event callback with the dispatcher.
+         *
+         * @param  \Closure|string  $callback
+         * @return void
+         */
+        public static function restored($callback)
+        {
+        }
+        /**
+         * Register a "forceDeleted" model event callback with the dispatcher.
+         *
+         * @param  \Closure|string  $callback
+         * @return void
+         */
+        public static function forceDeleted($callback)
+        {
+        }
+        /**
+         * Determine if the model is currently force deleting.
+         *
+         * @return bool
+         */
+        public function isForceDeleting()
+        {
+        }
+        /**
+         * Get the name of the "deleted at" column.
+         *
+         * @return string
+         */
+        public function getDeletedAtColumn()
+        {
+        }
+        /**
+         * Get the fully qualified "deleted at" column.
+         *
+         * @return string
+         */
+        public function getQualifiedDeletedAtColumn()
         {
         }
     }
@@ -77565,7 +77804,7 @@ namespace {
      * param String $meta_key
      * param Boolean $default
      */
-    function fluent_cart_get_option($meta_key, $default = \false)
+    function fluent_cart_get_option($meta_key, $default = \false, $cache = \true)
     {
     }
     /**
