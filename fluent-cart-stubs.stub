@@ -6703,7 +6703,7 @@ namespace FluentCart\App\Hooks\Handlers {
          * Default addon gateways to register
          * @var array
          */
-        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class];
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class, 'square' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SquareAddon::class];
         public function register()
         {
         }
@@ -20060,7 +20060,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
     {
         protected $gatewaySlug;
         protected $customStyles = [];
-        public function __construct($gatewaySlug)
+        public function __construct($gatewaySlug, $methodHandler = 'fluent_cart_payment_settings_addon_gateway')
         {
         }
         public function setCustomStyles($styles)
@@ -20267,6 +20267,33 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
         {
         }
     }
+    class SquareAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'square-for-fluent-cart';
+        private $addonFile = 'square-for-fluent-cart/square-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
 }
 namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro {
     class AuthorizeNetPromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
@@ -20433,107 +20460,6 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro {
          * @return string HTML for the upgrade notice
          */
         public function generateUpgradeNotice($config)
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\SquareGateway {
-    class Square extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
-    {
-        public array $supportedFeatures = ['payment', 'refund', 'webhook'];
-        public function __construct()
-        {
-        }
-        public function meta(): array
-        {
-        }
-        public function boot()
-        {
-        }
-        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
-        {
-        }
-        public function refund($refundInfo, $order, $transaction)
-        {
-        }
-        public function handleIPN()
-        {
-        }
-        public function getOrderInfo(array $data)
-        {
-        }
-        public function fields(): array
-        {
-        }
-        public static function validateSettings($data): array
-        {
-        }
-        public function getEnqueueScriptSrc($hasSubscription = 'no'): array
-        {
-        }
-        public function getEnqueueStyleSrc(): array
-        {
-        }
-        private function createSquarePayment($data)
-        {
-        }
-        private function processSquareRefund($refundData)
-        {
-        }
-        private static function testApiConnection($accessToken, $locationId, $mode)
-        {
-        }
-        private function getApiBaseUrl()
-        {
-        }
-        private function getWebhookUrl()
-        {
-        }
-        public function webHookPaymentMethodName()
-        {
-        }
-        private function generateIdempotencyKey($order, $type = 'payment')
-        {
-        }
-        private function getSourceToken()
-        {
-        }
-        private function handlePaymentUpdated($payload)
-        {
-        }
-        private function handleRefundUpdated($payload)
-        {
-        }
-        private function handlePaymentSuccess($payment, $order)
-        {
-        }
-    }
-    class SquareSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
-    {
-        public $settings;
-        public $methodHandler = 'fluent_cart_payment_settings_square';
-        public static function getDefaults()
-        {
-        }
-        public function isActive(): bool
-        {
-        }
-        public function get($key = '')
-        {
-        }
-        public function getMode()
-        {
-        }
-        public function getApplicationId()
-        {
-        }
-        public function getAccessToken()
-        {
-        }
-        public function getLocationId()
-        {
-        }
-        public function getWebhookSignatureKey()
         {
         }
     }
