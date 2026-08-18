@@ -4424,6 +4424,50 @@ namespace FluentCart\App\Events\Order {
         {
         }
     }
+    class OrderPaymentFailed extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/order_payment_failed';
+        protected array $listeners = [\FluentCart\App\Listeners\Order\OrderPaymentFailed::class];
+        /**
+         * @var $order Order
+         */
+        public \FluentCart\App\Models\Order $order;
+        /**
+         * @var $customer Customer|null
+         */
+        public ?\FluentCart\App\Models\Customer $customer;
+        /**
+         * @var $transaction OrderTransaction|null
+         */
+        /**
+         * @var $oldStatus string|null
+         */
+        public ?string $oldStatus;
+        /**
+         * @var $newStatus string|null
+         */
+        public ?string $newStatus;
+        /**
+         * @var $reason string|null
+         */
+        public ?string $reason;
+        public ?\FluentCart\App\Models\OrderTransaction $transaction;
+        public function __construct(\FluentCart\App\Models\Order $order, $transaction = null, $oldStatus = null, $newStatus = null, $reason = null)
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        public function getActivityEventModel()
+        {
+        }
+        public function beforeDispatch()
+        {
+        }
+        public function afterDispatch()
+        {
+        }
+    }
     class OrderRefund extends \FluentCart\App\Events\EventDispatcher
     {
         public string $hook = 'fluent_cart/order_refunded';
@@ -6323,10 +6367,36 @@ namespace FluentCart\App\Hooks\Handlers {
     }
     class AddonGatewaysHandler
     {
+        /**
+         * Default addon gateways to register
+         * @var array
+         */
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class];
         public function register()
         {
         }
+        /**
+         * Register addon gateways
+         * Can be filtered to add or remove gateways
+         */
         public function registerPromoGateways()
+        {
+        }
+        /**
+         * Add a new addon gateway to the default list
+         * 
+         * @param string $slug
+         * @param string $className
+         */
+        public function addGateway($slug, $className)
+        {
+        }
+        /**
+         * Remove an addon gateway from the default list
+         * 
+         * @param string $slug
+         */
+        public function removeGateway($slug)
         {
         }
     }
@@ -6427,6 +6497,8 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout {
     class CheckoutBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'checkout';
@@ -6436,10 +6508,16 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         protected function getStyles(): array
         {
         }
+        public function init(): void
+        {
+        }
+        public function registerInnerBlocks()
+        {
+        }
         protected function localizeData(): array
         {
         }
-        public function render(array $shortCodeAttribute, $block = null): string
+        public function render(array $shortCodeAttribute, $block = null, $content = null): string
         {
         }
         /**
@@ -6508,6 +6586,113 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout\InnerBlocks {
+    class InnerBlocks
+    {
+        use \FluentCart\Api\Contracts\CanEnqueue;
+        public static $parentBlock = 'fluent-cart/checkout';
+        public array $blocks = [];
+        private $cart = null;
+        private function getCart()
+        {
+        }
+        public static function textBlockSupport(): array
+        {
+        }
+        public static function buttonBlockSupport(): array
+        {
+        }
+        public static function register()
+        {
+        }
+        public function getInnerBlocks(): array
+        {
+        }
+        public function renderCheckoutNameFields($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutCreateAccountField($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutAddressFields($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutBillingAddressField($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutShippingAddressField($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutShipToDifferentField($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutShippingMethods($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutPaymentMethods($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutAgreeTermsField($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutSubmitButton($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutOrderNotesField($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutSummary($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutOrderSummary($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutSummaryFooter($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutSubtotal($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutShipping($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutCoupon($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutManualDiscount($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutTax($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutShippingTax($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutTotal($attributes, $content, $block)
+        {
+        }
+        public function renderCheckoutOrderBump($attributes, $content, $block)
+        {
+        }
+        protected function getLocalizationKey(): string
+        {
+        }
+        protected function localizeData(): array
+        {
+        }
+        protected function getStyles(): array
+        {
+        }
+        protected function getScripts(): array
+        {
+        }
+        protected function generateEnqueueSlug(): string
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class CustomerProfileBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'customer-profile';
@@ -6949,10 +7134,36 @@ namespace FluentCart\App\Hooks\Handlers {
     }
     class PromoGatewaysHandler
     {
+        /**
+         * Default promo gateways to register
+         * @var array
+         */
+        protected $defaultGateways = ['paddle' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro\PaddlePromo::class, 'mollie' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro\MolliePromo::class, 'authorize_dot_net' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro\AuthorizeNetPromo::class];
         public function register()
         {
         }
+        /**
+         * Register promo gateways
+         * Only registers if Fluent Cart Pro is not active
+         */
         public function registerPromoGateways()
+        {
+        }
+        /**
+         * Add a new promo gateway to the default list
+         * 
+         * @param string $slug
+         * @param string $className
+         */
+        public function addGateway($slug, $className)
+        {
+        }
+        /**
+         * Remove a promo gateway from the default list
+         * 
+         * @param string $slug
+         */
+        public function removeGateway($slug)
         {
         }
     }
@@ -8116,7 +8327,7 @@ namespace FluentCart\App\Http\Controllers {
         public static function hasSubscription($orderItems): bool
         {
         }
-        public function updateOrder(\FluentCart\App\Http\Requests\OrderEditRequest $request, $order_id)
+        public function updateOrder(\FluentCart\App\Http\Requests\OrderRequest $request, $order_id)
         {
         }
         public function updateOrderAddressId(\FluentCart\Framework\Http\Request\Request $request, $order_id)
@@ -8226,6 +8437,20 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function activateAddon(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        /*
+         * Check for addon update (for now, github,wordpress only), later we'll add support for other sources if needed
+         * @param Request $request
+         */
+        public function checkAddonUpdate(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        /*
+         * Update addon (for now, github, wordpress only), later we'll add support for other sources if needed
+         * @param Request $request
+         */
+        public function updateAddon(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -9509,27 +9734,6 @@ namespace FluentCart\App\Http\Requests {
         {
         }
     }
-    class OrderEditRequest extends \FluentCart\Framework\Foundation\RequestGuard
-    {
-        /**
-         * @return array
-         */
-        public function rules(): array
-        {
-        }
-        /**
-         * @return array
-         */
-        public function messages(): array
-        {
-        }
-        /**
-         * @return array
-         */
-        public function sanitize()
-        {
-        }
-    }
     class OrderRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
         /**
@@ -10029,6 +10233,12 @@ namespace FluentCart\App\Listeners\Order {
         {
         }
         public static function maybeCreateUser(\FluentCart\App\Models\Order $order)
+        {
+        }
+    }
+    class OrderPaymentFailed
+    {
+        public static function handle(\FluentCart\App\Events\Order\OrderPaymentFailed $event)
         {
         }
     }
@@ -14378,6 +14588,9 @@ namespace FluentCart\App\Models {
         public function applyCoupon($codes = [])
         {
         }
+        protected function hasZeroRecurringAmount(array $cartItems)
+        {
+        }
         public function getDiscountLines($revalidate = false)
         {
         }
@@ -14497,6 +14710,9 @@ namespace FluentCart\App\Models {
         {
         }
         public function scopeActive($query)
+        {
+        }
+        public function isRecurringDiscount()
         {
         }
     }
@@ -14808,7 +15024,7 @@ namespace FluentCart\App\Models {
         }
         protected $fillable = ['status', 'parent_id', 'invoice_no', 'receipt_number', 'fulfillment_type', 'type', 'customer_id', 'payment_method', 'payment_method_title', 'payment_status', 'currency', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'tax_total', 'tax_behavior', 'total_amount', 'rate', 'note', 'ip_address', 'completed_at', 'refunded_at', 'total_refund', 'uuid', 'created_at', 'refunded_at', 'total_paid', 'mode', 'shipping_status', 'config'];
         protected $searchable = ['id', 'total_amount', 'status', 'payment_method', 'payment_status', 'created_at', 'updated_at'];
-        protected $casts = ['subtotal' => 'double', 'discount_tax' => 'double', 'manual_discount_total' => 'double', 'coupon_discount_total' => 'double', 'shipping_tax' => 'double', 'shipping_total' => 'double', 'tax_total' => 'double', 'total_amount' => 'double'];
+        protected $casts = ['subtotal' => 'double', 'discount_tax' => 'double', 'manual_discount_total' => 'double', 'coupon_discount_total' => 'double', 'shipping_tax' => 'double', 'shipping_total' => 'double', 'tax_total' => 'double', 'total_amount' => 'double', 'customer_id' => 'integer'];
         public function parentOrder(): \FluentCart\Framework\Database\Orm\Relations\BelongsTo
         {
         }
@@ -15449,6 +15665,9 @@ namespace FluentCart\App\Models {
         public function soldIndividually()
         {
         }
+        public function images(): array
+        {
+        }
     }
     /**
      *  Product Details Model - DB Model for Product Details
@@ -15981,6 +16200,9 @@ namespace FluentCart\App\Models {
         {
         }
         public function canSwitchPaymentMethod()
+        {
+        }
+        public function switchablePaymentMethods()
         {
         }
         public function canReactive()
@@ -16634,45 +16856,6 @@ namespace FluentCart\App\Modules\Integrations {
     }
 }
 namespace FluentCart\App\Modules\PaymentMethods\Core {
-    abstract class BaseGatewaySettings
-    {
-        public static array $allSettings = [];
-        private static bool $settingsLoaded = false;
-        public $settings;
-        public $methodHandler;
-        public function __construct()
-        {
-        }
-        abstract public function get($key = '');
-        abstract public function getMode();
-        abstract public function isActive();
-        public function getCachedSettings()
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\AddonGateways {
-    class AddonGatewaySettings extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
-    {
-        protected $gatewaySlug;
-        public function __construct($gatewaySlug)
-        {
-        }
-        public static function getDefaults()
-        {
-        }
-        public function get($key = null)
-        {
-        }
-        public function getMode()
-        {
-        }
-        public function isActive(): bool
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\Core {
     interface PaymentGatewayInterface
     {
         public function has(string $feature): bool;
@@ -16803,32 +16986,6 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         }
     }
 }
-namespace FluentCart\App\Modules\PaymentMethods\AddonGateways {
-    class PaystackAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
-    {
-        public array $supportedFeatures = [];
-        private $addonSlug = 'paystack-for-fluent-cart';
-        private $addonFile = 'paystack-for-fluent-cart/paystack-for-fluent-cart.php';
-        public function __construct()
-        {
-        }
-        public function meta(): array
-        {
-        }
-        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
-        {
-        }
-        public function handleIPN()
-        {
-        }
-        public function getOrderInfo(array $data)
-        {
-        }
-        public function fields()
-        {
-        }
-    }
-}
 namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
     class Airwallex extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
@@ -16909,6 +17066,26 @@ namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
         {
         }
     }
+}
+namespace FluentCart\App\Modules\PaymentMethods\Core {
+    abstract class BaseGatewaySettings
+    {
+        public static array $allSettings = [];
+        private static bool $settingsLoaded = false;
+        public $settings;
+        public $methodHandler;
+        public function __construct()
+        {
+        }
+        abstract public function get($key = '');
+        abstract public function getMode();
+        abstract public function isActive();
+        public function getCachedSettings()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
     class AirwallexSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
     {
         public $settings;
@@ -16932,107 +17109,6 @@ namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
         {
         }
         public function getWebhookSecret()
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\AuthorizeNetGateway {
-    class AuthorizeNet extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
-    {
-        public array $supportedFeatures = ['payment', 'refund', 'webhook'];
-        public function __construct()
-        {
-        }
-        public function meta(): array
-        {
-        }
-        public function boot()
-        {
-        }
-        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
-        {
-        }
-        public function refund($refundInfo, $order, $transaction)
-        {
-        }
-        public function handleIPN()
-        {
-        }
-        public function getOrderInfo(array $data)
-        {
-        }
-        public function fields(): array
-        {
-        }
-        public static function validateSettings($data): array
-        {
-        }
-        public function getEnqueueScriptSrc($hasSubscription = 'no'): array
-        {
-        }
-        public function getEnqueueStyleSrc(): array
-        {
-        }
-        private function createAuthorizeNetTransaction($data)
-        {
-        }
-        private function processAuthorizeNetRefund($refundData)
-        {
-        }
-        private static function testApiConnection($apiLoginId, $transactionKey, $mode)
-        {
-        }
-        private function getApiUrl()
-        {
-        }
-        private function getWebhookUrl()
-        {
-        }
-        public function webHookPaymentMethodName()
-        {
-        }
-        private function getDataDescriptor()
-        {
-        }
-        private function getDataValue()
-        {
-        }
-        private function handlePaymentCreated($payload)
-        {
-        }
-        private function handleRefundCreated($payload)
-        {
-        }
-        private function handlePaymentSuccess($transaction, $order)
-        {
-        }
-    }
-    class AuthorizeNetSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
-    {
-        public $settings;
-        public $methodHandler = 'fluent_cart_payment_settings_authorize_net';
-        public static function getDefaults()
-        {
-        }
-        public function isActive(): bool
-        {
-        }
-        public function get($key = '')
-        {
-        }
-        public function getMode()
-        {
-        }
-        public function getApiLoginId()
-        {
-        }
-        public function getTransactionKey()
-        {
-        }
-        public function getClientKey()
-        {
-        }
-        public function getSignatureKey()
         {
         }
     }
@@ -17611,7 +17687,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     class PayPal extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'paypal';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method', 'dispute_handler', 'subscriptions'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions'];
         public function __construct()
         {
         }
@@ -17878,7 +17954,140 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         }
     }
 }
-namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
+namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
+    class AddonGatewaySettings extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
+    {
+        protected $gatewaySlug;
+        protected $customStyles = [];
+        public function __construct($gatewaySlug)
+        {
+        }
+        public function setCustomStyles($styles)
+        {
+        }
+        public static function getDefaults()
+        {
+        }
+        public function get($key = null)
+        {
+        }
+        /**
+         * Validate addon configuration
+         * 
+         * @param array $config
+         * @return array|\WP_Error
+         */
+        public function validateAddonConfig($config)
+        {
+        }
+        public function getMode()
+        {
+        }
+        public function isActive(): bool
+        {
+        }
+        protected function getAddonNoticeStyles()
+        {
+        }
+        protected function renderIcon($svgPath, $styles = '')
+        {
+        }
+        protected function renderFeatureItem($text, $mode = 'light')
+        {
+        }
+        protected function renderInstallButton($addonSlug, $addonFile, $addonSource, $mode = 'light')
+        {
+        }
+        protected function renderActivateButton($addonFile, $mode = 'light')
+        {
+        }
+        protected function renderActiveBadge()
+        {
+        }
+        /**
+         * Generate addon notice HTML
+         * 
+         * @param array $config Configuration array with:
+         *   - title: Gateway title
+         *   - description: Gateway description
+         *   - features: Array of feature strings
+         *   - icon_path: SVG path for the gateway icon
+         *   - addon_slug: Plugin slug
+         *   - addon_file: Plugin file path
+         *   - addon_source: Array with 'type' and 'link'
+         * 
+         * @return string HTML for the addon notice
+         */
+        public function generateAddonNotice($config)
+        {
+        }
+    }
+    class PaystackAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'paystack-for-fluent-cart';
+        private $addonFile = 'paystack-for-fluent-cart/paystack-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        /**
+         * Get Paystack-specific notice configuration
+         */
+        private function getNoticeConfig()
+        {
+        }
+        /**
+         * Generate addon notice message
+         */
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro {
+    class AuthorizeNetPromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        private function getNoticeConfig()
+        {
+        }
+        public function upgradeToProMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
     class MolliePromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         public array $supportedFeatures = [];
@@ -17895,6 +18104,18 @@ namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
         {
         }
         public function getOrderInfo(array $data)
+        {
+        }
+        /**
+         * Get Mollie-specific notice configuration
+         */
+        private function getNoticeConfig()
+        {
+        }
+        /**
+         * Generate upgrade to pro message
+         */
+        public function upgradeToProMessage()
         {
         }
         public function fields()
@@ -17919,6 +18140,18 @@ namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
         public function getOrderInfo(array $data)
         {
         }
+        /**
+         * Get Paddle-specific notice configuration
+         */
+        private function getNoticeConfig()
+        {
+        }
+        /**
+         * Generate upgrade to pro message
+         */
+        public function upgradeToProMessage()
+        {
+        }
         public function fields()
         {
         }
@@ -17926,6 +18159,8 @@ namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
     class PromoGatewaySettings extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
     {
         protected $gatewaySlug;
+        protected $customStyles = [];
+        private $upgradeUrl = 'https://fluentcart.com/discount-deal';
         public function __construct($gatewaySlug)
         {
         }
@@ -17939,6 +18174,56 @@ namespace FluentCart\App\Modules\PaymentMethods\ProGateways {
         {
         }
         public function isActive(): bool
+        {
+        }
+        public function setCustomStyles($styles)
+        {
+        }
+        protected function getPromoNoticeStyles()
+        {
+        }
+        /**
+         * Render SVG icon
+         */
+        protected function renderIcon($svgPath, $styles = '')
+        {
+        }
+        /**
+         * Render a feature list item with checkmark
+         */
+        protected function renderFeatureItem($text, $mode = 'light')
+        {
+        }
+        /**
+         * Check if FluentCart Pro is installed
+         */
+        protected function isProInstalled()
+        {
+        }
+        /**
+         * Check if FluentCart Pro is active
+         */
+        protected function isProActive()
+        {
+        }
+        /**
+         * Render upgrade or activate button
+         */
+        protected function renderActionButton($mode = 'light')
+        {
+        }
+        /**
+         * Generate upgrade to pro notice HTML
+         * 
+         * @param array $config Configuration array with:
+         *   - title: Gateway title
+         *   - description: Gateway description
+         *   - features: Array of feature strings
+         *   - icon_path: SVG path for the gateway icon
+         *   - footer_text: Optional footer text
+         * @return string HTML for the upgrade notice
+         */
+        public function generateUpgradeNotice($config)
         {
         }
     }
@@ -18408,7 +18693,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     class Stripe extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'stripe';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method', 'dispute_handler', 'subscriptions'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'zero_recurring'];
         public \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings $settings;
         public function __construct()
         {
@@ -19761,6 +20046,15 @@ namespace FluentCart\App\Modules\Tax {
     {
         protected $taxSettings = [];
         public function register()
+        {
+        }
+        public function renderTaxRow($cart, $atts = '')
+        {
+        }
+        public function renderShippingTaxRow($cart, $atts = '')
+        {
+        }
+        public function renderCompoundTaxRow($cart, $atts = '')
         {
         }
         public function recalculateTax($data)
@@ -31463,6 +31757,65 @@ namespace FluentCart\App\Services\PluginInstaller {
         public function activateAddon($pluginFile)
         {
         }
+        /**
+         * Check for updates based on source type
+         * 
+         * @param string $sourceType Source type (github, wordpress, other)
+         * @param string $sourceLink Source URL (for github, other sources)
+         * @param string $pluginFile Plugin file path
+         * @param string $pluginSlug Plugin slug (for wordpress)
+         * @return array|\WP_Error
+         */
+        public function checkForUpdate($sourceType, $sourceLink, $pluginFile, $pluginSlug = '')
+        {
+        }
+        /**
+         * Check for updates from GitHub
+         * 
+         * @param string $sourceLink releases/latest URL
+         * @param string $currentVersion Current plugin version
+         * @return array|\WP_Error
+         */
+        private function checkUpdateFromGitHub($sourceLink, $currentVersion)
+        {
+        }
+        private function checkUpdateFromWordPress($pluginFile, $currentVersion)
+        {
+        }
+        /**
+         * Check for updates from other sources (placeholder)
+         * 
+         * @param string $sourceType Source type
+         * @param string $currentVersion Current plugin version
+         * @return array|\WP_Error
+         */
+        private function checkUpdateFromOther($sourceType, $sourceLink, $currentVersion)
+        {
+        }
+        private function getLatestGitHubVersion($releasesUrl)
+        {
+        }
+        /**
+         * Update addon based on source type
+         * 
+         * @param string $sourceType Source type (github, wordpress, other)
+         * @param string $sourceLink Source URL (for github)
+         * @param string $pluginSlug Plugin slug
+         * @param string $pluginFile Plugin file path
+         * @return bool|\WP_Error
+         */
+        public function updateAddon($sourceType, $sourceLink, $pluginSlug, $pluginFile)
+        {
+        }
+        private function updateFromGitHub($sourceLink, $pluginSlug, $pluginFile)
+        {
+        }
+        private function updateFromWordPress($pluginFile)
+        {
+        }
+        private function updateFromOther($sourceType)
+        {
+        }
     }
 }
 namespace FluentCart\App\Services {
@@ -31652,19 +32005,37 @@ namespace FluentCart\App\Services\Renderer {
         public function render($withWrapper = true)
         {
         }
+        public function renderOrderSummarySectionHeading()
+        {
+        }
         public function renderItemsLists()
         {
         }
         public function renderItemsFooter()
         {
         }
+        public function renderSubtotal($atts = '')
+        {
+        }
+        public function renderShipping($atts = '')
+        {
+        }
+        public function renderTotal($atts = '')
+        {
+        }
         protected function maybeShowCustomCartSummaries()
+        {
+        }
+        public function renderDiscountDetailRow()
+        {
+        }
+        public function renderShippingDetailRow()
         {
         }
         public function showCouponApplied()
         {
         }
-        public function showManualDiscount()
+        public function showManualDiscount($atts = '')
         {
         }
         public function showCouponField()
@@ -31731,7 +32102,7 @@ namespace FluentCart\App\Services\Renderer {
         public function wrapperEnd()
         {
         }
-        public function renderCreateAccountField()
+        public function renderCreateAccountField($attr_title = '')
         {
         }
         public function renderNameFields()
@@ -31743,7 +32114,16 @@ namespace FluentCart\App\Services\Renderer {
         public function renderAddressFields()
         {
         }
-        public function renderOrderNoteField()
+        public function renderBillingAddressFields($section_title = '')
+        {
+        }
+        public function renderShipToDifferentField($attr_title = '')
+        {
+        }
+        public function renderShippingAddressFields($section_title = '')
+        {
+        }
+        public function renderOrderNoteField($attr_title = '')
         {
         }
         public function renderShippingOptions()
@@ -31752,7 +32132,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderPaymentMethods()
         {
         }
-        public function renderCheckoutButton()
+        public function renderCheckoutButton($atts = '')
         {
         }
         protected function renderPaymentMethod($method, $config = [])
@@ -31761,7 +32141,7 @@ namespace FluentCart\App\Services\Renderer {
         private function maybeRearrangeAddressFields($fields)
         {
         }
-        public function agreeTerms()
+        public function agreeTerms($attr_title = '')
         {
         }
         private function renderSummaryFragment()
@@ -31989,7 +32369,16 @@ namespace FluentCart\App\Services\Renderer {
         public function render()
         {
         }
+        public function renderBuySectionWrapperStart()
+        {
+        }
+        public function renderBuySectionWrapperEnd()
+        {
+        }
         public function renderBuySection($atts = [])
+        {
+        }
+        public function renderVariationDisplay($atts = [])
         {
         }
         public function renderGalleryThumb()
@@ -32029,6 +32418,12 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderPurchaseButtons($atts = [])
+        {
+        }
+        public function renderBuyNowButton($atts = [])
+        {
+        }
+        public function renderAddToCartButton($atts = [])
         {
         }
         public static function renderNoProductFound()
@@ -32192,6 +32587,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         public function renderOrderItemsBody()
         {
         }
+        public function renderThankYouPageInstructions()
+        {
+        }
         public function renderOrderTotal()
         {
         }
@@ -32306,6 +32704,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderEmpty($message)
+        {
+        }
+        public function renderLoader()
         {
         }
     }
