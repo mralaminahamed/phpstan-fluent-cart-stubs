@@ -7973,6 +7973,15 @@ namespace FluentCart\App\Hooks\Handlers {
         public function getAllActive()
         {
         }
+        public function registerPromoR2Driver($drivers, $args)
+        {
+        }
+        public function getPromoR2Logo()
+        {
+        }
+        public function getPromoR2DarkLogo()
+        {
+        }
     }
     class MenuHandler
     {
@@ -10080,6 +10089,27 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function verifyConnectInfo(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Hooks\Handlers\GlobalStorageHandler $globalHandler)
+        {
+        }
+        public function createBucket(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function listBuckets(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function resetSettings(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function changeStatus(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        private function resolveBucketActionDriver(string $driver, string $method)
+        {
+        }
+        private function resolveStorageDriver(string $driver)
+        {
+        }
+        private function resolveDriverInstance(string $driver)
         {
         }
     }
@@ -19452,6 +19482,9 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
         public static function getRequest($url, $accessToken = null, $mode = '')
         {
         }
+        public static function createOrder($purchaseUnit)
+        {
+        }
         public static function verifyPayment($paymentId)
         {
         }
@@ -21828,6 +21861,9 @@ namespace FluentCart\App\Modules\StorageDrivers {
         public static $drivers = [];
         public static $routes = [];
         abstract public function getLogo();
+        public function getDarkLogo()
+        {
+        }
         abstract public function getDescription();
         abstract public function getSettings();
         abstract public function fields();
@@ -21860,6 +21896,9 @@ namespace FluentCart\App\Modules\StorageDrivers {
         public function hasBucket(): bool
         {
         }
+        public function needsReconfigure(): bool
+        {
+        }
         public function getActiveStatus($data, $args)
         {
         }
@@ -21872,10 +21911,22 @@ namespace FluentCart\App\Modules\StorageDrivers {
         public function saveSettings($data)
         {
         }
+        public function resetSettings()
+        {
+        }
         public function updateSettings($data)
         {
         }
         public function globalFields($data, $args)
+        {
+        }
+        public function hasSettingsTemplate(): bool
+        {
+        }
+        public function getSettingsTemplate(): ?string
+        {
+        }
+        public function getSettingsTemplatePayload(array $response = []): array
         {
         }
         public function sanitize($data, $fields)
@@ -21965,13 +22016,19 @@ namespace FluentCart\App\Modules\StorageDrivers\S3 {
         public function registerHooks()
         {
         }
-        public function getBucketList(): array
+        public function getBucketList($buckets = [], $args = []): array
         {
         }
         public function getLogo(): string
         {
         }
+        public function getDarkLogo()
+        {
+        }
         public function hasBucket(): bool
+        {
+        }
+        public function needsReconfigure(): bool
         {
         }
         public function getDescription()
@@ -21983,7 +22040,31 @@ namespace FluentCart\App\Modules\StorageDrivers\S3 {
         public function getSettings()
         {
         }
+        public function getSettingsTemplate(): ?string
+        {
+        }
+        public function getSettingsTemplatePayload(array $response = []): array
+        {
+        }
+        public function listBuckets(array $data, array $args = [])
+        {
+        }
+        public function createBucket(array $data)
+        {
+        }
         public function updateSettings($data)
+        {
+        }
+        private function requireCredentials(array $data)
+        {
+        }
+        private function resolveCredentials(array $data): array
+        {
+        }
+        public function resetSettings()
+        {
+        }
+        private function prepareSettingsForStorage(array $settings): array
         {
         }
         /**
@@ -22004,9 +22085,13 @@ namespace FluentCart\App\Modules\StorageDrivers\S3 {
         public static function getBucketRegion($bucket)
         {
         }
+        private function isTrue($value)
+        {
+        }
     }
     class S3Settings
     {
+        protected const MISSING_DEFINE_CREDENTIALS_MESSAGE = 'S3 was configured previously, but the wp-config.php credentials are missing now. Add them again to continue.';
         protected $settings;
         protected $driverHandler = 'fluent_cart_storage_settings_s3';
         static ?array $cachedSettings = null;
@@ -22017,13 +22102,31 @@ namespace FluentCart\App\Modules\StorageDrivers\S3 {
         public static function getDefaults()
         {
         }
+        public function get($key = '')
+        {
+        }
+        public static function resolveConfiguredBucket(array $settings): string
+        {
+        }
+        public static function resolveEffectiveBucket(array $settings): string
+        {
+        }
+        protected function applyDefineCredentialsState(): void
+        {
+        }
         public function isActive()
+        {
+        }
+        public function getAuthMethod()
         {
         }
         private function hasRequiredKeys(array $settings, array $requiredKeys): bool
         {
         }
-        public function get($key = '')
+        public static function hasDefinedCredentials(): bool
+        {
+        }
+        public static function getDefinedCredentials(): array
         {
         }
     }
@@ -25503,6 +25606,66 @@ namespace FluentCart\App\Services\FileSystem\Drivers\Local {
     }
 }
 namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
+    class S3BucketCreator
+    {
+        private const DEFAULT_REGION = 'us-east-1';
+        private string $accessKey;
+        private string $secretKey;
+        private string $region;
+        private string $bucket;
+        private string $hashAlgorithm = 'sha256';
+        private string $httpMethod = 'PUT';
+        private string $signature;
+        private $timeStamp;
+        private $date;
+        private string $requestUrl;
+        private ?string $sessionToken = null;
+        public static function create(string $secret, string $accessKey, string $bucket, string $region, ?string $sessionToken = null)
+        {
+        }
+        public function __construct(string $secret, string $accessKey, string $bucket, string $region, ?string $sessionToken = null)
+        {
+        }
+        public function createBucket()
+        {
+        }
+        public function getSignature(): string
+        {
+        }
+        public function generateSignature()
+        {
+        }
+        private function createScope(): string
+        {
+        }
+        private function getContentHash($payload = ''): string
+        {
+        }
+        private function createCanonicalUrl($payloadHash): string
+        {
+        }
+        private function getHost(): string
+        {
+        }
+        private function getBucketBaseUrl(): string
+        {
+        }
+        private function createStringToSign($payloadHash): string
+        {
+        }
+        private function getSigningKey()
+        {
+        }
+        // We need to re-generate signature dynamically based on body if needed, 
+        // but constructor runs once. So usage of this class instance:
+        // Actually, let's just do it inside getHeaders since body is there
+        private function generateSignatureKey($body = '')
+        {
+        }
+        public function getHeaders($body = ''): array
+        {
+        }
+    }
     class S3BucketList
     {
         private string $accessKey;
@@ -25514,10 +25677,11 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         private $timeStamp;
         private $date;
         private string $requestUrl;
-        public static function get(string $secret, string $accessKey, string $region)
+        private ?string $sessionToken = null;
+        public static function get(string $secret, string $accessKey, string $region, ?string $sessionToken = null)
         {
         }
-        public function __construct(string $secret, string $accessKey, string $region)
+        public function __construct(string $secret, string $accessKey, string $region, ?string $sessionToken = null)
         {
         }
         public function getList()
@@ -25559,6 +25723,8 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
     }
     class S3ConnectionVerify
     {
+        private const DEFAULT_REGION = 'us-east-1';
+        private const MAX_REGION_RETRIES = 2;
         private $date;
         private $timeStamp;
         private string $accessKey;
@@ -25569,13 +25735,62 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         private string $secretKey;
         private string $signature;
         private string $requestUrl;
-        public static function verify(string $secret, string $accessKey)
+        private ?string $sessionToken = null;
+        private string $payloadBody = '';
+        private ?string $contentMD5 = null;
+        private int $regionRetryCount = 0;
+        public static function verify(string $secret, string $accessKey, ?string $sessionToken = null, string $bucket = '', string $region = 'us-east-1')
         {
         }
-        public function __construct(string $secret, string $accessKey)
+        public static function checkBucketExistence(string $secret, string $accessKey, ?string $sessionToken = null, string $bucket = '', string $region = 'us-east-1')
+        {
+        }
+        public static function updatePublicAccessBlock(string $secret, string $accessKey, ?string $sessionToken = null, string $bucket = '', bool $enable = true, string $region = 'us-east-1')
+        {
+        }
+        public static function updateObjectOwnership(string $secret, string $accessKey, ?string $sessionToken = null, string $bucket = '', bool $enforce = true, string $region = 'us-east-1')
+        {
+        }
+        public static function checkSecuritySettings(string $secret, string $accessKey, ?string $sessionToken = null, string $bucket = '', string $region = 'us-east-1')
+        {
+        }
+        public function __construct(string $secret, string $accessKey, ?string $sessionToken = null, string $region = 'us-east-1')
         {
         }
         public function testConnection()
+        {
+        }
+        public function testBucketConnection()
+        {
+        }
+        public function checkPublicAccessBlock()
+        {
+        }
+        public function setPublicAccessBlock(bool $enable)
+        {
+        }
+        public function checkObjectOwnership()
+        {
+        }
+        public function getBucketLocation()
+        {
+        }
+        public function setObjectOwnership(bool $enforce)
+        {
+        }
+        private static function validateRequestInputs(string $region, string $bucket = '')
+        {
+        }
+        private function getServiceListUrl(): string
+        {
+        }
+        private function getBucketBaseUrlForRegion(string $region): string
+        {
+        }
+        private function getBucketRequestUrl(string $querySuffix = '?max-keys=1'): string
+        {
+        }
+        private function retryWithRegion(string $detectedRegion, string $querySuffix)
         {
         }
         private function generateSignature()
@@ -25600,6 +25815,9 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         {
         }
         private function getHeaders(): array
+        {
+        }
+        private function isPathStyle()
         {
         }
     }
@@ -25824,6 +26042,25 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
          * @throws \Exception
          */
         public function getHeaders(): array
+        {
+        }
+    }
+    class S3InputValidator
+    {
+        private const REGION_PATTERN = '/^(af|ap|ca|cn|eu|il|me|mx|sa|us)(-gov)?-[a-z0-9-]+-\d+$/';
+        public static function isValidBucket($bucket): bool
+        {
+        }
+        public static function isValidRegion($region): bool
+        {
+        }
+        public static function validateBucket($bucket)
+        {
+        }
+        public static function validateRegion($region)
+        {
+        }
+        public static function validateBucketAndRegion($bucket, $region)
         {
         }
     }
