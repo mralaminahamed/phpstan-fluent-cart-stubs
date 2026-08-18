@@ -1006,230 +1006,100 @@ namespace FluentCart\Api\Resource {
     class AttrGroupResource extends \FluentCart\Api\Resource\BaseResourceApi
     {
         use \FluentCart\App\Helpers\HelperTrait;
-        private static array $orderByCols = ['title', 'id', 'slug', 'created_at'];
         public static function getQuery(): \FluentCart\Framework\Database\Orm\Builder
         {
         }
-        /**
-         * Retrieve attribute groups  based on the provided parameters.
-         *
-         * @param array $params Optional.  Params containing the necessary parameters to retrieve.
-         *        [
-         *            'params' => [
-         *                'with'         => (array) Optional. Relationships name to be eager loaded,
-         *                "search"       => (array) Optional.
-         *                       [ "column name(e.g., title|slug)" => [
-         *                             "column"       => "column name(e.g., title|slug)",
-         *                             "operator"     => "(string)(e.g., like_all|rlike|or_rlike)",
-         *                             "value"        => (string|array) ]
-         *                       ],
-         *                  "filters"     => (array) Optional.
-         *                       [ "column name(e.g., title|slug)" => [
-         *                             "column"       => "column name(e.g., title|slug)",
-         *                             "operator"     => "(string)(e.g., in)",
-         *                             "value"        => (string|array) ]
-         *                       ],
-         *                'order_by'     => (string) Optional. Column to order by,
-         *                'order_type'   => (string) Optional. Order type for sorting (ASC or DESC),
-         *                'per_page'     => (int) Optional. Number of items for per page,
-         *                'page'         => (int) Optional. Page number for pagination
-         *            ]
-         *        ]
-         *
-         */
         public static function get(array $params = [])
         {
         }
-        /**
-         * Find and retrieve attribute group based on the ID and given params.
-         *
-         * @param int $id Required. The ID of the attribute group to find and retrieve.
-         * @param array $params Optional. Additional parameters for finding attribute groups.
-         *        [
-         *            'params' => [
-         *                'with'         => (array) Optional. Relationships name to be eager loaded
-         *             ]
-         *         ]
-         *
-         */
         public static function find($id, $params = [])
         {
         }
-        /**
-         * Create attribute group with the provided data.
-         *
-         * @param array $data Required. Array containing the necessary parameters
-         *        $data    =>   (array) Required. Array of attribute group data.
-         *            [
-         *                    'title'          => (string) Required. The title of the attr group.
-         *                    'slug'           => (string) Required. The slug of the attr group.
-         *                    'description'    => (string) Optional. The description of the attr group.
-         *             ]
-         * @param array $params Optional. Additional parameters for attribute group creation.
-         *        [
-         *             // Include optional parameters, if any.
-         *        ]
-         *
-         */
         public static function create($data, $params = [])
         {
         }
-        /**
-         * Update attribute group with the provided data.
-         *
-         * @param array $data Required. Array containing the necessary parameters
-         *        $data    =>   (array) Required. Array of attribute group data.
-         *            [
-         *                    'title'          => (string) Required. The title of the attr group.
-         *                    'description'    => (string) Optional. The description of the attr group.
-         *             ]
-         * @param int $groupId Required. The id of the attribute group to update.
-         * @param array $params Optional. Additional parameters for attribute group creation.
-         *        [
-         *             // Include optional parameters, if any.
-         *        ]
-         *
-         */
         public static function update($data, $groupId, $params = [])
         {
         }
         /**
-         * Delete attribute group by ID.
-         *
-         * @param int $groupId Required. The ID of the attribute group to delete.
-         * @param array $params Optional. Additional parameters for attribute group deletion.
-         *        [
-         *              // Include optional parameters, if any.
-         *        ]
-         *
+         * Generate a unique slug for a new group. Mirrors AttrTermResource::generateUniqueSlug()
+         * but scoped to the groups table (global slug UNIQUE, not per-group).
          */
+        private static function generateUniqueSlug(string $title): string
+        {
+        }
+        /**
+         * MySQL/MariaDB UNIQUE constraint violation detector. SQLSTATE 23000 covers
+         * duplicate-key errors on slug UNIQUE. Used so concurrent inserts/updates
+         * return a clean 422 instead of leaking a generic 500.
+         */
+        private static function isUniqueViolation(\Throwable $e): bool
+        {
+        }
         public static function delete($groupId, $params = [])
+        {
+        }
+        /**
+         * Persist the merchant's drag-reorder of attribute groups in the library.
+         * Receives group IDs in the desired display order and writes a dense
+         * serial (1-indexed) to each. Mirrors AttrTermResource::reorder, one level
+         * up — the only difference is there's no parent group to scope ownership
+         * to, so we just confirm every ID is a real group before writing.
+         *
+         * The sidebar paginates (Load More), so the submitted set is the loaded
+         * prefix of the serial-ordered list; reassigning it to 1..k stays within
+         * the prefix's own range and never collides with unloaded groups.
+         */
+        public static function reorder($params = [])
         {
         }
     }
     class AttrTermResource extends \FluentCart\Api\Resource\BaseResourceApi
     {
         use \FluentCart\App\Helpers\HelperTrait;
-        private static array $orderByCols = ['id', 'title', 'slug', 'serial', 'created_at'];
-        private static array $moveTo = ['up', 'down'];
         public static function getQuery(): \FluentCart\Framework\Database\Orm\Builder
         {
         }
-        /**
-         * Retrieve attribute terms  based on the provided parameters.
-         *
-         * @param array $params Optional.  Params containing the necessary parameters to retrieve.
-         *        [
-         *            'params' => [
-         *                "search"       => (array) Optional.
-         *                       [ "column name(e.g., title|slug)" => [
-         *                             "column"       => "column name(e.g., title|slug)",
-         *                             "operator"     => "(string)(e.g., like_all|rlike|or_rlike)",
-         *                             "value"        => (string|array) ] 
-         *                       ],
-         *                  "filters"     => (array) Optional. 
-         *                       [ "column name(e.g., title|slug)" => [
-         *                             "column"       => "column name(e.g., title|slug)",
-         *                             "operator"     => "(string)(e.g., in)",
-         *                             "value"        => (string|array) ] 
-         *                       ],
-         *                'order_by'     => (string) Optional. Column to order by,
-         *                'order_type'   => (string) Optional. Order type for sorting (ASC or DESC),
-         *                'per_page'     => (int) Optional. Number of items for per page,
-         *                'page'         => (int) Optional. Page number for pagination
-         *            ]
-         *        ]
-         *
-         */
         public static function get(array $params = [])
         {
         }
-        /**
-         * Find and retrieve attribute term based on the ID and given params.
-         *
-         * @param int   $id     Required. The ID of the attribute term to find and retrieve.
-         * @param array $params Optional. Additional parameters for finding attribute terms.
-         *        [
-         *             // Include optional parameters, if any.  
-         *        ]
-         *
-         */
         public static function find($id, $params = [])
         {
         }
-        /**
-         * Create attribute term with the provided data.
-         *
-         * @param array $data   Required. Array containing the necessary parameters
-         *        $data    =>   (array) Required. Array of attribute term data.
-         *            [
-         *                    'title'          => (string) Required. The title of the attr term.
-         *                    'slug'           => (string) Required. The slug of the attr term.
-         *                    'description'    => (string) Optional. The description of the attr term.
-         *                    'serial'         => (int)    Optional. The serial of the attr term.
-         *             ]
-         * @param array $params Required. Additional parameters for attribute term creation.
-         *        [
-         *            'params' => [
-         *                'group_id'=> (int) Required. The id of the attr group.
-         *             ]
-         *         ]
-         *
-         */
         public static function create($data, $params = [])
         {
         }
-        /**
-         * Update attribute term with the provided data.
-         *
-         * @param array $data   Required. Array containing the necessary parameters
-         *        $data    =>   (array) Required. Array of attribute term data.
-         *            [
-         *                    'title'          => (string) Required. The title of the attr term.
-         *                    'slug'           => (string) Required. The slug of the attr term.
-         *                    'description'    => (string) Optional. The description of the attr term.
-         *                    'serial'         => (int)    Optional. The serial of the attr term.
-         *             ]
-         * @param int $termId     Required. The id of the attribute term to update.
-         * @param array $params   Required. Additional parameters for attribute term creation.
-         *        [
-         *            'params' => [
-         *                'group_id'=> (int) Required. The id of the attr group.
-         *             ]
-         *         ]
-         *
-         */
         public static function update($data, $termId, $params = [])
         {
         }
-        /**
-         * Delete attribute term by term ID and given params.
-         *
-         * @param int   $termId     Required. The ID of the attribute term to delete.
-         * @param array $params     Required. Additional parameters for attribute term deletion.
-         *        [
-         *            'params' => [
-         *                'group_id'=> (int) Required. The id of the attr group.
-         *             ]
-         *         ]
-         * 
-         */
         public static function delete($termId, $params = [])
         {
         }
+        public static function reorder($params = [])
+        {
+        }
         /**
-         * Update attribute term serial index with the provided params.
-         *
-         * @param array $params   Required. Array containing the necessary parameters
-         *        $params    =>   (array) Required. Array of attribute term data.
-         *            [
-         *                    'term_id'   => (int) Required. The term id of the attr term.
-         *                    'group_id'  => (int) Required. The group id of the attr term.
-         *                    'move'      => (int) Required. The move of the attr term.
-         *             ]
-         *
+         * MySQL/MariaDB UNIQUE constraint violation detector. SQLSTATE 23000 covers
+         * duplicate-key on any UNIQUE index, including the composite (group_id, slug)
+         * on terms and slug on groups. Used so concurrent inserts return a clean 422
+         * instead of leaking a generic 500.
          */
-        public static function updateSerial($params = [])
+        private static function isUniqueViolation(\Throwable $e): bool
+        {
+        }
+        /**
+         * Derive a unique slug from an in-memory set of already-taken slugs.
+         * Used by createBulk() so multiple titles can be resolved in one pass
+         * without a DB round-trip per title.
+         */
+        private static function resolveUniqueSlugFromSet(string $slugBase, array $takenSlugs): string
+        {
+        }
+        /**
+         * Generate a unique slug within a group, ignoring a specific term id (for update).
+         * Mirrors the auto-slug logic in create() so the two endpoints stay in sync.
+         */
+        private static function generateUniqueSlug(string $title, int $groupId, ?int $ignoreId = null): string
         {
         }
     }
@@ -3031,6 +2901,9 @@ namespace FluentCart\Api\Resource {
          *        ]
          *
          */
+        /**
+         * @deprecated since v1.4. Use OverviewReportController::getOverview() via GET reports/overview instead.
+         */
         public static function reportOverview($params = [])
         {
         }
@@ -4780,6 +4653,35 @@ namespace FluentCart\App\Events {
         {
         }
     }
+    /**
+     * Fired when a product's variation set changes in a way that can invalidate its
+     * default_variation_id — combinations regenerated/removed, or a variant set
+     * active/inactive. Distinct from StockChanged (which is broad and currently
+     * carries no default listener) so this stays scoped to variant-set mutations.
+     * UpdateDefaultVariation re-resolves the default to the first purchasable
+     * combination; works for every variation type.
+     */
+    class ProductVariationsChanged extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/product_variations_changed';
+        protected array $listeners = [\FluentCart\App\Listeners\UpdateDefaultVariation::class];
+        /**
+         * @var array $postIds
+         */
+        public $postIds;
+        public function __construct($postIds)
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        public function getActivityEventModel()
+        {
+        }
+        public function shouldCreateActivity(): bool
+        {
+        }
+    }
     class StockChanged extends \FluentCart\App\Events\EventDispatcher
     {
         public string $hook = 'fluent_cart/product_stock_changed';
@@ -6184,12 +6086,31 @@ namespace FluentCart\App\Helpers {
         {
         }
         /**
+         * Build a bounded, human-readable summary of variation titles for activity
+         * logs. When the count is within $limit the full list is returned; only when
+         * there are MORE than $limit titles do we sample the first $limit and append
+         * "and N more", so large combination sets don't bloat the log content.
+         *
+         * @param array $titles
+         * @param int $limit
+         * @return string
+         */
+        public static function summarizeVariationTitles(array $titles, $limit = 5)
+        {
+        }
+        /**
          *
          * @param $productId
          * @param array $childrenIdsWeWantToKeepSafe
+         * @param string $reason Human-readable cause for the deletion, shown in the
+         *                       log content (e.g. "the variation type was changed to
+         *                       'Simple'"). Defaults to a generic, always-true phrase
+         *                       so the message never claims the wrong cause — this is
+         *                       called from several flows (Simple switch, option/group
+         *                       changes, regeneration), not only the Simple switch.
          * @return mixed
          */
-        public static function deleteOrphanVariant($productId, array $childrenIdsWeWantToKeepSafe = [])
+        public static function deleteOrphanVariant($productId, array $childrenIdsWeWantToKeepSafe = [], $reason = '')
         {
         }
         public static function generateVariationSets($formattedVariations, $i = 0)
@@ -6923,6 +6844,18 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
         public function init($wp_admin_bar)
+        {
+        }
+    }
+    class AdvancedVariationHandler
+    {
+        public function register()
+        {
+        }
+    }
+    class AttributesHandler
+    {
+        public function register()
         {
         }
     }
@@ -9063,76 +8996,55 @@ namespace FluentCart\App\Http\Controllers\AppControllers {
 namespace FluentCart\App\Http\Controllers {
     class AttributesController extends \FluentCart\App\Http\Controllers\Controller
     {
-        /**
-         *
-         * @param \FluentCart\Framework\Http\Request\Request $request
-         * @param $group_id
-         * @return array
-         */
         public function getGroup(\FluentCart\Framework\Http\Request\Request $request, $group_id): array
         {
         }
         public function getGroups(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
+        /**
+         * Two-pass payload for the Advanced Variation library picker.
+         *
+         * Pass 1: groups list (capped at 200) plus a per-group terms_count from a
+         * single batched aggregate. No terms are eager-loaded — at scale (200
+         * groups times hundreds of terms each) the combined payload could exceed
+         * memory limits and stall the admin request.
+         *
+         * Pass 2: the picker calls GET attr/group/{id}/terms on expand to fetch
+         * the full paginated term list for the specific group the merchant
+         * clicked. This trades one big upfront response for one small expansion
+         * round-trip per group the user actually interacts with — the usual
+         * pattern at expected catalog sizes (most stores expand 1-3 groups, not
+         * all 200).
+         */
+        public function getLibrary(\FluentCart\Framework\Http\Request\Request $request): array
+        {
+        }
         public function createGroup(\FluentCart\App\Http\Requests\AttrGroupRequest $request)
         {
         }
-        /**
-         * Update attribute group info
-         *
-         * @param \FluentCart\App\Http\Requests\AttrGroupRequest $request
-         * @param $group_id
-         * @return mixed
-         */
         public function updateGroup(\FluentCart\App\Http\Requests\AttrGroupRequest $request, $group_id)
         {
         }
-        /**
-         * Delete a group only if the terms of the group is unused
-         *
-         * @param \FluentCart\Framework\Http\Request\Request $request
-         * @param $group_id
-         * @return mixed
-         */
         public function deleteGroup(\FluentCart\Framework\Http\Request\Request $request, $group_id)
         {
         }
         public function getTerms(\FluentCart\Framework\Http\Request\Request $request, $group_id): array
         {
         }
-        public function createTerm(\FluentCart\App\Http\Requests\AttrTermRequest $request, $group_id)
+        public function createTerms(\FluentCart\App\Http\Requests\AttrTermRequest $request, $group_id)
         {
         }
-        /**
-         *
-         * @param \FluentCart\App\Http\Requests\AttrTermRequest $request
-         * @param $group_id
-         * @param $term_id
-         * @return mixed
-         */
-        public function updateTerm(\FluentCart\App\Http\Requests\AttrTermRequest $request, $group_id, $term_id)
+        public function updateTerm(\FluentCart\App\Http\Requests\AttrTermUpdateRequest $request, $group_id, $term_id)
         {
         }
-        /**
-         *
-         * @param \FluentCart\Framework\Http\Request\Request $request
-         * @param $group_id
-         * @param $term_id
-         * @return mixed
-         */
         public function deleteTerm(\FluentCart\Framework\Http\Request\Request $request, $group_id, $term_id)
         {
         }
-        /**
-         * Update the serial of a term only
-         *
-         * @param \FluentCart\Framework\Http\Request\Request $request
-         * @param $group_id
-         * @param $term_id
-         * @return mixed
-         */
-        public function changeTermSerial(\FluentCart\Framework\Http\Request\Request $request, $group_id, $term_id)
+        public function reorderTerms(\FluentCart\Framework\Http\Request\Request $request, $group_id)
+        {
+        }
+        public function reorderGroups(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -10151,6 +10063,26 @@ namespace FluentCart\App\Http\Controllers {
         public function updatePricingTable(\FluentCart\Framework\Http\Request\Request $request, $variantId)
         {
         }
+        public function bulkUpdate(\FluentCart\App\Http\Requests\BulkUpdateVariantRequest $request)
+        {
+        }
+        /**
+         * Group bulk update — partial update with PATCH semantics.
+         * Any field left null in the payload is skipped; only provided non-null
+         * fields are written to each variant in the group. For other_info, only
+         * the supplied non-null sub-keys are merged into the existing JSON.
+         */
+        public function groupBulkUpdate(\FluentCart\App\Http\Requests\GroupBulkUpdateVariantRequest $request)
+        {
+        }
+        /**
+         * Sanitize the other_info delta for group bulk update.
+         * Only known sub-keys are allowed; unknown keys are dropped to prevent
+         * arbitrary data injection into the JSON column.
+         */
+        private function sanitizeOtherInfoDelta(array $raw)
+        {
+        }
     }
 }
 namespace FluentCart\App\Http\Controllers\Reports {
@@ -10265,12 +10197,18 @@ namespace FluentCart\App\Http\Controllers\Reports {
         public function getSalesGrowth(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Modules\ReportingModule\SalesReport $salesReport): array
         {
         }
+        /**
+         * @deprecated since v1.4. Use GET reports/overview (OverviewReportController::getOverview) instead.
+         */
         public function getReportOverview(\FluentCart\Framework\Http\Request\Request $request): array
         {
         }
         public function searchRepeatCustomer(\FluentCart\Framework\Http\Request\Request $request): array
         {
         }
+        /**
+         * @deprecated since v1.4. Use GET reports/fetch-top-sold-products (DefaultReportController::getTopSoldProducts) instead.
+         */
         public function getTopProductsSold(\FluentCart\Framework\Http\Request\Request $request): array
         {
         }
@@ -10924,44 +10862,77 @@ namespace FluentCart\App\Http\Requests {
     }
     class AttrGroupRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
-        /**
-         * @return string[]
-         */
         public function rules()
         {
         }
-        /**
-         *
-         * @return array
-         */
         public function messages()
         {
         }
-        /**
-         *
-         * @return array
-         */
         public function sanitize()
         {
         }
     }
     class AttrTermRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
-        /**
-         * @return array
-         */
         public function rules()
         {
         }
-        /**
-         * @return array
-         */
         public function messages()
         {
         }
+        public function sanitize()
+        {
+        }
         /**
-         * @return array
+         * Look up the parent attribute group's type ('color' | 'image' | 'options')
+         * so the rules() can require the matching settings field. The {group_id}
+         * URL param is merged into the request inputs via WP_REST_Request::get_params(),
+         * so $this->get() resolves it without touching the controller signature.
+         *
+         * @return string|null
          */
+        protected function getGroupType()
+        {
+        }
+    }
+    class AttrTermUpdateRequest extends \FluentCart\Framework\Foundation\RequestGuard
+    {
+        public function rules()
+        {
+        }
+        public function messages()
+        {
+        }
+        public function sanitize()
+        {
+        }
+        /**
+         * Look up the parent attribute group's type ('color' | 'image' | 'options')
+         * from the route param {group_id} so settings can be required to match.
+         *
+         * @return string|null
+         */
+        protected function getGroupType()
+        {
+        }
+    }
+    class BulkUpdateVariantRequest extends \FluentCart\Framework\Foundation\RequestGuard
+    {
+        /**
+         * Hard cap on the number of variant rows a single bulk-update call may
+         * modify. Matches AdvancedVariationService::DEFAULT_MAX_COMBINATIONS so a
+         * caller cannot use the bulk endpoint to write more rows than the editor
+         * can generate in the first place. Without this, an unauthenticated-yet-
+         * capability-holding attacker could POST a 100K-element array and burn
+         * memory + CPU even when every row eventually fails per-row sanitization.
+         */
+        const MAX_UPDATES_PER_REQUEST = 500;
+        public function rules()
+        {
+        }
+        public function messages()
+        {
+        }
         public function sanitize()
         {
         }
@@ -11235,6 +11206,19 @@ namespace FluentCart\App\Http\Requests\FrontendRequests\CustomerRequests {
     }
 }
 namespace FluentCart\App\Http\Requests {
+    class GroupBulkUpdateVariantRequest extends \FluentCart\Framework\Foundation\RequestGuard
+    {
+        const MAX_VARIANTS_PER_REQUEST = 500;
+        public function rules()
+        {
+        }
+        public function messages()
+        {
+        }
+        public function sanitize()
+        {
+        }
+    }
     class LabelRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
         /**
@@ -11846,12 +11830,21 @@ namespace FluentCart\App\Listeners {
     class UpdateDefaultVariation
     {
         /**
-         * @param $event StockChanged
+         * @param $event \FluentCart\App\Events\ProductVariationsChanged
          */
         public static function handle($event)
         {
         }
-        private static function checkDefaultVariationStockStatus($params = [])
+        /**
+         * Set each product's default_variation_id to the FIRST variant by
+         * serial_index — the first combination in the merchant's order. Always
+         * recomputed on a variant-set change (generate / reorder / add / update /
+         * remove), overriding any prior value including a manual pick. Intentionally
+         * ignores stock_status and item_status: the default is purely the first
+         * combination by order, in stock or not, active or not. null only when the
+         * product has no variants.
+         */
+        public static function updateForProducts(array $postIds)
         {
         }
     }
@@ -15880,12 +15873,13 @@ namespace FluentCart\App\Models {
      */
     class AttributeGroup extends \FluentCart\App\Models\Model
     {
-        use \FluentCart\App\Models\Concerns\CanSearch;
+        use \FluentCart\App\Models\Concerns\CanSearch, \FluentCart\App\Models\Concerns\CanUpdateBatch;
         public static function boot()
         {
         }
         protected $table = 'fct_atts_groups';
-        protected $fillable = ['title', 'slug', 'description', 'settings'];
+        protected $fillable = ['title', 'slug', 'description', 'settings', 'serial'];
+        protected $casts = ['is_system' => 'boolean'];
         public function setSettingsAttribute($value)
         {
         }
@@ -15942,7 +15936,7 @@ namespace FluentCart\App\Models {
      */
     class AttributeTerm extends \FluentCart\App\Models\Model
     {
-        use \FluentCart\App\Models\Concerns\CanSearch;
+        use \FluentCart\App\Models\Concerns\CanSearch, \FluentCart\App\Models\Concerns\CanUpdateBatch;
         protected $table = 'fct_atts_terms';
         protected $fillable = ['group_id', 'serial', 'title', 'slug', 'description', 'settings'];
         public function setSettingsAttribute($value)
@@ -17805,6 +17799,9 @@ namespace FluentCart\App\Models {
         {
         }
         public function product_downloads(): \FluentCart\Framework\Database\Orm\Relations\HasMany
+        {
+        }
+        public function attrRelations(): \FluentCart\Framework\Database\Orm\Relations\HasMany
         {
         }
         public function order_items()
@@ -22653,7 +22650,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway\Webhook {
         public static function getEvents(): array
         {
         }
-        public static function webhookInstruction(): string
+        public static function webhookInstruction(): array
         {
         }
         public function processAndInsertOrderByEvent($event)
@@ -24930,21 +24927,6 @@ namespace FluentCart\App\Modules\Turnstile {
         }
     }
 }
-namespace FluentCart\App\Modules\Wishlist {
-    class WishlistModule
-    {
-        public function register()
-        {
-        }
-        /**
-         * @param string $userLogin
-         * @param \WP_User $user
-         */
-        public function mergeGuestWishlistOnLogin($userLogin, $user)
-        {
-        }
-    }
-}
 namespace FluentCart\App\Modules\WooCommerceMigrator\Contracts {
     interface MigrationServiceInterface
     {
@@ -25548,6 +25530,145 @@ namespace FluentCart\App\Modules\WooCommerceMigrator {
         {
         }
         public static function checkRequiredTables()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Services {
+    class AdvancedVariationService
+    {
+        /**
+         * Hard ceiling on the number of variant combinations a single save may
+         * generate. The cartesian product of attribute groups grows multiplicatively
+         * (3 groups × 10 terms each = 1,000 variants, 4 × 10 = 10,000), so without
+         * a cap a careless attribute set can blow up admin save time, memory,
+         * and downstream DB write volume. 500 is generous for real e-commerce use
+         * (typical: <50 combinations) while still bounding the worst case.
+         * Filterable so a high-SKU store can raise it after a deliberate review.
+         */
+        const DEFAULT_MAX_COMBINATIONS = 500;
+        /**
+         * Hard ceiling on the number of attribute groups a single save may
+         * reference. Caps the cartesian's depth AND bounds the length of the
+         * variation_identifier string (joined term IDs — the column is
+         * VARCHAR(100) on free, so ~5 BIGINT-sized IDs is the schema limit
+         * anyway). Without this, a payload with many single-term groups would
+         * pass the combination cap but still drive an unbounded identifier
+         * concatenation, whereIn list, and relation insert per variant.
+         */
+        const DEFAULT_MAX_GROUPS_PER_SAVE = 10;
+        /**
+         * Hard ceiling on the total unique term IDs the payload may reference
+         * (sum across all groups, deduplicated). Bounds the size of the
+         * findMissingTermIds whereIn lookup and the per-variant relation
+         * insert volume even when the cartesian cap is satisfied (the
+         * single-term-many-groups bypass the bot flagged).
+         */
+        const DEFAULT_MAX_TERMS_PER_SAVE = 500;
+        /**
+         * Matches fc_product_variations.variation_identifier (VARCHAR(100) on
+         * free). Used by the runtime guard in syncVariantCombinations to abort
+         * the save if any cartesian combination's underscore-joined term IDs
+         * would overflow the column. At the group cap (10) with realistic
+         * 5-8 digit term IDs we land at ~89 chars; the guard exists to catch
+         * the pathological case of growth-rotated BIGINT IDs in long-lived
+         * stores (>10-digit IDs aren't unprecedented). Non-STRICT MySQL would
+         * silently truncate, creating duplicate variants on different
+         * cartesian combinations that collapse to the same identifier prefix.
+         */
+        const VARIATION_IDENTIFIER_MAX_LENGTH = 100;
+        /**
+         * Baseline keys every variant's `other_info` carries — mirrors the
+         * payload that ProductBaseModel.addDummyVariant ships for simple /
+         * simple_variations products. The advanced-variation create path used
+         * to write only `{"variant": [...]}`, so downstream consumers that
+         * read `other_info.payment_type` (admin order update, cart line
+         * generation, OrderItemResource) got NULL and tripped the
+         * fct_order_items.payment_type NOT NULL constraint. Keep the keys in
+         * sync with the JS factory so the two surfaces don't drift.
+         */
+        private static function defaultVariantOtherInfo(): array
+        {
+        }
+        public static function syncVariantOption(int $productId, array $data): array
+        {
+        }
+        private static function syncVariantCombinations($srcDetails, $variations)
+        {
+        }
+        /**
+         * Whitelist-sanitize the caller-supplied options payload. Strips any
+         * keys we don't explicitly recognise so a hostile payload cannot pollute
+         * ProductDetail.other_info.attribute_co
+         * nfig with arbitrary structure.
+         * Within each group entry, only 'variants' (term IDs) and 'group_id'
+         * survive — both coerced to ints. Empty / non-array inputs become [].
+         *
+         * Runs BEFORE the cap checks so they operate on the cleaned shape,
+         * and BEFORE the storage write so what lands in other_info matches
+         * what the rest of the codebase reads back.
+         */
+        private static function sanitizeSettings($settings): array
+        {
+        }
+        /**
+         * Returns the term IDs from the payload that don't exist in fct_atts_terms.
+         * Called by syncVariantOption to reject the whole request when ANY term
+         * reference is unknown — better than silently creating orphan variants
+         * with missing relation rows (the bot-flagged failure mode).
+         *
+         * Returns empty array when every referenced term resolves. The single
+         * whereIn query is bounded by the projected-combination cap above, so
+         * worst case is one indexed PK lookup of <= MAX_COMBINATIONS unique IDs.
+         */
+        private static function findMissingTermIds(array $variations): array
+        {
+        }
+        /**
+         * Number of non-empty groups in the payload. Empty groups are skipped
+         * because they neither contribute to the cartesian nor to the cost
+         * caps below. Bounds the depth of the cartesian AND the length of the
+         * variation_identifier string (joined term IDs per variant).
+         */
+        private static function countNonEmptyGroups(array $variations): int
+        {
+        }
+        /**
+         * Total unique term IDs referenced across all groups (positive ints
+         * only). Bounds the size of the term-validation whereIn and the
+         * per-save relation-insert volume — independently of the combination
+         * cap, which can be satisfied even with many single-term groups.
+         */
+        private static function countUniqueTermIds(array $variations): int
+        {
+        }
+        /**
+         * Cheap O(N) projection of the cartesian combination count from the raw
+         * payload — multiplies the term count of every non-empty group. Used by
+         * the cap guard in syncVariantOption so we reject blow-up payloads
+         * BEFORE generateVariationSets() materialises the actual combinations.
+         *
+         * Returns 0 when every group is empty (no variants will be generated)
+         * so the cap check treats that as a no-op, not a violation.
+         */
+        private static function projectCombinationCount(array $variations): int
+        {
+        }
+        private static function generateVariationSets(array $groups): array
+        {
+        }
+        /**
+         * Attaches term + group display fields to every variant.attr_map row on
+         * the given product payload. Runs once per single-product API response
+         * (scoped by the variation_type guard in AdvancedVariation::register).
+         * Eager-loads terms with their group in ONE query so a product with N
+         * variants is still one query, not N.
+         *
+         * Returns the original product array unchanged when no terms are
+         * referenced — list-endpoint responses or products with no advanced
+         * variation pay no query cost.
+         */
+        public static function hydrateProductData(array $product): array
         {
         }
     }
@@ -28156,7 +28277,88 @@ namespace FluentCart\App\Services\FileSystem {
         }
     }
 }
+namespace FluentCart\App\Services\Filter\Concerns {
+    trait HasIdTitleSlugSearch
+    {
+        public function applySimpleFilter(?string $search = null): void
+        {
+        }
+    }
+}
 namespace FluentCart\App\Services\Filter {
+    class AttrGroupFilter extends \FluentCart\App\Services\Filter\BaseFilter
+    {
+        use \FluentCart\App\Services\Filter\Concerns\HasIdTitleSlugSearch;
+        // Groups render in the merchant's manual drag-order (fct_atts_groups.serial),
+        // the same contract terms use. Forced here so the list the sidebar drags
+        // matches the order the reorder endpoint persists.
+        public string $defaultSortBy = 'serial';
+        public string $defaultSortType = 'asc';
+        protected function parseSortBy(): string
+        {
+        }
+        protected function parseSortType(): string
+        {
+        }
+        public function applySelect(): void
+        {
+        }
+        protected function applyWith(): void
+        {
+        }
+        protected function buildCommonQuery()
+        {
+        }
+        public function tabsMap(): array
+        {
+        }
+        public function getModel(): string
+        {
+        }
+        public static function getFilterName(): string
+        {
+        }
+        public function applyActiveViewFilter(?string $activeView = null): void
+        {
+        }
+        private function whereStyling($query, string $styling): void
+        {
+        }
+    }
+    class AttrTermFilter extends \FluentCart\App\Services\Filter\BaseFilter
+    {
+        use \FluentCart\App\Services\Filter\Concerns\HasIdTitleSlugSearch;
+        public string $defaultSortBy = 'serial';
+        public string $defaultSortType = 'asc';
+        protected function parseSortBy(): string
+        {
+        }
+        protected function parseSortType(): string
+        {
+        }
+        protected ?int $groupId = null;
+        public function setGroupId(int $groupId): self
+        {
+        }
+        public function applySelect(): void
+        {
+        }
+        protected function buildCommonQuery()
+        {
+        }
+        public function tabsMap(): array
+        {
+        }
+        public function getModel(): string
+        {
+        }
+        public static function getFilterName(): string
+        {
+        }
+        public function applyActiveViewFilter(?string $activeView = null): void
+        {
+        }
+    }
     class CouponFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
         public function applySimpleFilter(?string $search = null): void
@@ -31829,6 +32031,49 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
     }
+    class AdvancedVariationRenderer
+    {
+        protected $product;
+        public function __construct($product)
+        {
+        }
+        /**
+         * Whitelist a term's stored color before it lands in an inline
+         * `style="background-color: ..."` attribute. esc_attr escapes HTML
+         * attribute chars but NOT CSS syntax — a stored value saved through
+         * sanitize_text_field (which never validated color format) like
+         * "red;position:fixed;inset:0;z-index:9999" would otherwise inject
+         * extra CSS declarations and deface the product page. Accept only
+         * hex (#rgb/#rgba/#rrggbb/#rrggbbaa), rgb()/rgba() with numeric
+         * content, or a bare CSS named color; anything else returns '' and
+         * the caller drops the style attribute entirely.
+         */
+        protected function safeCssColor($color): string
+        {
+        }
+        /**
+         * Emits the storefront selector markup. Returns true only when markup
+         * was actually echoed — false on every early bail. The caller writes
+         * this into the filter's 'rendered' flag so free core can fall through
+         * to its simple-variation rendering when this renderer no-ops (e.g. a
+         * product switched to advanced_variations before attributes are built).
+         */
+        public function render($selectorStyle = 'auto'): bool
+        {
+        }
+        protected function renderAttributeDropdown($group, $terms)
+        {
+        }
+        protected function renderColorDropdown($group, $terms)
+        {
+        }
+        protected function renderImageDropdown($group, $terms)
+        {
+        }
+        protected function renderAttributeSwatches($group, $terms)
+        {
+        }
+    }
     class CartDrawerRenderer
     {
         protected $cartItems;
@@ -32091,6 +32336,9 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public static function isLegalRegistrationIdRequired(): bool
+        {
+        }
+        public static function isB2BOnlyMode(): bool
         {
         }
         public static function hasAnyBusinessFields(): bool
@@ -32554,6 +32802,7 @@ namespace FluentCart\App\Services\Renderer {
         protected $variantsByPaymentTypes = [];
         protected $activeTab = 'onetime';
         protected $images = [];
+        protected $variantTermMap = [];
         protected $defaultImageUrl = null;
         protected $defaultImageAlt = null;
         public function __construct(\FluentCart\App\Models\Product $product, $config = [])
@@ -32592,7 +32841,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderGallerySeeMoreButton($remainingCount)
         {
         }
-        public function renderGalleryThumbControlButton($item, $imageId)
+        public function renderGalleryThumbControlButton($item, $imageId, $termId = 0, $mediaId = 0)
         {
         }
         public function renderGallery($args = [])
@@ -34474,6 +34723,9 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function getCustomerDashboardLink($accessor, $code = null)
+        {
+        }
+        public function getPaymentLink($accessor = null, $code = null)
         {
         }
         public function getAdminOrderLink($accessor, $code = null)
