@@ -5102,6 +5102,36 @@ namespace FluentCart\App\Helpers {
         {
         }
         /**
+         * Batched variant of getProductItemAttributes — resolves the item_attributes
+         * snapshot for many variations with a SINGLE whereIn query, so cart writes
+         * carrying several unsnapshotted items don't run one query per item. The
+         * per-item `fluent_cart/item_attributes` filter still fires for each variation.
+         *
+         * @param array $variationIds Variation (object) ids.
+         * @param array $productIds   Optional variationId => productId map for filter context.
+         * @return array variationId => item_attributes
+         */
+        public static function getProductItemsAttributes($variationIds, $productIds = [])
+        {
+        }
+        /**
+         * Attach a resolved `variation_display_title` ("Color: Red | Size: S") to every
+         * variation of the given products — the picker/list-side mirror of the order
+         * item display.
+         *
+         * Resolves the attribute snapshot for ALL variations in ONE batched query (no
+         * per-variant N+1), and only touches products whose `detail.variants` relation
+         * is eager-loaded — so callers that don't load variants pay nothing. Variations
+         * are mutated in place; the value falls back to the raw variation_title for
+         * simple products. Reusable across any product-list endpoint.
+         *
+         * @param iterable $products Product models with `detail.variants` loaded.
+         * @return void
+         */
+        public static function attachVariationDisplayTitles($products)
+        {
+        }
+        /**
          * The store's attribute groups as a lightweight slug => label/type map.
          *
          * Sourced from the request-cached `getStoreProductAttributeSet()` registry,
@@ -5132,15 +5162,31 @@ namespace FluentCart\App\Helpers {
         {
         }
         /**
-         * Render a line item's attributes as a single inline string.
+         * Render a line item's variation display string.
+         *
+         * Returns the labeled attribute combination ("Color: Red | Size: XS") when
+         * the item carries an attribute snapshot. When no attributes resolve it
+         * falls back to the item's variation title — staying empty for simple
+         * products whose title equals their post_title (no real variation). So
+         * callers can use the return value directly without their own fallback.
          *
          * @param array  $itemAttributes other_info['item_attributes'] snapshot.
-         * @param mixed  $item           Owning cart/order item (passed to filters).
+         * @param mixed  $item           Owning cart/order item (model or array).
          * @param string $scope          'cart' | 'order_item'.
          * @param string $separator      Glue between pairs (default ' | ').
-         * @return string e.g. "Color: Red | Size: XS"
+         * @return string e.g. "Color: Red | Size: XS", the variation title, or ''
          */
         public static function getDisplayAttributesString(array $itemAttributes, $item = null, $scope = 'cart', $separator = ' | ')
+        {
+        }
+        /**
+         * Variation title used when no attributes resolve — empty for simple
+         * products (title === post_title), otherwise the variation title.
+         *
+         * @param mixed $item Cart/order item model or array.
+         * @return string
+         */
+        protected static function variationTitleFallback($item)
         {
         }
     }
@@ -6915,7 +6961,7 @@ namespace FluentCart\App\Hooks\Handlers {
          * Default addon gateways to register
          * @var array
          */
-        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class, 'square' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SquareAddon::class];
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class, 'square' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SquareAddon::class, 'sslcommerz' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SslcommerzAddon::class];
         public function register()
         {
         }
@@ -17210,7 +17256,7 @@ namespace FluentCart\App\Models {
         public function getLastNameAttribute(): ?string
         {
         }
-        public function order(): \FluentCart\Framework\Database\Orm\Relations\belongsTo
+        public function order(): \FluentCart\Framework\Database\Orm\Relations\BelongsTo
         {
         }
         public function getEmailAttribute(): ?string
@@ -17496,7 +17542,7 @@ namespace FluentCart\App\Models {
     {
         use \FluentCart\App\Models\Concerns\CanSearch;
         protected $table = 'fct_order_transactions';
-        protected $appends = ['url'];
+        protected $appends = ['url', 'refundable'];
         /**
          * The attributes that are mass assignable.
          *
@@ -17535,6 +17581,9 @@ namespace FluentCart\App\Models {
         {
         }
         public function orders(): \FluentCart\Framework\Database\Orm\Relations\HasOne
+        {
+        }
+        public function getRefundableAttribute(): int
         {
         }
         public function getMaxRefundableAmount()
@@ -18752,7 +18801,7 @@ namespace FluentCart\App\Models {
         use \FluentCart\App\Models\Concerns\HasActivity, \FluentCart\App\Models\Concerns\CanUpdateBatch;
         protected $table = 'fct_subscriptions';
         protected $primaryKey = 'id';
-        protected $appends = ['url', 'payment_info', 'billingInfo', 'overridden_status', 'currency', 'reactivate_url'];
+        protected $appends = ['url', 'payment_info', 'billingInfo', 'overridden_status', 'currency', 'reactivate_url', 'display_item_name'];
         protected $guarded = ['id'];
         protected $fillable = ['customer_id', 'parent_order_id', 'product_id', 'item_name', 'variation_id', 'billing_interval', 'signup_fee', 'quantity', 'recurring_amount', 'recurring_tax_total', 'recurring_total', 'bill_times', 'bill_count', 'expire_at', 'trial_ends_at', 'canceled_at', 'restored_at', 'collection_method', 'trial_days', 'vendor_customer_id', 'vendor_plan_id', 'vendor_subscription_id', 'next_billing_date', 'status', 'original_plan', 'vendor_response', 'current_payment_method', 'config'];
         public static function boot()
@@ -18798,6 +18847,24 @@ namespace FluentCart\App\Models {
         {
         }
         public function setConfigAttribute($value)
+        {
+        }
+        /**
+         * Customer-facing display name. When the config['item_attributes'] snapshot
+         * resolves it returns the product name with the labeled combination
+         * ("Cake - Flavor: Vanilla | Weight: 500 g"); otherwise the raw item_name
+         * (simple / pre-snapshot subscriptions).
+         *
+         * Presentation-only — it does NOT override the item_name column, so internal
+         * and payment-gateway reads of $subscription->item_name keep the raw stored
+         * value. Use this only at customer-facing display sites.
+         *
+         * The model is passed to the resolver so attribute-display filters (e.g. for
+         * simple-variation / third-party attributes) get the item context they need.
+         *
+         * @return string
+         */
+        public function getDisplayItemNameAttribute()
         {
         }
         public function getUrlAttribute($value)
@@ -22056,6 +22123,33 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
         {
         }
     }
+    class SslcommerzAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'sslcommerz-for-fluent-cart';
+        private $addonFile = 'sslcommerz-for-fluent-cart/sslcommerz-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
 }
 namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro {
     class AuthorizeNetPromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
@@ -24225,6 +24319,9 @@ namespace FluentCart\App\Modules\Tax {
         protected function isReverseChargeCheckout($checkoutData)
         {
         }
+        protected function hasReverseChargeTaxData(array $taxData): bool
+        {
+        }
         public function maybeRerenderEuVatField($fragments, $args)
         {
         }
@@ -24691,10 +24788,32 @@ namespace FluentCart\App\Modules\Templating\Bricks {
     }
     class BricksLoader
     {
+        const TEMPLATE_TYPE_PRODUCT = 'fct_product';
         public function register()
         {
         }
         public function loadElements()
+        {
+        }
+        /**
+         * Add FluentCart template types to the Bricks template type dropdown.
+         */
+        public function addTemplateTypes($controlOptions)
+        {
+        }
+        /**
+         * Let Bricks resolve FluentCart single product templates as product templates.
+         */
+        public function setContentType($contentType, $postId)
+        {
+        }
+        /**
+         * Make the FluentCart product template type render on single product pages.
+         */
+        public function setActiveTemplates($activeTemplates, $postId, $contentType)
+        {
+        }
+        protected function getProductTemplateId($postId)
         {
         }
         public function preloadProductCollectionsAjax($view, $args)
@@ -25830,6 +25949,12 @@ namespace FluentCart\App\Services\Async {
         protected function insert($product)
         {
         }
+        private function insertAdvancedVariation(\FluentCart\App\Models\Product $product, array $detail, array $resolved, array $variantImages, array $imageKeyGroups, array $defaultVariantData, array $variantPrices = [], array $priceKeyGroups = []): void
+        {
+        }
+        private function resolveAttributeOptions(array $attributeOptions): array
+        {
+        }
         public function attachTerms($categories, $postId)
         {
         }
@@ -25842,13 +25967,13 @@ namespace FluentCart\App\Services\Async {
         public function __construct()
         {
         }
-        public static function attachImageToProduct(array $product, array $images)
+        public static function attachImageToProduct(array $product, array $images, bool $cdnMode = false)
         {
         }
-        public static function attachImageToVariant($variantId, array $images)
+        public static function attachImageToVariant($variantId, array $images, bool $cdnMode = false)
         {
         }
-        protected function addImageFromUrl($url, $title): array
+        protected function addImageFromUrl($url, $title, bool $cdnMode = false): array
         {
         }
         public function prepareAttachmentForJsFromUrl(string $url): ?array
@@ -33263,6 +33388,21 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         /**
+         * Build a folded per-rate row array for the 3-column tax breakdown table.
+         *
+         * Merges order-tax rate lines with shipping-tax lines by rate_id so each rate
+         * appears once with its combined tax and computed taxable base.
+         *
+         * @param array  $rateLines          Output of Order::getDisplayTaxLines().
+         * @param array  $shippingLines      Output of Order::getDisplayShippingTaxLines().
+         * @param string $taxAmountKey       Key holding the order tax amount in each $rateLine ('order_tax').
+         * @param bool   $isShippingInclusive Whether shipping tax is inclusive.
+         * @return array Each row: ['label'=>string,'base'=>int,'tax'=>int,'inclusive'=>bool]
+         */
+        public static function buildFoldedRateRows($rateLines, $shippingLines, $taxAmountKey, $isShippingInclusive)
+        {
+        }
+        /**
          * Checkout-side variant: determines whether the shipping tax is inclusive of the
          * shipping price. Shipping always follows the store-level tax mode, so this returns
          * true only when store_tax_behavior === 2 (inclusive). Per-product inclusive flags
@@ -34907,6 +35047,24 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function getTaxBreakdown(): string
+        {
+        }
+        /**
+         * Wrap the accumulated tax-breakdown rows in their own grey rounded box,
+         * right-aligned to a fixed 400px column.
+         *
+         * The tax breakdown is the only thing that lives inside the grey box; the
+         * surrounding Subtotal/Discount/Shipping/Fees rows (above) and Refund/Total/
+         * Payment rows (below) are rendered as plain rows by the summary table and
+         * stay outside this wrapper. A table-based 400px right-aligned wrapper is used
+         * (not a div) so PDF renderers (mPDF/Dompdf) and email clients honour the
+         * width/alignment, matching the boxed treatment on the thank-you/customer
+         * surfaces. Consumed by the PDF receipt templates via {{order.tax_breakdown}}.
+         *
+         * @param string $rows Inner <tr> rows for the tax breakdown.
+         * @return string A single <tr><td colspan="2"> cell carrying the grey box.
+         */
+        private function wrapTaxBreakdownBox(string $rows): string
         {
         }
         private function resolveTaxRateLabel($orderTaxRate): string
