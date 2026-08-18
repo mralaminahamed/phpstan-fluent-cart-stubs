@@ -6367,6 +6367,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         private function enqueueAsset()
         {
         }
+        private function enqueueGlobalStyles()
+        {
+        }
         public function init(): void
         {
         }
@@ -6386,6 +6389,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         public static function make(): \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+        {
+        }
+        protected function isBlockEditor(): bool
         {
         }
     }
@@ -6580,9 +6586,6 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         protected function localizeData(): array
-        {
-        }
-        public function init(): void
         {
         }
         public function render(array $shortCodeAttribute, $block = null)
@@ -8560,6 +8563,9 @@ namespace FluentCart\App\Http\Controllers\Reports {
         {
         }
         public function getSubscriptionChart(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function getFutureRenewals(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -18885,6 +18891,9 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         public function acceptRemoteDispute($transaction, $args = [])
+        {
+        }
+        public function isCurrencySupported(): bool
         {
         }
     }
@@ -40422,6 +40431,9 @@ namespace FluentCart\App\Services\Renderer {
         public function renderFooter()
         {
         }
+        public function renderItemCount()
+        {
+        }
     }
     class CartItemRenderer
     {
@@ -41395,6 +41407,36 @@ namespace FluentCart\App\Services\Report\Concerns\Subscription {
         {
         }
     }
+    trait FutureRenewals
+    {
+        public function getFutureRenewals(array $params)
+        {
+        }
+        /**
+         * Get all active subscriptions with billing info
+         */
+        private function getActiveSubscriptions()
+        {
+        }
+        /**
+         * Calculate how many renewals will occur for a subscription in the given period
+         */
+        private function calculateRenewalsInPeriod($subscription, $startDate, $endDate)
+        {
+        }
+        /**
+         * Convert billing interval to days
+         */
+        private function getIntervalDays($interval)
+        {
+        }
+        /**
+         * Get actual renewal dates for a subscription within the period
+         */
+        private function getRenewalDatesInPeriod($subscription, $startDate, $endDate)
+        {
+        }
+    }
 }
 namespace FluentCart\App\Services\Report {
     class CustomerReportService extends \FluentCart\App\Services\Report\ReportService
@@ -41613,6 +41655,7 @@ namespace FluentCart\App\Services\Report {
     }
     class SubscriptionReportService extends \FluentCart\App\Services\Report\ReportService
     {
+        use \FluentCart\App\Services\Report\Concerns\Subscription\FutureRenewals;
         public function getRetentionChart($params = [])
         {
         }
