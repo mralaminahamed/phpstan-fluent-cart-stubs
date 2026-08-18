@@ -245,10 +245,10 @@ namespace FluentCart\Api {
         public static function getFormattedCurrencies()
         {
         }
-        public static function getPriceHtml($amount, $currencyCode = null, $showDecimal = true)
+        public static function getPriceHtml($amount, $currencyCode = null, $showDecimal = true, $withTranslatedDigit = false)
         {
         }
-        public static function getFormattedPrice($amount, $currencyCode = null, $asList = false, $showDecimal = true)
+        public static function getFormattedPrice($amount, $currencyCode = null, $asList = false, $showDecimal = true, $withTranslatedDigit = false)
         {
         }
     }
@@ -2043,11 +2043,11 @@ namespace FluentCart\Api\Resource\FrontendResource {
         /**
          * Find order address based on the given ID and parameters.
          *
-         * @param int $id Required. The ID of the order address.
+         * @param int $id Optional. The ID of the order address.
          * @param array $params Optional. Array containing the necessary parameters.
          *
          */
-        public static function find($id, $params = [])
+        public static function find($id = null, $params = [])
         {
         }
         /**
@@ -5542,7 +5542,7 @@ namespace FluentCart\App\Helpers {
          * @hook fluent_cart/hide_unnecessary_decimals - Filter to control whether unnecessary decimals (like .00) should be hidden.
          * Usage: add_filter('fluent_cart/hide_unnecessary_decimals', '__return_true'); // This will show 10 instead of 10.00
          */
-        public static function toDecimal($amount, $withCurrency = true, $currencyCode = null, $formatted = true, $showDecimals = true, $thousand_separator = true)
+        public static function toDecimal($amount, $withCurrency = true, $currencyCode = null, $formatted = true, $showDecimals = true, $thousand_separator = true, $withTranslatedDigit = true)
         {
         }
         public static function toCent($amount): int
@@ -5652,6 +5652,9 @@ namespace FluentCart\App\Helpers {
         public static function getSubscriptionTermText(array $data, $asHtml = false): string
         {
         }
+        public static function getTranslatedIntervalUnit(string $unit, int $count = 1): string
+        {
+        }
         public static function generateSubscriptionInfo($otherInfo, $itemPrice): ?string
         {
         }
@@ -5735,6 +5738,24 @@ namespace FluentCart\App\Helpers {
         {
         }
         public static function mergeTermIdsForFilter($array1 = [], $array2 = []): array
+        {
+        }
+        public static function loadBundleChild(array $variants, $select = ['id', 'variation_title']): array
+        {
+        }
+        /**
+         * Translate digits in a number according to the configured numeric system.
+         *
+         * Converts the digits 0-9 in the given number to their equivalents
+         * defined in the numeric system string from `dateTimeStrings()`.
+         * This allows displaying numbers in other numeral systems, e.g., Bengali, Arabic, Hindi, etc.
+         *
+         * Only digits are translated; other characters such as decimal points, currency symbols, or text remain unchanged.
+         *
+         * @param int|float|string $number The number to translate.
+         * @return string The number with digits translated according to the configured numeric system.
+         */
+        public static function translateNumber($number): string
         {
         }
     }
@@ -6192,6 +6213,28 @@ namespace FluentCart\App\Hooks\CLI {
         public function clone_orders($args, $assoc_args)
         {
         }
+        /**
+         * Generate retention snapshots for cohort analysis
+         *
+         * This command processes all subscriptions and generates monthly retention
+         * snapshots that track true customer retention (not subscription retention).
+         * Customers who "recycle" (cancel and re-subscribe) are correctly tracked
+         * as retained, not churned.
+         *
+         * ## OPTIONS
+         *
+         * [--product_id=<id>]
+         * : Only process a specific product (optional)
+         *
+         * ## EXAMPLES
+         *
+         *     wp fluent_cart generate_retention_snapshots --product_id=123
+         *
+         * @when after_wp_load
+         */
+        public function generate_retention_snapshots($args, $assoc_args)
+        {
+        }
     }
     class OrderCloneCommand
     {
@@ -6264,6 +6307,15 @@ namespace FluentCart\App\Hooks\CLI {
         {
         }
         private function getNextReceiptNumber()
+        {
+        }
+    }
+    class RetentionSnapshotCommand
+    {
+        /**
+         * Generate retention snapshots
+         */
+        public function generate($args, $assoc_args)
         {
         }
     }
@@ -6371,7 +6423,7 @@ namespace FluentCart\App\Hooks\Handlers {
          * Default addon gateways to register
          * @var array
          */
-        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class];
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class];
         public function register()
         {
         }
@@ -7167,6 +7219,23 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
     }
+    class RetentionSnapshotHandler
+    {
+        /**
+         * Register Action Scheduler hooks
+         */
+        public function register()
+        {
+        }
+        /**
+         * Action Scheduler callback to generate retention snapshots
+         * 
+         * @param array $args ['product_id' => int|null]
+         */
+        public function generateSnapshots($productId = null, $jobId = null)
+        {
+        }
+    }
 }
 namespace FluentCart\App\Hooks\Handlers\ShortCodes {
     abstract class ShortCode
@@ -7540,10 +7609,14 @@ namespace FluentCart\App\Hooks\Handlers {
 namespace FluentCart\App\Hooks\Scheduler\AutoSchedules {
     class DailyScheduler
     {
+        private $startTimeStamp = null;
         public function register(): void
         {
         }
         public function handle()
+        {
+        }
+        private function deleteOldCarts()
         {
         }
     }
@@ -8213,6 +8286,9 @@ namespace FluentCart\App\Http\Controllers\FrontendControllers {
         public function cancelAutoRenew(\FluentCart\Framework\Http\Request\Request $request, $subscription_uuid)
         {
         }
+        public function getSetupIntentRemainingAttempts($subscription_uuid)
+        {
+        }
     }
 }
 namespace FluentCart\App\Http\Controllers {
@@ -8485,6 +8561,12 @@ namespace FluentCart\App\Http\Controllers {
         public function removeTaxClass(\FluentCart\Framework\Http\Request\Request $request, $postId)
         {
         }
+        public function updateShippingClass(\FluentCart\Framework\Http\Request\Request $request, $postId)
+        {
+        }
+        public function removeShippingClass(\FluentCart\Framework\Http\Request\Request $request, $postId)
+        {
+        }
         /**
          *
          * @param \FluentCart\Framework\Http\Request\Request $request
@@ -8562,6 +8644,12 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function searchProductByName(\FluentCart\Framework\Http\Request\Request $request): array
+        {
+        }
+        public function getBundleInfo(\FluentCart\Framework\Http\Request\Request $request, $productId): array
+        {
+        }
+        public function saveBundleInfo(\FluentCart\Framework\Http\Request\Request $request, $variationId): array
         {
         }
         public function fetchProductsByIds(\FluentCart\Framework\Http\Request\Request $request): array
@@ -8812,6 +8900,21 @@ namespace FluentCart\App\Http\Controllers\Reports {
         {
         }
     }
+    class RetentionSnapshotController extends \FluentCart\App\Http\Controllers\Controller
+    {
+        /**
+         * Generate retention snapshots via Action Scheduler (background job)
+         */
+        public function generate(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        /**
+         * Check status of a snapshot generation job
+         */
+        public function checkStatus(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+    }
     class RevenueReportController extends \FluentCart\App\Http\Controllers\Controller
     {
         protected $params = ['paymentStatus', 'orderTypes'];
@@ -8842,6 +8945,12 @@ namespace FluentCart\App\Http\Controllers\Reports {
         {
         }
         public function getFutureRenewals(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function getRetentionData(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function getCohortData(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -14536,7 +14645,7 @@ namespace FluentCart\App\Models {
         public function setCartDataAttribute($settings)
         {
         }
-        public function getCartDataAttribute($settings)
+        public function getCartDataAttribute($data): array
         {
         }
         public function setUtmDataAttribute($utmData)
@@ -14607,6 +14716,9 @@ namespace FluentCart\App\Models {
         {
         }
         public function getEstimatedTotal($extraAmount = 0)
+        {
+        }
+        public function getEstimatedRecurringTotal()
         {
         }
         protected function findExistingItemAndIndex($objectId, $extraArgs = [])
@@ -14871,17 +14983,23 @@ namespace FluentCart\App\Models {
     {
         use \FluentCart\App\Models\Concerns\CanSearch;
         protected $table = 'fct_customer_addresses';
-        protected $appends = ['formatted_address'];
+        protected $appends = ['formatted_address', 'company_name'];
         /**
          * The attributes that are mass assignable.
          *
          * @var array
          */
-        protected $fillable = ['customer_id', 'is_primary', 'type', 'status', 'label', 'name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone', 'email', 'meta'];
+        protected $fillable = ['customer_id', 'is_primary', 'type', 'status', 'label', 'name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone', 'email', 'meta', 'company_name'];
         public function setMetaAttribute($value)
         {
         }
         public function getMetaAttribute($value)
+        {
+        }
+        public function setCompanyNameAttribute($value)
+        {
+        }
+        public function getCompanyNameAttribute()
         {
         }
         public function scopeOfActive($query)
@@ -15224,8 +15342,8 @@ namespace FluentCart\App\Models {
          *
          * @var array
          */
-        protected $fillable = ['order_id', 'type', 'name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'meta'];
-        protected $appends = ['email', 'first_name', 'last_name', 'full_name', 'formatted_address'];
+        protected $fillable = ['id', 'order_id', 'type', 'name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'meta'];
+        protected $appends = ['email', 'first_name', 'last_name', 'full_name', 'formatted_address', 'company_name', 'phone', 'label'];
         public function setMetaAttribute($value)
         {
         }
@@ -15254,6 +15372,27 @@ namespace FluentCart\App\Models {
         {
         }
         public function getAddressAsText($isHtml = false, $includeName = true, $separator = ', '): string
+        {
+        }
+        public function getFormattedDataForCheckout($prefix = 'billing_')
+        {
+        }
+        public function setCompanyNameAttribute($value)
+        {
+        }
+        public function getCompanyNameAttribute()
+        {
+        }
+        public function setLabelAttribute($value)
+        {
+        }
+        public function getLabelAttribute()
+        {
+        }
+        public function setPhoneAttribute($value)
+        {
+        }
+        public function getPhoneAttribute()
         {
         }
     }
@@ -15665,7 +15804,19 @@ namespace FluentCart\App\Models {
         public function soldIndividually()
         {
         }
+        public function isStock(): bool
+        {
+        }
         public function images(): array
+        {
+        }
+        public function isBundleProduct(): bool
+        {
+        }
+        public function scopeBundle($query)
+        {
+        }
+        public function scopeNonBundle($query)
         {
         }
     }
@@ -15918,6 +16069,20 @@ namespace FluentCart\App\Models {
         public function soldIndividually()
         {
         }
+        public function isStock(): bool
+        {
+        }
+        /**
+         * Check if all bundle children are in stock
+         *
+         * @return bool
+         */
+        protected function isBundleChildrenInStock(): bool
+        {
+        }
+        public function bundleChildren(): \FluentCart\App\Models\Relations\BundleChildrenRelation
+        {
+        }
     }
 }
 namespace FluentCart\App\Models\Query {
@@ -15952,6 +16117,572 @@ namespace FluentCart\App\Models\Query {
         {
         }
         public function apply(\FluentCart\Framework\Database\Orm\Builder $query, array $sortCriteria)
+        {
+        }
+    }
+}
+namespace FluentCart\Framework\Support {
+    trait MacroableTrait
+    {
+        /**
+         * The registered string macros.
+         *
+         * @var array
+         */
+        protected static $macros = [];
+        /**
+         * Register a custom macro.
+         *
+         * @param  string  $name
+         * @param  object|callable  $macro
+         * @return void
+         */
+        public static function macro($name, $macro)
+        {
+        }
+        /**
+         * Mix another object into the class.
+         *
+         * @param  object  $mixin
+         * @param  bool  $replace
+         * @return void
+         *
+         * @throws \ReflectionException
+         */
+        public static function mixin($mixin, $replace = true)
+        {
+        }
+        /**
+         * Checks if macro is registered.
+         *
+         * @param  string  $name
+         * @return bool
+         */
+        public static function hasMacro($name)
+        {
+        }
+        /**
+         * Flush the existing macros.
+         *
+         * @return void
+         */
+        public static function flushMacros()
+        {
+        }
+        /**
+         * Dynamically handle calls to the class.
+         *
+         * @param  string  $method
+         * @param  array  $parameters
+         * @return mixed
+         *
+         * @throws \BadMethodCallException
+         */
+        public static function __callStatic($method, $parameters)
+        {
+        }
+        /**
+         * Dynamically handle calls to the class.
+         *
+         * @param  string  $method
+         * @param  array  $parameters
+         * @return mixed
+         *
+         * @throws \BadMethodCallException
+         */
+        public function __call($method, $parameters)
+        {
+        }
+    }
+}
+namespace FluentCart\Framework\Database\Orm\Relations {
+    /**
+     * @mixin \FluentCart\Framework\Database\Orm\Builder
+     */
+    abstract class Relation
+    {
+        use \FluentCart\Framework\Support\HelperFunctionsTrait;
+        use \FluentCart\Framework\Support\ForwardsCalls, \FluentCart\Framework\Support\MacroableTrait {
+            __call as macroCall;
+        }
+        /**
+         * The Orm query builder instance.
+         *
+         * @var \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected $query;
+        /**
+         * The parent model instance.
+         *
+         * @var \FluentCart\Framework\Database\Orm\Model
+         */
+        protected $parent;
+        /**
+         * The related model instance.
+         *
+         * @var \FluentCart\Framework\Database\Orm\Model
+         */
+        protected $related;
+        /**
+         * Indicates whether the eagerly loaded relation
+         * should implicitly return an empty collection.
+         *
+         * @var bool
+         */
+        protected $eagerKeysWereEmpty = false;
+        /**
+         * Indicates if the relation is adding constraints.
+         *
+         * @var bool
+         */
+        protected static $constraints = true;
+        /**
+         * An array to map class names to their morph names in the database.
+         *
+         * @var array
+         */
+        public static $morphMap = [];
+        /**
+         * Prevents morph relationships without a morph map.
+         *
+         * @var bool
+         */
+        protected static $requireMorphMap = false;
+        /**
+         * The count of self joins.
+         *
+         * @var int
+         */
+        protected static $selfJoinCount = 0;
+        /**
+         * Create a new relation instance.
+         *
+         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
+         * @param  \FluentCart\Framework\Database\Orm\Model  $parent
+         * @return void
+         */
+        public function __construct(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Model $parent)
+        {
+        }
+        /**
+         * Run a callback with constraints disabled on the relation.
+         *
+         * @param  \Closure  $callback
+         * @return mixed
+         */
+        public static function noConstraints(\Closure $callback)
+        {
+        }
+        /**
+         * Set the base constraints on the relation query.
+         *
+         * @return void
+         */
+        abstract public function addConstraints();
+        /**
+         * Set the constraints for an eager load of the relation.
+         *
+         * @param  array  $models
+         * @return void
+         */
+        abstract public function addEagerConstraints(array $models);
+        /**
+         * Initialize the relation on a set of models.
+         *
+         * @param  array  $models
+         * @param  string  $relation
+         * @return array
+         */
+        abstract public function initRelation(array $models, $relation);
+        /**
+         * Match the eagerly loaded results to their parents.
+         *
+         * @param  array  $models
+         * @param  \FluentCart\Framework\Database\Orm\Collection  $results
+         * @param  string  $relation
+         * @return array
+         */
+        abstract public function match(array $models, \FluentCart\Framework\Database\Orm\Collection $results, $relation);
+        /**
+         * Get the results of the relationship.
+         *
+         * @return mixed
+         */
+        abstract public function getResults();
+        /**
+         * Get the relationship for eager loading.
+         *
+         * @return \FluentCart\Framework\Database\Orm\Collection
+         */
+        public function getEager()
+        {
+        }
+        /**
+         * Execute the query and get the first result if it's the sole matching record.
+         *
+         * @param  array|string  $columns
+         * @return \FluentCart\Framework\Database\Orm\Model
+         *
+         * @throws \FluentCart\Framework\Database\Orm\ModelNotFoundException
+         * @throws \FluentCart\Framework\Database\MultipleRecordsFoundException
+         */
+        public function sole($columns = ['*'])
+        {
+        }
+        /**
+         * Execute the query as a "select" statement.
+         *
+         * @param  array  $columns
+         * @return \FluentCart\Framework\Database\Orm\Collection
+         */
+        public function get($columns = ['*'])
+        {
+        }
+        /**
+         * Touch all of the related models for the relationship.
+         *
+         * @return void
+         */
+        public function touch()
+        {
+        }
+        /**
+         * Run a raw update against the base query.
+         *
+         * @param  array  $attributes
+         * @return int
+         */
+        public function rawUpdate(array $attributes = [])
+        {
+        }
+        /**
+         * Add the constraints for a relationship count query.
+         *
+         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
+         * @param  \FluentCart\Framework\Database\Orm\Builder  $parentQuery
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        public function getRelationExistenceCountQuery(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Builder $parentQuery)
+        {
+        }
+        /**
+         * Add the constraints for an internal relationship existence query.
+         *
+         * Essentially, these queries compare on column names like whereColumn.
+         *
+         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
+         * @param  \FluentCart\Framework\Database\Orm\Builder  $parentQuery
+         * @param  array|mixed  $columns
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        public function getRelationExistenceQuery(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Builder $parentQuery, $columns = ['*'])
+        {
+        }
+        /**
+         * Get a relationship join table hash.
+         *
+         * @param  bool  $incrementJoinCount
+         * @return string
+         */
+        public function getRelationCountHash($incrementJoinCount = true)
+        {
+        }
+        /**
+         * Get all of the primary keys for an array of models.
+         *
+         * @param  array  $models
+         * @param  string|null  $key
+         * @return array
+         */
+        protected function getKeys(array $models, $key = null)
+        {
+        }
+        /**
+         * Get the query builder that will contain the relationship constraints.
+         *
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        protected function getRelationQuery()
+        {
+        }
+        /**
+         * Get the underlying query for the relation.
+         *
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         */
+        public function getQuery()
+        {
+        }
+        /**
+         * Get the base query builder driving the Orm builder.
+         *
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        public function getBaseQuery()
+        {
+        }
+        /**
+         * Get a base query builder instance.
+         *
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        public function toBase()
+        {
+        }
+        /**
+         * Get the parent model of the relation.
+         *
+         * @return \FluentCart\Framework\Database\Orm\Model
+         */
+        public function getParent()
+        {
+        }
+        /**
+         * Get the fully qualified parent key name.
+         *
+         * @return string
+         */
+        public function getQualifiedParentKeyName()
+        {
+        }
+        /**
+         * Get the related model of the relation.
+         *
+         * @return \FluentCart\Framework\Database\Orm\Model
+         */
+        public function getRelated()
+        {
+        }
+        /**
+         * Get the name of the "created at" column.
+         *
+         * @return string
+         */
+        public function createdAt()
+        {
+        }
+        /**
+         * Get the name of the "updated at" column.
+         *
+         * @return string
+         */
+        public function updatedAt()
+        {
+        }
+        /**
+         * Get the name of the related model's "updated at" column.
+         *
+         * @return string
+         */
+        public function relatedUpdatedAt()
+        {
+        }
+        /**
+         * Add a whereIn eager constraint for the given set of model keys to be loaded.
+         *
+         * @param  string  $whereIn
+         * @param  string  $key
+         * @param  array  $modelKeys
+         * @param  \FluentCart\Framework\Database\Orm\Builder|null  $query
+         * @return void
+         */
+        protected function whereInEager(string $whereIn, string $key, array $modelKeys, ?\FluentCart\Framework\Database\Orm\Builder $query = null)
+        {
+        }
+        /**
+         * Get the name of the "where in" method for eager loading.
+         *
+         * @param  \FluentCart\Framework\Database\Orm\Model  $model
+         * @param  string  $key
+         * @return string
+         */
+        protected function whereInMethod(\FluentCart\Framework\Database\Orm\Model $model, $key)
+        {
+        }
+        /**
+         * Prevent polymorphic relationships from being used without model mappings.
+         *
+         * @param  bool  $requireMorphMap
+         * @return void
+         */
+        public static function requireMorphMap($requireMorphMap = true)
+        {
+        }
+        /**
+         * Determine if polymorphic relationships require explicit model mapping.
+         *
+         * @return bool
+         */
+        public static function requiresMorphMap()
+        {
+        }
+        /**
+         * Define the morph map for polymorphic relations and require all morphed models to be explicitly mapped.
+         *
+         * @param  array  $map
+         * @param  bool  $merge
+         * @return array
+         */
+        public static function enforceMorphMap(array $map, $merge = true)
+        {
+        }
+        /**
+         * Set or get the morph map for polymorphic relations.
+         *
+         * @param  array|null  $map
+         * @param  bool  $merge
+         * @return array
+         */
+        public static function morphMap(?array $map = null, $merge = true)
+        {
+        }
+        /**
+         * Builds a table-keyed array from model class names.
+         *
+         * @param  string[]|null  $models
+         * @return array|null
+         */
+        protected static function buildMorphMapFromModels(?array $models = null)
+        {
+        }
+        /**
+         * Get the model associated with a custom polymorphic type.
+         *
+         * @param  string  $alias
+         * @return string|null
+         */
+        public static function getMorphedModel($alias)
+        {
+        }
+        /**
+         * Get the alias associated with a custom polymorphic class.
+         *
+         * @param  string  $className
+         * @return int|string
+         */
+        public static function getMorphAlias(string $className)
+        {
+        }
+        /**
+         * Handle dynamic method calls to the relationship.
+         *
+         * @param  string  $method
+         * @param  array  $parameters
+         * @return mixed
+         */
+        public function __call($method, $parameters)
+        {
+        }
+        /**
+         * Force a clone of the underlying query builder when cloning.
+         *
+         * @return void
+         */
+        public function __clone()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Models\Relations {
+    class BundleChildrenRelation extends \FluentCart\Framework\Database\Orm\Relations\Relation
+    {
+        /**
+         * The JSON column name
+         *
+         * @var string
+         */
+        protected $jsonColumn;
+        /**
+         * The JSON key that contains child IDs
+         *
+         * @var string
+         */
+        protected $jsonKey;
+        /**
+         * Create a new BundleChildrenRelation instance.
+         *
+         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
+         * @param  \FluentCart\Framework\Database\Orm\Model  $parent
+         * @param  string  $jsonColumn
+         * @param  string  $jsonKey
+         * @return void
+         */
+        public function __construct(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Model $parent, $jsonColumn = 'other_info', $jsonKey = 'bundle_child_ids')
+        {
+        }
+        /**
+         * Set the base constraints on the relation query.
+         *
+         * @return void
+         */
+        public function addConstraints()
+        {
+        }
+        /**
+         * Set the constraints for an eager load of the relation.
+         *
+         * @param  array  $models
+         * @return void
+         */
+        public function addEagerConstraints(array $models)
+        {
+        }
+        /**
+         * Initialize the relation on a set of models.
+         *
+         * @param  array  $models
+         * @param  string  $relation
+         * @return array
+         */
+        public function initRelation(array $models, $relation)
+        {
+        }
+        /**
+         * Match the eagerly loaded results to their parents.
+         *
+         * @param  array  $models
+         * @param  \FluentCart\Framework\Database\Orm\Collection  $results
+         * @param  string  $relation
+         * @return array
+         */
+        public function match(array $models, \FluentCart\Framework\Database\Orm\Collection $results, $relation)
+        {
+        }
+        /**
+         * Get the results of the relationship.
+         *
+         * @return mixed
+         */
+        public function getResults()
+        {
+        }
+        /**
+         * Get the child IDs from the parent model.
+         *
+         * @return array
+         */
+        protected function getChildIds()
+        {
+        }
+        /**
+         * Get child IDs from a specific model.
+         *
+         * @param  \FluentCart\Framework\Database\Orm\Model  $model
+         * @return array
+         */
+        protected function getChildIdsFromModel(\FluentCart\Framework\Database\Orm\Model $model)
+        {
+        }
+        /**
+         * Add a basic where clause to the query.
+         *
+         * @param  string  $column
+         * @param  mixed  $operator
+         * @param  mixed  $value
+         * @param  string  $boolean
+         * @return $this
+         */
+        public function where($column, $operator = null, $value = null, $boolean = 'and')
         {
         }
     }
@@ -17116,7 +17847,7 @@ namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
 namespace FluentCart\App\Modules\PaymentMethods\Cod {
     class Cod extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
-        public array $supportedFeatures = ['payment', 'refund'];
+        public array $supportedFeatures = ['payment', 'refund', 'subscriptions'];
         public \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings $settings;
         public function boot()
         {
@@ -18058,6 +18789,42 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
         {
         }
     }
+    class RazorpayAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'razorpay-for-fluent-cart';
+        private $addonFile = 'razorpay-for-fluent-cart/razorpay-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        /**
+         * Get Razorpay-specific notice configuration
+         */
+        private function getNoticeConfig()
+        {
+        }
+        /**
+         * Generate addon notice message
+         */
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
+        {
+        }
+    }
 }
 namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro {
     class AuthorizeNetPromo extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
@@ -18224,104 +18991,6 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Pro {
          * @return string HTML for the upgrade notice
          */
         public function generateUpgradeNotice($config)
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\RazorpayGateway {
-    class Razorpay extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
-    {
-        public array $supportedFeatures = ['payment', 'refund', 'webhook'];
-        public function __construct()
-        {
-        }
-        public function meta(): array
-        {
-        }
-        public function boot()
-        {
-        }
-        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
-        {
-        }
-        public function refund($refundInfo, $order, $transaction)
-        {
-        }
-        public function handleIPN()
-        {
-        }
-        public function getOrderInfo(array $data)
-        {
-        }
-        public function fields(): array
-        {
-        }
-        public static function validateSettings($data): array
-        {
-        }
-        public function getEnqueueScriptSrc($hasSubscription = 'no'): array
-        {
-        }
-        public function getEnqueueStyleSrc(): array
-        {
-        }
-        private function createRazorpayOrder($data)
-        {
-        }
-        private function processRazorpayRefund($paymentId, $refundData)
-        {
-        }
-        private static function testApiConnection($keyId, $keySecret)
-        {
-        }
-        private function verifyWebhookSignature($payload)
-        {
-        }
-        private function getWebhookUrl()
-        {
-        }
-        public function webHookPaymentMethodName()
-        {
-        }
-        private function handlePaymentCaptured($payload)
-        {
-        }
-        private function handlePaymentFailed($payload)
-        {
-        }
-        private function handleRefundProcessed($payload)
-        {
-        }
-        private function handlePaymentSuccess($payment, $order)
-        {
-        }
-        private function handlePaymentFailure($payment, $order)
-        {
-        }
-    }
-    class RazorpaySettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
-    {
-        public $settings;
-        public $methodHandler = 'fluent_cart_payment_settings_razorpay';
-        public static function getDefaults()
-        {
-        }
-        public function isActive(): bool
-        {
-        }
-        public function get($key = '')
-        {
-        }
-        public function getMode()
-        {
-        }
-        public function getKeyId()
-        {
-        }
-        public function getKeySecret()
-        {
-        }
-        public function getWebhookSecret()
         {
         }
     }
@@ -18574,6 +19243,21 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public function init()
         {
         }
+        private function confirmByCheckoutSession($sessionId, $transaction)
+        {
+        }
+        /**
+         * Process payment intent confirmation
+         */
+        private function processPaymentIntentConfirmation($intent, $transaction)
+        {
+        }
+        /**
+         * Extract billing info from charge for subscription confirmation
+         */
+        private function extractBillingInfoFromCharge($charge)
+        {
+        }
         /*
          * Only for validating hosted checkout payment confirmation
          */
@@ -18588,13 +19272,6 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         public function getPaymentMethodDetails($methodId)
-        {
-        }
-        /*
-         * To validate by session, id
-         *
-         */
-        public function validateBySession($id)
         {
         }
         /**
@@ -18682,11 +19359,17 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         /**
-         * Handle single payment for stripe (onsite)
+         * Handle single payment for stripe (onsite or hosted)
          *
          * @return \WP_Error|array
          */
         public function handleSinglePayment(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $paymentArgs = [])
+        {
+        }
+        private function handleHostedCheckout(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $paymentArgs = [])
+        {
+        }
+        private function handleHostedSubscriptionCheckout(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $paymentArgs = [])
         {
         }
     }
@@ -18776,6 +19459,16 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public static function createOrUpdateIpnRefund($refundData, $parentTransaction)
         {
         }
+        /*
+         * To validate by session, id
+         *
+         */
+        public static function validateBySession($id)
+        {
+        }
+        public static function getCancelUrl(): string
+        {
+        }
     }
     class StripeSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
     {
@@ -18838,6 +19531,20 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
          * @throws \Exception
          */
         public static function verifyPaymentMethod($paymentMethodId, $customerId, $offSession = true)
+        {
+        }
+        /**
+         * Check rate limit for SetupIntent creation to prevent card testing fraud.
+         * 
+         * Rate limit: 3 attempts per day per customer (for subscription card updates)
+         * 
+         * @param string $customerId Stripe customer ID
+         * @return bool|\WP_Error Returns true if allowed, WP_Error if rate limited
+         */
+        protected static function checkRateLimit($customerId)
+        {
+        }
+        public function getRemainingRateLimit($customerId)
         {
         }
         public function getOrCreateStripeCustomer($pm)
@@ -18927,6 +19634,13 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway\Webhook {
         {
         }
         public function handleChargeDisputeClosed($data)
+        {
+        }
+        /**
+         * Handle checkout.session.completed webhook for hosted checkout mode
+         * This ensures webhooks work properly even if redirect confirmation hasn't happened yet
+         */
+        public function handleCheckoutSessionCompleted($data)
         {
         }
         public function handleSubscriptionUpdated($data)
@@ -20746,6 +21460,68 @@ namespace FluentCart\App\Modules\Templating {
         }
     }
 }
+namespace FluentCart\App\Modules\Turnstile {
+    class TurnstileBoot
+    {
+        public function register()
+        {
+        }
+        public function renderTurnstileWidget($data = [])
+        {
+        }
+        public function enqueueTurnstileScript()
+        {
+        }
+        public function localizeTurnstileData($data)
+        {
+        }
+        /**
+         * Inject widget via wp_footer as last resort
+         * This should ALWAYS work since wp_footer fires on every page
+         */
+        public function injectWidgetViaFooter()
+        {
+        }
+        /**
+         * Get widget HTML as string
+         */
+        private function getWidgetHtml()
+        {
+        }
+    }
+    class TurnstileInit
+    {
+        public function register($app)
+        {
+        }
+    }
+    class TurnstileValidator
+    {
+        public function register()
+        {
+        }
+        /**
+         * Validate Turnstile token during checkout
+         *
+         * @param bool $isValid
+         * @param array $data
+         * @return bool|WP_Error
+         */
+        public function validateCheckout($isValid, $data)
+        {
+        }
+        /**
+         * Validate Cloudflare Turnstile token
+         *
+         * @param string $token
+         * @param array $turnstileSettings
+         * @return bool
+         */
+        public function validateToken($token, $turnstileSettings)
+        {
+        }
+    }
+}
 namespace FluentCart\App\Modules\WooCommerceMigrator\Contracts {
     interface MigrationServiceInterface
     {
@@ -21397,7 +22173,7 @@ namespace FluentCart\App\Services\Async {
 namespace FluentCart\App\Services {
     class AuthService
     {
-        public static function createUserFromCustomer(\FluentCart\App\Models\Customer $customer, $sendUserEmail = true)
+        public static function createUserFromCustomer(\FluentCart\App\Models\Customer $customer, $sendUserEmail = true, $userRole = '')
         {
         }
         public static function registerNewUser($user_login, $user_email, $user_pass = '', $extraData = [])
@@ -31840,6 +32616,31 @@ namespace FluentCart\App\Services {
         {
         }
     }
+    class RateLimitter
+    {
+        public static function isActive()
+        {
+        }
+        /**
+         * Checks if the action identified by $identifier is being spammed. This will only work if an external object cache is enabled.
+         * Usage: FluentCart\App\Services\RateLimitter::isSpamming('checkout_attempt', 5, 60); // allows 5 attempts per 60 seconds
+         *
+         * @param $identifier string A unique identifier for the action being rate limited. For example: checkout_attempt
+         * @param $limit Number of allowed attempts within the time window
+         * @param $seconds integer Time window in seconds
+         * @param $sendJson boolean Whether to send a JSON response when rate limit is exceeded
+         * @return bool
+         */
+        public static function isSpamming($identifier, $limit = 10, $seconds = 30, $sendJson = false)
+        {
+        }
+        private static function getCurrentHits($identifier)
+        {
+        }
+        private static function setHits($identifier, $hits, $seconds)
+        {
+        }
+    }
 }
 namespace FluentCart\App\Services\Renderer {
     class AddressSelectRenderer
@@ -31927,12 +32728,15 @@ namespace FluentCart\App\Services\Renderer {
         protected function maybeRenderPaymentTypeInfo()
         {
         }
+        public function renderChildVariants()
+        {
+        }
     }
     class CartRenderer
     {
         protected $cartItems;
         protected $storeSettings;
-        protected $cartItem = [];
+        protected $currentCartItem = [];
         protected $url = [];
         protected $product = [];
         public function __construct($cartItems = [])
@@ -32337,6 +33141,7 @@ namespace FluentCart\App\Services\Renderer {
     {
         protected $product;
         protected $config = [];
+        protected $storeSettings;
         public function __construct(\FluentCart\App\Models\Product $product, $config = [])
         {
         }
@@ -32348,6 +33153,7 @@ namespace FluentCart\App\Services\Renderer {
     {
         protected $product;
         protected $variants;
+        protected $storeSettings;
         protected $defaultVariant = null;
         protected $hasOnetime = false;
         protected $hasSubscription = false;
@@ -32414,6 +33220,30 @@ namespace FluentCart\App\Services\Renderer {
         public function renderItemPrice()
         {
         }
+        public function shouldRenderPriceInPriceSection(): bool
+        {
+        }
+        public function applyVariationPriceFilter($variant, $paymentType = 'onetime')
+        {
+        }
+        public function renderComparePriceWrapperStart($atts = [])
+        {
+        }
+        public function renderComparePriceWrapperEnd()
+        {
+        }
+        public function renderVariationComparePrice($variant, $atts = [])
+        {
+        }
+        public function renderVariantPricingWrapperStart($variant)
+        {
+        }
+        public function renderVariantPricingWrapperEnd()
+        {
+        }
+        public function renderVariationsBundleProduct($variant)
+        {
+        }
         public function renderQuantity()
         {
         }
@@ -32466,6 +33296,7 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         protected $order_operation = null;
         protected $settings = null;
         protected $vat_tax_id = null;
+        protected $orderTz;
         public function __construct($config = [])
         {
         }
@@ -32651,6 +33482,22 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function renderDownloadReceiptButton()
+        {
+        }
+        /**
+         * Build a parent → bundle items relationship from flat order items
+         *
+         * Converts a flat order items list into:
+         * - Parent items
+         * - Each parent contains a ` bundle_items ` array
+         *
+         * @param array $orderItems
+         * @return array
+         */
+        protected function buildBundleItemsTree($orderItems)
+        {
+        }
+        public function renderBundleProducts($item)
         {
         }
     }
@@ -33554,6 +34401,160 @@ namespace FluentCart\App\Services\Report {
         {
         }
     }
+    class RetentionSnapshotService
+    {
+        /**
+         * Statuses to exclude from analysis (never really started)
+         */
+        protected array $excludedStatuses = [\FluentCart\App\Helpers\Status::SUBSCRIPTION_PENDING, \FluentCart\App\Helpers\Status::SUBSCRIPTION_INTENDED, 'incomplete_expired'];
+        /**
+         * Active statuses
+         */
+        protected array $activeStatuses = [\FluentCart\App\Helpers\Status::SUBSCRIPTION_ACTIVE, \FluentCart\App\Helpers\Status::SUBSCRIPTION_TRIALING];
+        /**
+         * Generate retention snapshots
+         * 
+         * @param int|null $productIdFilter Optional product ID to filter by
+         * @param callable|null $progressCallback Optional callback for progress updates: fn(string $message, string $level = 'info')
+         * @return array Result with 'success', 'message', and 'stats'
+         */
+        public function generate(?int $productIdFilter = null, ?callable $progressCallback = null): array
+        {
+        }
+        /**
+         * Log a message
+         */
+        protected function log(string $message, string $level = 'info', ?callable $callback = null): void
+        {
+        }
+        /**
+         * Ensure the retention snapshots table exists
+         */
+        protected function ensureTableExists(): void
+        {
+        }
+        /**
+         * Truncate the snapshots table
+         */
+        protected function truncateTable(): void
+        {
+        }
+        /**
+         * Get all unique customer-product pairs
+         */
+        protected function getCustomerProductPairs(?int $productIdFilter = null): array
+        {
+        }
+        /**
+         * Get the date range for analysis
+         */
+        protected function getDateRange(?int $productIdFilter = null): array
+        {
+        }
+        /**
+         * Build customer timelines - for each customer-product pair, determine their state in each month
+         */
+        protected function buildCustomerTimelines(array $pairs, array $dateRange, ?callable $progressCallback = null): array
+        {
+        }
+        /**
+         * Build timelines and aggregate - optimized to fetch all data once but insert in batches
+         */
+        protected function buildTimelinesAndAggregate(array $pairs, array $dateRange, ?callable $progressCallback): int
+        {
+        }
+        /**
+         * Build timelines and aggregate in batches to minimize memory usage
+         * 
+         * Instead of building ALL timelines in memory, we:
+         * 1. Fetch subscriptions for a batch of customer-product pairs
+         * 2. Build timelines for that batch
+         * 3. Aggregate and insert to DB
+         * 4. Clear memory and repeat
+         */
+        protected function buildAndAggregateInBatches(array $pairs, array $dateRange, ?callable $progressCallback, ?int $productIdFilter): int
+        {
+        }
+        /**
+         * Accumulate timelines into global aggregates array
+         * This merges data from multiple batches without creating duplicates
+         */
+        protected function accumulateAggregates(array &$globalAggregates, array $timelines, array $dateRange): void
+        {
+        }
+        /**
+         * Insert aggregates into database in batches
+         */
+        protected function insertAggregates(string $table, array $aggregates, ?callable $progressCallback): int
+        {
+        }
+        /**
+         * Determine customer's state for a given month
+         */
+        protected function getCustomerStateForMonth($subscriptions, string $month): array
+        {
+        }
+        /**
+         * Check if a subscription was active during a given month
+         * 
+         * A subscription is considered active in a month if:
+         * - It was created on or before the end of that month, AND
+         * - It had not ended before the start of that month
+         * 
+         * For ended subscriptions, we use the END date (expire_at, or canceled_at + billing period)
+         * For active subscriptions, we check if they existed during that month
+         */
+        protected function wasSubscriptionActiveInMonth($sub, \DateTime $monthStart, \DateTime $monthEnd): bool
+        {
+        }
+        /**
+         * Get the effective end date of a subscription
+         * Returns null if subscription is still ongoing
+         * 
+         * We use last_payment + billing_interval as the effective end date.
+         * This represents when the subscription actually stopped providing revenue.
+         */
+        protected function getSubscriptionEndDate($sub): ?\DateTime
+        {
+        }
+        /**
+         * Get billing interval in months
+         */
+        protected function getBillingIntervalMonths(string $interval): int
+        {
+        }
+        /**
+         * Normalize recurring amount to monthly MRR
+         */
+        protected function normalizeToMonthlyMrr($sub): int
+        {
+        }
+        /**
+         * Aggregate timelines into cohort snapshots
+         * Returns the number of snapshots inserted (not the snapshots themselves to save memory)
+         */
+        protected function aggregateSnapshots(array $timelines, array $dateRange, ?callable $progressCallback = null): int
+        {
+        }
+        /**
+         * Add data to aggregate array
+         */
+        protected function addToAggregate(array &$aggregates, string $cohort, string $period, $productId, int $periodOffset, int $cohortMrr, array $periodState): void
+        {
+        }
+        /**
+         * Insert a batch of records
+         */
+        protected function insertBatch(string $table, array $batch): int
+        {
+        }
+        /**
+         * Get statistics from the generated snapshots
+         */
+        public function getStats(): array
+        {
+        }
+    }
     class RevenueReportService extends \FluentCart\App\Services\Report\ReportService
     {
         public function revenueByGroup(array $params = []): array
@@ -33588,6 +34589,77 @@ namespace FluentCart\App\Services\Report {
         {
         }
         public function getChartData(array $params)
+        {
+        }
+        public function getRetentionData($params)
+        {
+        }
+        /**
+         * Get cohort retention data from pre-calculated snapshots table
+         * 
+         * Supports both monthly and yearly g  * - Monthly: Uses period_offset 1, 2, 3... (each month)
+         * - Yearly: Aggregates cohorts by year and uses period_offset 12, 24, 36... (each year)
+         * 
+         * @param array $params
+         * @return array
+         */
+        public function getCohortData($params = [])
+        {
+        }
+        /**
+         * Get cohort data grouped by month
+         * 
+         * @param string $startCohort
+         * @param string $endCohort
+         * @param array $productIds Array of product IDs to filter by (empty = all products combined)
+         * @param string $metric
+         * @param int $maxPeriods
+         * @return array
+         */
+        protected function getCohortDataByMonth($startCohort, $endCohort, $productIds, $metric, $maxPeriods)
+        {
+        }
+        /**
+         * Get cohort data grouped by year
+         * 
+         * For yearly view, we use period_offset = 12 as the baseline (end of year 1, before first renewal)
+         * and show period_offset 24, 36, 48... as Year 1, Year 2, Year 3 (after 1st, 2nd, 3rd renewal)
+         * 
+         * This is because at period_offset = 12, yearly subscribers haven't had a renewal opportunity yet,
+         * so they show ~100% retention. The actual churn happens after the first renewal at offset 12+.
+         * 
+         * @param string $startCohort
+         * @param string $endCohort
+         * @param array $productIds Array of product IDs to filter by (empty = all products combined)
+         * @param string $metric
+         * @param int $maxPeriods
+         * @return array
+         */
+        protected function getCohortDataByYear($startCohort, $endCohort, $productIds, $metric, $maxPeriods)
+        {
+        }
+        /**
+         * Build cohort response from raw snapshots
+         */
+        protected function buildCohortResponse($snapshots, $groupBy, $metric, $maxPeriods)
+        {
+        }
+        /**
+         * Build cohort response from grouped data
+         */
+        protected function buildCohortResponseFromGroups($cohortGroups, $groupBy, $metric, $maxPeriods)
+        {
+        }
+        /**
+         * Calculate weighted averages from accumulated data
+         */
+        protected function calculateWeightedAverages($weightedData)
+        {
+        }
+        /**
+         * Return empty response structure
+         */
+        protected function emptyResponse($groupBy, $metric, $maxPeriods)
         {
         }
     }
@@ -36077,80 +37149,6 @@ namespace FluentCart\Framework\Container {
          * @return string|null
          */
         public static function getParameterClassName($parameter)
-        {
-        }
-    }
-}
-namespace FluentCart\Framework\Support {
-    trait MacroableTrait
-    {
-        /**
-         * The registered string macros.
-         *
-         * @var array
-         */
-        protected static $macros = [];
-        /**
-         * Register a custom macro.
-         *
-         * @param  string  $name
-         * @param  object|callable  $macro
-         * @return void
-         */
-        public static function macro($name, $macro)
-        {
-        }
-        /**
-         * Mix another object into the class.
-         *
-         * @param  object  $mixin
-         * @param  bool  $replace
-         * @return void
-         *
-         * @throws \ReflectionException
-         */
-        public static function mixin($mixin, $replace = true)
-        {
-        }
-        /**
-         * Checks if macro is registered.
-         *
-         * @param  string  $name
-         * @return bool
-         */
-        public static function hasMacro($name)
-        {
-        }
-        /**
-         * Flush the existing macros.
-         *
-         * @return void
-         */
-        public static function flushMacros()
-        {
-        }
-        /**
-         * Dynamically handle calls to the class.
-         *
-         * @param  string  $method
-         * @param  array  $parameters
-         * @return mixed
-         *
-         * @throws \BadMethodCallException
-         */
-        public static function __callStatic($method, $parameters)
-        {
-        }
-        /**
-         * Dynamically handle calls to the class.
-         *
-         * @param  string  $method
-         * @param  array  $parameters
-         * @return mixed
-         *
-         * @throws \BadMethodCallException
-         */
-        public function __call($method, $parameters)
         {
         }
     }
@@ -42947,394 +43945,6 @@ namespace FluentCart\Framework\Database\Orm {
          * @return static
          */
         public static function make($model, $relation, $type = null)
-        {
-        }
-    }
-}
-namespace FluentCart\Framework\Database\Orm\Relations {
-    /**
-     * @mixin \FluentCart\Framework\Database\Orm\Builder
-     */
-    abstract class Relation
-    {
-        use \FluentCart\Framework\Support\HelperFunctionsTrait;
-        use \FluentCart\Framework\Support\ForwardsCalls, \FluentCart\Framework\Support\MacroableTrait {
-            __call as macroCall;
-        }
-        /**
-         * The Orm query builder instance.
-         *
-         * @var \FluentCart\Framework\Database\Orm\Builder
-         */
-        protected $query;
-        /**
-         * The parent model instance.
-         *
-         * @var \FluentCart\Framework\Database\Orm\Model
-         */
-        protected $parent;
-        /**
-         * The related model instance.
-         *
-         * @var \FluentCart\Framework\Database\Orm\Model
-         */
-        protected $related;
-        /**
-         * Indicates whether the eagerly loaded relation
-         * should implicitly return an empty collection.
-         *
-         * @var bool
-         */
-        protected $eagerKeysWereEmpty = false;
-        /**
-         * Indicates if the relation is adding constraints.
-         *
-         * @var bool
-         */
-        protected static $constraints = true;
-        /**
-         * An array to map class names to their morph names in the database.
-         *
-         * @var array
-         */
-        public static $morphMap = [];
-        /**
-         * Prevents morph relationships without a morph map.
-         *
-         * @var bool
-         */
-        protected static $requireMorphMap = false;
-        /**
-         * The count of self joins.
-         *
-         * @var int
-         */
-        protected static $selfJoinCount = 0;
-        /**
-         * Create a new relation instance.
-         *
-         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
-         * @param  \FluentCart\Framework\Database\Orm\Model  $parent
-         * @return void
-         */
-        public function __construct(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Model $parent)
-        {
-        }
-        /**
-         * Run a callback with constraints disabled on the relation.
-         *
-         * @param  \Closure  $callback
-         * @return mixed
-         */
-        public static function noConstraints(\Closure $callback)
-        {
-        }
-        /**
-         * Set the base constraints on the relation query.
-         *
-         * @return void
-         */
-        abstract public function addConstraints();
-        /**
-         * Set the constraints for an eager load of the relation.
-         *
-         * @param  array  $models
-         * @return void
-         */
-        abstract public function addEagerConstraints(array $models);
-        /**
-         * Initialize the relation on a set of models.
-         *
-         * @param  array  $models
-         * @param  string  $relation
-         * @return array
-         */
-        abstract public function initRelation(array $models, $relation);
-        /**
-         * Match the eagerly loaded results to their parents.
-         *
-         * @param  array  $models
-         * @param  \FluentCart\Framework\Database\Orm\Collection  $results
-         * @param  string  $relation
-         * @return array
-         */
-        abstract public function match(array $models, \FluentCart\Framework\Database\Orm\Collection $results, $relation);
-        /**
-         * Get the results of the relationship.
-         *
-         * @return mixed
-         */
-        abstract public function getResults();
-        /**
-         * Get the relationship for eager loading.
-         *
-         * @return \FluentCart\Framework\Database\Orm\Collection
-         */
-        public function getEager()
-        {
-        }
-        /**
-         * Execute the query and get the first result if it's the sole matching record.
-         *
-         * @param  array|string  $columns
-         * @return \FluentCart\Framework\Database\Orm\Model
-         *
-         * @throws \FluentCart\Framework\Database\Orm\ModelNotFoundException
-         * @throws \FluentCart\Framework\Database\MultipleRecordsFoundException
-         */
-        public function sole($columns = ['*'])
-        {
-        }
-        /**
-         * Execute the query as a "select" statement.
-         *
-         * @param  array  $columns
-         * @return \FluentCart\Framework\Database\Orm\Collection
-         */
-        public function get($columns = ['*'])
-        {
-        }
-        /**
-         * Touch all of the related models for the relationship.
-         *
-         * @return void
-         */
-        public function touch()
-        {
-        }
-        /**
-         * Run a raw update against the base query.
-         *
-         * @param  array  $attributes
-         * @return int
-         */
-        public function rawUpdate(array $attributes = [])
-        {
-        }
-        /**
-         * Add the constraints for a relationship count query.
-         *
-         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
-         * @param  \FluentCart\Framework\Database\Orm\Builder  $parentQuery
-         * @return \FluentCart\Framework\Database\Orm\Builder
-         */
-        public function getRelationExistenceCountQuery(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Builder $parentQuery)
-        {
-        }
-        /**
-         * Add the constraints for an internal relationship existence query.
-         *
-         * Essentially, these queries compare on column names like whereColumn.
-         *
-         * @param  \FluentCart\Framework\Database\Orm\Builder  $query
-         * @param  \FluentCart\Framework\Database\Orm\Builder  $parentQuery
-         * @param  array|mixed  $columns
-         * @return \FluentCart\Framework\Database\Orm\Builder
-         */
-        public function getRelationExistenceQuery(\FluentCart\Framework\Database\Orm\Builder $query, \FluentCart\Framework\Database\Orm\Builder $parentQuery, $columns = ['*'])
-        {
-        }
-        /**
-         * Get a relationship join table hash.
-         *
-         * @param  bool  $incrementJoinCount
-         * @return string
-         */
-        public function getRelationCountHash($incrementJoinCount = true)
-        {
-        }
-        /**
-         * Get all of the primary keys for an array of models.
-         *
-         * @param  array  $models
-         * @param  string|null  $key
-         * @return array
-         */
-        protected function getKeys(array $models, $key = null)
-        {
-        }
-        /**
-         * Get the query builder that will contain the relationship constraints.
-         *
-         * @return \FluentCart\Framework\Database\Orm\Builder
-         */
-        protected function getRelationQuery()
-        {
-        }
-        /**
-         * Get the underlying query for the relation.
-         *
-         * @return \FluentCart\Framework\Database\Orm\Builder
-         */
-        public function getQuery()
-        {
-        }
-        /**
-         * Get the base query builder driving the Orm builder.
-         *
-         * @return \FluentCart\Framework\Database\Query\Builder
-         */
-        public function getBaseQuery()
-        {
-        }
-        /**
-         * Get a base query builder instance.
-         *
-         * @return \FluentCart\Framework\Database\Query\Builder
-         */
-        public function toBase()
-        {
-        }
-        /**
-         * Get the parent model of the relation.
-         *
-         * @return \FluentCart\Framework\Database\Orm\Model
-         */
-        public function getParent()
-        {
-        }
-        /**
-         * Get the fully qualified parent key name.
-         *
-         * @return string
-         */
-        public function getQualifiedParentKeyName()
-        {
-        }
-        /**
-         * Get the related model of the relation.
-         *
-         * @return \FluentCart\Framework\Database\Orm\Model
-         */
-        public function getRelated()
-        {
-        }
-        /**
-         * Get the name of the "created at" column.
-         *
-         * @return string
-         */
-        public function createdAt()
-        {
-        }
-        /**
-         * Get the name of the "updated at" column.
-         *
-         * @return string
-         */
-        public function updatedAt()
-        {
-        }
-        /**
-         * Get the name of the related model's "updated at" column.
-         *
-         * @return string
-         */
-        public function relatedUpdatedAt()
-        {
-        }
-        /**
-         * Add a whereIn eager constraint for the given set of model keys to be loaded.
-         *
-         * @param  string  $whereIn
-         * @param  string  $key
-         * @param  array  $modelKeys
-         * @param  \FluentCart\Framework\Database\Orm\Builder|null  $query
-         * @return void
-         */
-        protected function whereInEager(string $whereIn, string $key, array $modelKeys, ?\FluentCart\Framework\Database\Orm\Builder $query = null)
-        {
-        }
-        /**
-         * Get the name of the "where in" method for eager loading.
-         *
-         * @param  \FluentCart\Framework\Database\Orm\Model  $model
-         * @param  string  $key
-         * @return string
-         */
-        protected function whereInMethod(\FluentCart\Framework\Database\Orm\Model $model, $key)
-        {
-        }
-        /**
-         * Prevent polymorphic relationships from being used without model mappings.
-         *
-         * @param  bool  $requireMorphMap
-         * @return void
-         */
-        public static function requireMorphMap($requireMorphMap = true)
-        {
-        }
-        /**
-         * Determine if polymorphic relationships require explicit model mapping.
-         *
-         * @return bool
-         */
-        public static function requiresMorphMap()
-        {
-        }
-        /**
-         * Define the morph map for polymorphic relations and require all morphed models to be explicitly mapped.
-         *
-         * @param  array  $map
-         * @param  bool  $merge
-         * @return array
-         */
-        public static function enforceMorphMap(array $map, $merge = true)
-        {
-        }
-        /**
-         * Set or get the morph map for polymorphic relations.
-         *
-         * @param  array|null  $map
-         * @param  bool  $merge
-         * @return array
-         */
-        public static function morphMap(?array $map = null, $merge = true)
-        {
-        }
-        /**
-         * Builds a table-keyed array from model class names.
-         *
-         * @param  string[]|null  $models
-         * @return array|null
-         */
-        protected static function buildMorphMapFromModels(?array $models = null)
-        {
-        }
-        /**
-         * Get the model associated with a custom polymorphic type.
-         *
-         * @param  string  $alias
-         * @return string|null
-         */
-        public static function getMorphedModel($alias)
-        {
-        }
-        /**
-         * Get the alias associated with a custom polymorphic class.
-         *
-         * @param  string  $className
-         * @return int|string
-         */
-        public static function getMorphAlias(string $className)
-        {
-        }
-        /**
-         * Handle dynamic method calls to the relationship.
-         *
-         * @param  string  $method
-         * @param  array  $parameters
-         * @return mixed
-         */
-        public function __call($method, $parameters)
-        {
-        }
-        /**
-         * Force a clone of the underlying query builder when cloning.
-         *
-         * @return void
-         */
-        public function __clone()
         {
         }
     }
