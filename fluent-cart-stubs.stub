@@ -2862,6 +2862,9 @@ namespace FluentCart\Api\Resource {
         public static function delete($id, $params = [])
         {
         }
+        protected static function deleteOrderRelatedData(array $orderIds, bool $isTestMode = false): void
+        {
+        }
         /**
          * View details of an order by ID.
          *
@@ -4406,6 +4409,30 @@ namespace FluentCart\App\Events\Order {
         public function getActivityEventModel()
         {
         }
+        public function shouldCreateActivity(): bool
+        {
+        }
+    }
+    class OrderDeleting extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/order_before_delete';
+        protected array $listeners = [\FluentCart\App\Listeners\Order\OrderDeleting::class];
+        public \FluentCart\App\Models\Order $order;
+        public array $connectedOrderIds;
+        public bool $isTestMode;
+        public string $type;
+        public function __construct(\FluentCart\App\Models\Order $order, $connectedOrderIds = [], bool $isTestMode = false, string $type = '')
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        public function getActivityEventModel()
+        {
+        }
+        public function shouldCreateActivity(): bool
+        {
+        }
     }
     class OrderPaid extends \FluentCart\App\Events\EventDispatcher
     {
@@ -4598,6 +4625,9 @@ namespace FluentCart\App\Events\Order {
         {
         }
         public function getActivityEventModel()
+        {
+        }
+        public function shouldCreateActivity(): bool
         {
         }
     }
@@ -5192,6 +5222,8 @@ namespace FluentCart\App\Helpers {
         private $orderModel;
         private $transactionModel;
         private $subscriptionModel;
+        // Fee tracking
+        private $feeTotal = 0;
         // Store Settings
         private $storeSettings;
         private $couponDiscountTotal = 0;
@@ -5227,6 +5259,9 @@ namespace FluentCart\App\Helpers {
         {
         }
         private function prepareOrderData()
+        {
+        }
+        private function syncFeeItems()
         {
         }
         /**
@@ -6701,6 +6736,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         public function supports(): array
         {
         }
+        public function ancestor(): array
+        {
+        }
         public function provideContext()
         {
         }
@@ -6965,6 +7003,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout\InnerBlocks {
         public function renderCheckoutShipping($attributes, $content, $block)
         {
         }
+        public function renderCheckoutFees($attributes, $content, $block)
+        {
+        }
         public function renderCheckoutCoupon($attributes, $content, $block)
         {
         }
@@ -7039,6 +7080,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class ExcerptBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'excerpt';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7160,6 +7204,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class PriceRangeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'price-range';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7337,6 +7384,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class ProductDescriptionBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-description';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7372,6 +7422,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class ProductImageBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-image';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7413,6 +7466,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class ProductSkuBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-sku';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7432,6 +7488,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class ProductTitleBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-title';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7497,6 +7556,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class SaleBadgeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'sale-badge';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -7672,6 +7734,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     class SoldOutBadgeBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'sold-out-badge';
+        public function ancestor(): array
+        {
+        }
         public function supports(): array
         {
         }
@@ -9266,6 +9331,9 @@ namespace FluentCart\App\Http\Controllers {
         public function activatePluginAddon(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
+        public function verifyTurnstileKeys(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
+        {
+        }
         private function getRegisteredPluginAddons(): array
         {
         }
@@ -9293,6 +9361,9 @@ namespace FluentCart\App\Http\Controllers {
     }
     class OrderController extends \FluentCart\App\Http\Controllers\Controller
     {
+        protected function getTestOrdersQuery()
+        {
+        }
         public function index(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
@@ -9335,7 +9406,7 @@ namespace FluentCart\App\Http\Controllers {
         /**
          * Delete order related data (transactions, items, meta, addresses, orders)
          */
-        private function deleteOrderRelatedData(array $orderIds, $type = 'renewal', $isTestMode = false)
+        private function deleteOrderRelatedData(array $orderIds, bool $isTestMode = false): void
         {
         }
         public function getDetails($orderId)
@@ -9358,6 +9429,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function handleBulkActions(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        protected function handleDeleteTestOrdersBulkAction(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
         public function updateTransactionStatus(\FluentCart\Framework\Http\Request\Request $request, $order, \FluentCart\App\Models\OrderTransaction $transaction)
@@ -9827,9 +9901,6 @@ namespace FluentCart\App\Http\Controllers\Reports {
         public function getRecentOrders(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
-        public function getUnfulfilledOrders(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
         public function getRecentActivities(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
@@ -9840,13 +9911,6 @@ namespace FluentCart\App\Http\Controllers\Reports {
         {
         }
         public function getCountryHeatMap(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        //Cart report controllers
-        public function getCartReport(\FluentCart\Framework\Http\Request\Request $request)
-        {
-        }
-        public function getAbandonedCartItems(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -11228,6 +11292,27 @@ namespace FluentCart\App\Listeners\Order {
     class OrderDeleted
     {
         public static function handle(\FluentCart\App\Events\Order\OrderDeleted $event)
+        {
+        }
+    }
+    class OrderDeleting
+    {
+        public static function handle(\FluentCart\App\Events\Order\OrderDeleting $event)
+        {
+        }
+        protected static function shouldRestoreStockOnOrderDelete(\FluentCart\App\Events\Order\OrderDeleting $event): bool
+        {
+        }
+        protected static function buildDeleteRestoreMap($orders, $stockMetaByOrderId): array
+        {
+        }
+        protected static function buildDeleteRestoreVariantUpdate($variation, int $restoreQty): array
+        {
+        }
+        protected static function appendBundleChildRestoreUpdates(array &$updatedVariants, array &$affectedProductIds, $variation, int $restoreQty): void
+        {
+        }
+        protected static function updateProductAvailabilityFromVariationStock(array $affectedProductIds): void
         {
         }
     }
@@ -15524,6 +15609,16 @@ namespace FluentCart\App\Models {
          */
         private static $cache = [];
         /**
+         * Per-request cache for computed fees.
+         * @var array|null
+         */
+        private $cachedFees = null;
+        /**
+         * Recursion guard for getFees() to prevent infinite loops.
+         * @var bool
+         */
+        private $isCalculatingFees = false;
+        /**
          * The attributes that are mass assignable.
          *
          * @var array
@@ -15617,10 +15712,130 @@ namespace FluentCart\App\Models {
         public function getShippingTotal()
         {
         }
+        /**
+         * Get all fees for this cart.
+         * Reads persistent fees from checkout_data.fees and merges with
+         * dynamically computed fees from the fluent_cart/cart/fees filter.
+         * Uses per-request caching to avoid redundant DB reads and filter evaluations.
+         *
+         * @return array Validated fee items
+         */
+        public function getFees(): array
+        {
+        }
+        /**
+         * Get only the persistent (stored) fees from checkout_data.
+         *
+         * @return array
+         */
+        public function getStoredFees(): array
+        {
+        }
+        /**
+         * Add a fee to the cart. Persists immediately to the database.
+         * If a fee with the same source:key already exists, it will be updated.
+         *
+         * Usage:
+         *   $cart->addFee([
+         *       'key'     => 'processing_fee',
+         *       'label'   => 'Processing Fee',
+         *       'amount'  => 450,           // cents, must be positive
+         *       'source'  => 'dynamic-pricing',
+         *       'taxable' => false,
+         *       'meta'    => ['rule_id' => 42],
+         *   ]);
+         *
+         * @param array $fee Fee data with required keys: key, label, amount
+         * @return bool Whether the fee was added successfully
+         */
+        public function addFee(array $fee): bool
+        {
+        }
+        /**
+         * Remove a fee from the cart by key (and optionally source).
+         * Persists immediately to the database.
+         *
+         * @param string $key The fee key to remove
+         * @param string|null $source Optional source filter. If null, removes all fees with this key.
+         * @return bool Whether any fee was removed
+         */
+        public function removeFee(string $key, ?string $source = null): bool
+        {
+        }
+        /**
+         * Remove all fees from a specific source.
+         * Useful for addons to clear their fees before recalculating.
+         *
+         * @param string $source The source identifier
+         * @return void
+         */
+        public function removeFeesBySource(string $source): void
+        {
+        }
+        /**
+         * Get the total of all fees in cents.
+         *
+         * @return int
+         */
+        public function getFeeTotal(): int
+        {
+        }
+        /**
+         * Build cart-data-compatible items for fee items.
+         * Used by the tax module to calculate tax on taxable fees
+         * through the same pipeline as product items.
+         *
+         * @return array
+         */
+        public function getFeeCartItems(): array
+        {
+        }
+        /**
+         * Convert a validated fee array into a cart-data-compatible line item.
+         * Single source of truth for fee item structure — used by both
+         * getFeeCartItems() and TaxModule::calculateCartTax().
+         *
+         * @param array $fee Validated fee array
+         * @return array Cart-data-compatible item
+         */
+        public static function buildFeeCartItem(array $fee): array
+        {
+        }
+        /**
+         * Clear the per-request fee cache.
+         * Call this after modifying fees or cart data.
+         *
+         * @return void
+         */
+        public function clearFeeCache(): void
+        {
+        }
+        /**
+         * Validate and deduplicate an array of fees.
+         *
+         * @param array $fees Raw fee items
+         * @return array Validated fee items
+         */
+        private function validateFees(array $fees): array
+        {
+        }
         public function getItemsSubtotal()
         {
         }
+        private static bool $calculatingTotal = false;
         public function getEstimatedTotal($extraAmount = 0)
+        {
+        }
+        /**
+         * Raw total calculation without hooks (used for recursion guard).
+         */
+        private function getEstimatedTotalRaw($extraAmount = 0)
+        {
+        }
+        /**
+         * Get full cart context data for dynamic pricing and other addons.
+         */
+        public function getContextData(): array
         {
         }
         public function getEstimatedRecurringTotal()
@@ -16058,9 +16273,9 @@ namespace FluentCart\App\Models {
         public static function boot()
         {
         }
-        protected $fillable = ['status', 'parent_id', 'invoice_no', 'receipt_number', 'fulfillment_type', 'type', 'customer_id', 'payment_method', 'payment_method_title', 'payment_status', 'currency', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'tax_total', 'tax_behavior', 'total_amount', 'rate', 'note', 'ip_address', 'completed_at', 'refunded_at', 'total_refund', 'uuid', 'created_at', 'refunded_at', 'total_paid', 'mode', 'shipping_status', 'config'];
+        protected $fillable = ['status', 'parent_id', 'invoice_no', 'receipt_number', 'fulfillment_type', 'type', 'customer_id', 'payment_method', 'payment_method_title', 'payment_status', 'currency', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'tax_behavior', 'total_amount', 'rate', 'note', 'ip_address', 'completed_at', 'refunded_at', 'total_refund', 'uuid', 'created_at', 'refunded_at', 'total_paid', 'mode', 'shipping_status', 'config'];
         protected $searchable = ['id', 'total_amount', 'status', 'payment_method', 'payment_status', 'created_at', 'updated_at'];
-        protected $casts = ['subtotal' => 'double', 'discount_tax' => 'double', 'manual_discount_total' => 'double', 'coupon_discount_total' => 'double', 'shipping_tax' => 'double', 'shipping_total' => 'double', 'tax_total' => 'double', 'total_amount' => 'double', 'customer_id' => 'integer'];
+        protected $casts = ['subtotal' => 'double', 'discount_tax' => 'double', 'manual_discount_total' => 'double', 'coupon_discount_total' => 'double', 'shipping_tax' => 'double', 'shipping_total' => 'double', 'fee_total' => 'double', 'tax_total' => 'double', 'total_amount' => 'double', 'customer_id' => 'integer'];
         public function parentOrder(): \FluentCart\Framework\Database\Orm\Relations\BelongsTo
         {
         }
@@ -16074,6 +16289,31 @@ namespace FluentCart\App\Models {
         {
         }
         public function order_items(): \FluentCart\Framework\Database\Orm\Relations\HasMany
+        {
+        }
+        /**
+         * Get only product order items (excludes fees, signup fees, and other non-product items).
+         * Use this in all display contexts where product line items are shown.
+         *
+         * @return \FluentCart\Framework\Support\Collection
+         */
+        public function getProductItems()
+        {
+        }
+        /**
+         * Get fee order items for this order.
+         *
+         * @return \FluentCart\Framework\Database\Orm\Relations\HasMany
+         */
+        public function feeItems(): \FluentCart\Framework\Database\Orm\Relations\HasMany
+        {
+        }
+        /**
+         * Get applied fees as a simple array (for display purposes).
+         *
+         * @return array
+         */
+        public function getAppliedFees(): array
         {
         }
         public function setConfigAttribute($value)
@@ -17713,6 +17953,16 @@ namespace FluentCart\App\Models {
         public function scopeApplicableToCountry($query, $country, $state)
         {
         }
+        /**
+         * Get shipping methods applicable to a country, with post-filtering for multi-country selection zones.
+         *
+         * @param string $country
+         * @param string|null $state
+         * @return \FluentCart\Framework\Database\Orm\Collection
+         */
+        public static function getApplicableForCountry(string $country, $state = null)
+        {
+        }
         public function getFormattedStatesAttribute()
         {
         }
@@ -17739,14 +17989,26 @@ namespace FluentCart\App\Models {
          *
          * @var array
          */
-        protected $fillable = ['name', 'region', 'order'];
+        protected $fillable = ['name', 'region', 'meta', 'order'];
         /**
          * Get the shipping methods for this zone.
          */
         public function methods(): \FluentCart\Framework\Database\Orm\Relations\HasMany
         {
         }
+        public function setMetaAttribute($value)
+        {
+        }
+        public function getMetaAttribute($value)
+        {
+        }
         public function getFormattedRegionAttribute()
+        {
+        }
+        /**
+         * Check if this zone applies to a given country code.
+         */
+        public function appliesToCountry(string $country): bool
         {
         }
     }
@@ -20843,7 +21105,18 @@ namespace FluentCart\App\Modules\Shipping\Http\Controllers {
         public function updateOrder(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
+        public function getCountriesByContinent()
+        {
+        }
         public function getZoneStates(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        /**
+         * Build meta array by merging new country selection data into existing meta.
+         * For 'selection' regions, sets countries and selection_type.
+         * For other regions, removes country selection keys but preserves any other meta.
+         */
+        private function buildMeta(array $existing, $incoming, $region): array
         {
         }
     }
@@ -21954,6 +22227,19 @@ namespace FluentCart\App\Modules\Templating {
     class AssetLoader
     {
         static $loadedAssets = [];
+        protected static bool $frontendAssetsRequired = false;
+        public static function markFrontendAssetsRequired(): void
+        {
+        }
+        public static function isFrontendAssetsMarked(): bool
+        {
+        }
+        public static function shouldLoadGlobalFrontendAssets(): bool
+        {
+        }
+        public static function isFluentCartContext(): bool
+        {
+        }
         public static function register()
         {
         }
@@ -23336,60 +23622,6 @@ namespace FluentCart\App\Services {
         {
         }
         private static function getReservedUserNames()
-        {
-        }
-    }
-    class BlockParser
-    {
-        public function __construct($subscriber = null)
-        {
-        }
-        public function parse($content)
-        {
-        }
-        private function sanitizeBlock($block)
-        {
-        }
-        public function alterBlockContent($content, $data)
-        {
-        }
-        private function getMediaTextOpening($block)
-        {
-        }
-        private function getMediaTextClosing($block)
-        {
-        }
-        private function getRowOpening($block)
-        {
-        }
-        private function getRowClosing($block)
-        {
-        }
-        private function getColumnOpening($block)
-        {
-        }
-        private function getColumnClosing($block)
-        {
-        }
-        private function getButtonsOpening($block)
-        {
-        }
-        private function getButtonWrapper($content, $data)
-        {
-        }
-        private function getButtonsClosing($block)
-        {
-        }
-        private function renderConditionalBlock($content, $data)
-        {
-        }
-        private function getImageBlockHtml($block)
-        {
-        }
-        private function renderLatestPosts($attributes)
-        {
-        }
-        private function getSpacing($key, $block)
         {
         }
     }
@@ -24869,1539 +25101,23 @@ namespace FluentCart\App\Services\Email {
         public static function getDynamicCssForEditor()
         {
         }
-    }
-}
-namespace FluentCart\App\Services\Email\Blocks {
-    /**
-     * Base class for Email Block Renderers
-     *
-     * Provides common style handling for Gutenberg blocks converted to email-compatible HTML.
-     * All block-specific renderers should extend this class.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    abstract class BaseBlock
-    {
         /**
-         * Block attributes from Gutenberg
-         *
-         * @var array
-         */
-        protected $attrs = [];
-        /**
-         * Style attributes (shortcut to $attrs['style'])
-         *
-         * @var array
-         */
-        protected $style = [];
-        /**
-         * Inner HTML content of the block
-         *
-         * @var string
-         */
-        protected $innerHTML = '';
-        /**
-         * Inner blocks (for nested blocks)
-         *
-         * @var array
-         */
-        protected $innerBlocks = [];
-        /**
-         * Reference to the parent parser for helper methods
-         *
-         * @var \FluentCart\App\Services\Email\FluentBlockParser
-         */
-        protected $parser;
-        /**
-         * Constructor
-         *
-         * @param array $attrs Block attributes
-         * @param string $innerHTML Inner HTML content
-         * @param array $innerBlocks Inner blocks for nested content
-         * @param \FluentCart\App\Services\Email\FluentBlockParser|null $parser Parent parser instance
-         */
-        public function __construct(array $attrs = [], string $innerHTML = '', array $innerBlocks = [], $parser = null)
-        {
-        }
-        /**
-         * Render the block to email-compatible HTML
-         *
-         * @return string
-         */
-        abstract public function render(): string;
-        /**
-         * Evaluate the block's built-in visibility condition.
-         *
-         * Returns true if the block should render, false if hidden.
-         * When no condition is configured, returns true (always render).
-         *
-         * Requires $this->parserData to be set for shortcode resolution.
-         *
-         * @return bool
-         */
-        protected function evaluateBlockCondition()
-        {
-        }
-        /**
-         * Resolve condition parameters from a preset ID or custom fields.
-         *
-         * Returns null if no valid condition could be resolved (block should render).
-         *
-         * @param string $presetId
-         * @param string $shortcode
-         * @param string $condition
-         * @param string $compareValue
-         * @return array{shortcode: string, condition: string, compareValue: string}|null
-         */
-        public static function resolveConditionParams($presetId, $shortcode, $condition, $compareValue)
-        {
-        }
-        /**
-         * Evaluate a shortcode condition.
-         *
-         * @param string $shortcode
-         * @param string $condition
-         * @param string $compareValue
-         * @param array  $data
-         * @return bool
-         */
-        public static function evaluateCondition($shortcode, $condition, $compareValue, array $data = [])
-        {
-        }
-        /**
-         * Evaluate a resolved condition array (from ConditionPresets::resolve or resolveConditionParams).
-         *
-         * Handles three types:
-         *  - 'callback': calls the preset's callback function
-         *  - 'filter':   delegates to apply_filters('fluent_cart/evaluate_condition_preset')
-         *  - 'shortcode': evaluates via shortcode comparison (default)
-         *
-         * @param array $resolved
-         * @param array $data
-         * @return bool
-         */
-        public static function evaluateResolved(array $resolved, array $data = [], $presetId = '', array $blockAttrs = [])
-        {
-        }
-        /**
-         * Get typography CSS styles from block attributes
-         *
-         * Handles: fontSize, fontFamily, fontWeight, lineHeight,
-         * textTransform, letterSpacing, textDecoration, fontStyle
-         *
-         * @param array|null $typography Typography array (defaults to $this->style['typography'])
-         * @return string CSS styles string
-         */
-        protected function getTypographyStyles(?array $typography = null): string
-        {
-        }
-        /**
-         * Get color CSS styles from block attributes
-         *
-         * Handles: textColor, backgroundColor, gradient
-         *
-         * @param string $targetElement 'element' for the main element, 'wrapper' for the wrapper
-         * @return array ['textColor' => string|null, 'styles' => string]
-         */
-        protected function getColorStyles(string $targetElement = 'element'): array
-        {
-        }
-        /**
-         * Get border CSS styles from block attributes
-         *
-         * Handles: width, style, color, radius, individual sides (top, right, bottom, left)
-         *
-         * @return string CSS styles string
-         */
-        protected function getBorderStyles(): string
-        {
-        }
-        /**
-         * Get border radius CSS styles
-         *
-         * @param string|array $radius Border radius value
-         * @return string CSS styles string
-         */
-        protected function getBorderRadiusStyles($radius): string
-        {
-        }
-        /**
-         * Get spacing CSS styles (padding or margin)
-         *
-         * @param string $type 'padding' or 'margin'
-         * @return string CSS styles string
-         */
-        protected function getSpacingStyles(string $type = 'padding'): string
-        {
-        }
-        /**
-         * Resolve a spacing value that might be a CSS variable reference
-         *
-         * Handles formats:
-         * - "var:preset|spacing|20" (Gutenberg shorthand)
-         * - "var(--wp--preset--spacing--20)" (CSS custom property)
-         * - "18px", "1.5em" etc. (literal values, returned as-is)
-         *
-         * @param string $value The spacing value
-         * @return string Resolved pixel value
-         */
-        protected function resolveSpacingValue(string $value): string
-        {
-        }
-        /**
-         * Get pixel value from spacing preset slug
-         *
-         * @param string $slug Spacing preset slug
-         * @return string Pixel value
-         */
-        protected function getSpacingFromSlug(string $slug): string
-        {
-        }
-        /**
-         * Get alignment CSS styles
-         *
-         * @param string|null $align Alignment value (left, center, right)
-         * @return string CSS styles string
-         */
-        protected function getAlignmentStyles(?string $align = null): string
-        {
-        }
-        /**
-         * Apply link color styles to anchor tags in content
-         *
-         * @param string $content HTML content with anchor tags
-         * @param string|null $linkColor Color to apply (defaults to element link color or text color)
-         * @param string|null $textColor Fallback text color
-         * @return string Modified HTML content
-         */
-        protected function applyLinkColorStyles(string $content, ?string $linkColor = null, ?string $textColor = null): string
-        {
-        }
-        /**
-         * Wrap content in email-safe table structure
-         *
-         * @param string $content HTML content to wrap
-         * @param string $className Optional class name for the table
-         * @param string $tdStyles Optional inline styles for the td element
-         * @return string Email-safe table HTML
-         */
-        protected function wrapInTable(string $content, string $className = '', string $tdStyles = 'padding: 0;'): string
-        {
-        }
-        /**
-         * Get color value from slug or CSS variable
-         *
-         * @param string $slug Color slug or value
-         * @return string Resolved color value
-         */
-        protected function getColorFromSlug(string $slug): string
-        {
-        }
-        /**
-         * Get font size value from slug
-         *
-         * @param string $slug Font size slug or value
-         * @return string Resolved font size value
-         */
-        protected function getFontSizeFromSlug(string $slug): string
-        {
-        }
-        /**
-         * Extract inner content from HTML tags
-         *
-         * @param string $content HTML content
-         * @param string $tagPattern Regex pattern for the tag (e.g., 'h[1-6]', 'p')
-         * @return string Extracted inner content or original content
-         */
-        protected function extractInnerContent(string $content, string $tagPattern): string
-        {
-        }
-        /**
-         * Get attribute value from innerHTML if not in attrs
-         *
-         * @param string $attrName Attribute name to extract
-         * @param mixed $default Default value if not found
-         * @return mixed Attribute value
-         */
-        protected function getAttrFromHtml(string $attrName, $default = '')
-        {
-        }
-        /**
-         * Build combined styles string from multiple style sources
-         *
-         * @param string $baseStyles Base/default styles
-         * @param bool $includeTypography Include typography styles
-         * @param bool $includeColors Include color styles
-         * @param bool $includeBorder Include border styles
-         * @param bool $includePadding Include padding styles
-         * @param bool $includeMargin Include margin styles
-         * @return array ['styles' => string, 'textColor' => string|null]
-         */
-        protected function buildStyles(string $baseStyles = '', bool $includeTypography = true, bool $includeColors = true, bool $includeBorder = true, bool $includePadding = true, bool $includeMargin = true): array
-        {
-        }
-        /**
-         * Handle font size from preset attribute
-         *
-         * @return string CSS font-size style or empty string
-         */
-        protected function getFontSizePresetStyle(): string
-        {
-        }
-    }
-    /**
-     * Email Address Container Block Renderer
-     *
-     * Handles layout logic (split/full/auto) for billing and shipping
-     * address children in email-safe table markup.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class AddressContainerBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * @var array Parser data containing order info
-         */
-        protected $parserData = [];
-        /**
-         * @param array $data
-         * @return self
-         */
-        public function setParserData(array &$data): self
-        {
-        }
-        public function render(): string
-        {
-        }
-        /**
-         * Render inner blocks of a child address block through the parser.
-         *
-         * @param array $innerBlocks
-         * @return string
-         */
-        private function renderChildBlocks(array $innerBlocks): string
-        {
-        }
-        /**
-         * Check if shipping should be hidden (digital-only order with flag set).
-         *
-         * The hideShippingOnDigital flag lives on the parent email-order-addresses
-         * block, but the parser data carries the order so we can check here.
-         *
-         * @return bool
-         */
-        private function shouldHideShipping(): bool
-        {
-        }
-    }
-    /**
-     * Button Block Renderer for Email
-     *
-     * Converts Gutenberg core/button blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ButtonBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Default button colors
-         */
-        protected $defaultBgColor = '#0073aa';
-        protected $defaultTextColor = '#ffffff';
-        /**
-         * Render the button block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract URL from content or attrs
-         *
-         * @return string
-         */
-        protected function extractUrl(): string
-        {
-        }
-        /**
-         * Extract button text from content or attrs
-         *
-         * @return string
-         */
-        protected function extractText(): string
-        {
-        }
-        /**
-         * Build button styles
-         *
-         * @param bool $isOutline Whether it's an outline button
-         * @return string CSS styles
-         */
-        protected function buildButtonStyles(bool $isOutline): string
-        {
-        }
-        /**
-         * Get background color
-         *
-         * @return string
-         */
-        protected function getBackgroundColor(): string
-        {
-        }
-        /**
-         * Get text color value
-         *
-         * @return string
-         */
-        protected function getTextColorValue(): string
-        {
-        }
-        /**
-         * Get button border styles (excluding outline handling)
-         *
-         * @return string
-         */
-        protected function getButtonBorderStyles(): string
-        {
-        }
-        /**
-         * Get only border radius styles
-         *
-         * @return string
-         */
-        protected function getBorderRadiusOnly(): string
-        {
-        }
-        /**
-         * Get shadow styles
-         *
-         * @return string
-         */
-        protected function getShadowStyles(): string
-        {
-        }
-        /**
-         * Extract link target from attrs or innerHTML
-         *
-         * @return string Target value (e.g., '_blank')
-         */
-        protected function extractLinkTarget(): string
-        {
-        }
-        /**
-         * Extract rel attribute from attrs or innerHTML
-         *
-         * @return string Rel value
-         */
-        protected function extractRel(): string
-        {
-        }
-    }
-    /**
-     * Buttons Container Block Renderer for Email
-     *
-     * Converts Gutenberg core/buttons blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ButtonsBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * The full block data (needed for innerContent)
-         *
-         * @var array
-         */
-        protected $block = [];
-        /**
-         * Constructor with block data
-         *
-         * @param array $attrs Block attributes
-         * @param string $innerHTML Inner HTML content
-         * @param array $innerBlocks Inner blocks
-         * @param mixed $parser Parent parser
-         * @param array $block Full block data
-         */
-        public function __construct(array $attrs = [], string $innerHTML = '', array $innerBlocks = [], $parser = null, array $block = [])
-        {
-        }
-        /**
-         * Render the buttons container block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract style attribute from content
-         *
-         * @param string $content HTML content
-         * @return string Style value
-         */
-        protected function extractStyleFromContent(string $content): string
-        {
-        }
-        /**
-         * Extract class attribute from content
-         *
-         * @param string $content HTML content
-         * @return string Class value
-         */
-        protected function extractClassFromContent(string $content): string
-        {
-        }
-        /**
-         * Resolve the blockGap value for spacing between buttons
-         *
-         * @return string CSS gap value (e.g., '0.5em', '20px')
-         */
-        protected function resolveBlockGap(): string
-        {
-        }
-        /**
-         * Render inner button blocks
-         *
-         * @return string HTML for all buttons
-         */
-        protected function renderButtons(): string
-        {
-        }
-    }
-    /**
-     * Code Block Renderer for Email
-     *
-     * Converts Gutenberg core/code blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class CodeBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the code block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract code content from innerHTML
-         *
-         * @return string
-         */
-        protected function extractCodeContent(): string
-        {
-        }
-    }
-    /**
-     * Column Block Renderer for Email
-     *
-     * Converts Gutenberg core/column blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ColumnBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Get CSS styles for the column's wrapping <td> element.
-         *
-         * @return string Inline CSS styles string
-         */
-        public function getTdStyles(): string
-        {
-        }
-        /**
-         * Get vertical alignment for this column, falling back to parent default
-         *
-         * @param string $parentDefault Parent columns' verticalAlignment
-         * @return string CSS vertical-align value (top, middle, bottom)
-         */
-        public function getVerticalAlignment(string $parentDefault = ''): string
-        {
-        }
-        /**
-         * Render the column block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Columns Block Renderer for Email
-     *
-     * Converts Gutenberg core/columns blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ColumnsBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the columns block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-    }
-    class ConditionContentBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        public function render(): string
-        {
-        }
-    }
-    class ConditionFallbackBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Cover Block Renderer for Email
-     *
-     * Converts Gutenberg core/cover blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class CoverBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the cover block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Get background URL from attrs or innerHTML
-         *
-         * @return string
-         */
-        protected function getBackgroundUrl(): string
-        {
-        }
-        /**
-         * Parse content position into vertical align and text align
-         *
-         * @param string $contentPosition Position string (e.g., "top center")
-         * @return array [vAlignStyle, textAlign]
-         */
-        protected function parseContentPosition(string $contentPosition): array
-        {
-        }
-        /**
-         * Render inner content from blocks
-         *
-         * @return string
-         */
-        protected function renderInnerContent(): string
-        {
-        }
-        /**
-         * Render cover with background image
-         *
-         * @param string $url Background URL
-         * @param string $overlayRgba Overlay rgba color string
-         * @param string $vAlignStyle Vertical alignment
-         * @param string $textAlign Text alignment
-         * @param string $minHeightValue Minimum height
-         * @param string $innerContent Inner content HTML
-         * @return string
-         */
-        protected function renderWithBackground(string $url, string $overlayRgba, string $vAlignStyle, string $textAlign, string $minHeightValue, string $innerContent): string
-        {
-        }
-        /**
-         * Get overlay color from various attribute sources
-         *
-         * @return string Hex color
-         */
-        protected function getOverlayColor(): string
-        {
-        }
-        /**
-         * Convert hex color + opacity to rgba string
-         *
-         * @param string $hex Hex color (e.g., '#ff0000' or '#f00')
-         * @param float $opacity Opacity 0-1
-         * @return string rgba() color string
-         */
-        protected function hexToRgba(string $hex, float $opacity): string
-        {
-        }
-    }
-    /**
-     * Order Items Loop Block Renderer for Email
-     *
-     * Iterates over order items, renders InnerBlocks per item,
-     * and replaces {{item.*}} shortcodes with actual values.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class OrderItemsLoopBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * @var array Parser data containing order, etc.
-         */
-        protected $parserData = [];
-        /**
-         * @param array $data Reference to parser data array
-         * @return self
-         */
-        public function setParserData(array &$data): self
-        {
-        }
-        public function render(): string
-        {
-        }
-        /**
-         * Call renderBlocks on the parser via reflection.
-         */
-        protected function renderBlocksViaParser(array $blocks): string
-        {
-        }
-        /**
-         * Build inline styles from block attributes and wrap content.
-         */
-        protected function wrapWithStyles(string $content): string
-        {
-        }
-    }
-    /**
-     * Download Details Loop Block Renderer for Email
-     *
-     * Iterates over order downloads (flattened), renders InnerBlocks per file,
-     * and replaces {{download.*}} shortcodes with actual values.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class DownloadDetailsLoopBlock extends \FluentCart\App\Services\Email\Blocks\OrderItemsLoopBlock
-    {
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Email Row Block Renderer (row-header / row-body)
-     *
-     * Simple pass-through — renders inner blocks. Styling is handled
-     * by the inner core/columns block via its own attributes.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class EmailRowBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * @var string 'header' or 'body'
-         */
-        protected $rowType = 'body';
-        /**
-         * @param string $type 'header' or 'body'
-         * @return self
-         */
-        public function setRowType(string $type): self
-        {
-        }
-        public function render(): string
-        {
-        }
-        protected function renderInnerContent(): string
-        {
-        }
-    }
-    /**
-     * Group Block Renderer for Email
-     *
-     * Converts Gutenberg core/group blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class GroupBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Whether this is a root-level group
-         *
-         * @var bool
-         */
-        protected $isRoot = false;
-        /**
-         * Set whether this is a root group
-         *
-         * @param bool $isRoot
-         * @return self
-         */
-        public function setIsRoot(bool $isRoot): self
-        {
-        }
-        /**
-         * Render the group block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Render flex-row layout as table cells (email-safe alternative to CSS flex)
-         *
-         * @param array $layout Layout attributes
-         * @return string Email-compatible HTML
-         */
-        protected function renderFlexRow(array $layout): string
-        {
-        }
-        /**
-         * Render inner content from blocks or innerHTML
-         *
-         * @return string
-         */
-        protected function renderInnerContent(): string
-        {
-        }
-    }
-    /**
-     * Heading Block Renderer for Email
-     *
-     * Converts Gutenberg core/heading blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class HeadingBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Default font sizes for heading levels
-         *
-         * @var array
-         */
-        protected $defaultFontSizes = [1 => '32px', 2 => '28px', 3 => '24px', 4 => '20px', 5 => '18px', 6 => '16px'];
-        /**
-         * Render the heading block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Image Block Renderer for Email
-     *
-     * Converts Gutenberg core/image blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ImageBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the image block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Get image URL from attrs or innerHTML
-         *
-         * @return string Image URL
-         */
-        protected function getImageUrl(): string
-        {
-        }
-        /**
-         * Get image alt text from attrs or innerHTML
-         *
-         * @return string Alt text
-         */
-        protected function getImageAlt(): string
-        {
-        }
-        /**
-         * Get image caption from innerHTML
-         *
-         * @return string Caption text
-         */
-        protected function getCaption(): string
-        {
-        }
-        /**
-         * Build image element styles
-         *
-         * @return string CSS styles for img tag
-         */
-        protected function buildImageStyles(): string
-        {
-        }
-        /**
-         * Build dimension HTML attributes for email clients
-         *
-         * @return string HTML width/height attributes
-         */
-        protected function buildDimensionAttributes(): string
-        {
-        }
-        /**
-         * Build container div styles
-         *
-         * @param string $align Alignment value
-         * @return string CSS styles for container
-         */
-        protected function buildContainerStyles(string $align): string
-        {
-        }
-        /**
-         * Build caption styles
-         *
-         * @param string $align Alignment value
-         * @return string CSS styles for caption
-         */
-        protected function buildCaptionStyles(string $align): string
-        {
-        }
-        /**
-         * Get link data from innerHTML or attrs
-         *
-         * @param string $imageUrl The image URL (used for linkDestination=media)
-         * @return array ['href' => string, 'target' => string, 'rel' => string]
-         */
-        protected function getLinkData(string $imageUrl): array
-        {
-        }
-    }
-    /**
-     * License Details Loop Block Renderer for Email
-     *
-     * Iterates over order licenses, renders InnerBlocks per license,
-     * and replaces {{license.*}} shortcodes with actual values.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class LicenseDetailsLoopBlock extends \FluentCart\App\Services\Email\Blocks\OrderItemsLoopBlock
-    {
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * List Block Renderer for Email
-     *
-     * Converts Gutenberg core/list blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ListBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the list block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract list content from innerHTML
-         *
-         * @return string
-         */
-        protected function extractListContent(): string
-        {
-        }
-    }
-    /**
-     * List Item Block Renderer for Email
-     *
-     * Converts Gutenberg core/list-item blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ListItemBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the list item block
-         *
-         * @return string Email-compatible HTML (li element, not wrapped in table)
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Render a nested list block inline (without table wrapper)
-         *
-         * @param array $block The core/list block data
-         * @return string HTML for the nested list
-         */
-        protected function renderNestedList(array $block): string
-        {
-        }
-    }
-    /**
-     * Media & Text Block Renderer for Email
-     *
-     * Converts Gutenberg core/media-text blocks to email-compatible HTML.
-     * Creates a side-by-side layout with image/media on one side and content on the other.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class MediaTextBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the media-text block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Get media URL from attrs or innerHTML
-         *
-         * @return string Media URL
-         */
-        protected function getMediaUrl(): string
-        {
-        }
-        /**
-         * Build container/wrapper styles
-         *
-         * @return string CSS styles for container
-         */
-        protected function buildContainerStyles(): string
-        {
-        }
-        /**
-         * Build media cell styles
-         *
-         * @param string $verticalAlignment Vertical alignment value
-         * @return string CSS styles for media cell
-         */
-        protected function buildMediaCellStyles(string $verticalAlignment): string
-        {
-        }
-        /**
-         * Build content cell styles
-         *
-         * @param string $verticalAlignment Vertical alignment value
-         * @return string CSS styles for content cell
-         */
-        protected function buildContentCellStyles(string $verticalAlignment): string
-        {
-        }
-        /**
-         * Map Gutenberg vertical alignment to CSS
-         *
-         * @param string $alignment Gutenberg alignment value
-         * @return string CSS vertical-align value
-         */
-        protected function mapVerticalAlignment(string $alignment): string
-        {
-        }
-        /**
-         * Build image element styles
-         *
-         * @param bool $imageFill Whether image should fill container
-         * @return string CSS styles for image
-         */
-        protected function buildImageStyles(bool $imageFill): string
-        {
-        }
-        /**
-         * Build the media HTML (image or placeholder)
-         *
-         * @param string $url Media URL
-         * @param string $alt Alt text
-         * @param string $styles Image styles
-         * @param bool $imageFill Whether image fills container
-         * @return string Media HTML
-         */
-        protected function buildMediaHtml(string $url, string $alt, string $styles, bool $imageFill): string
-        {
-        }
-        /**
-         * Render inner blocks content
-         *
-         * @return string Rendered inner content HTML
-         */
-        protected function renderInnerContent(): string
-        {
-        }
-        /**
-         * Build the two-column table layout
-         *
-         * @param string $leftContent Left column content
-         * @param string $rightContent Right column content
-         * @param int $leftWidth Left column width percentage
-         * @param int $rightWidth Right column width percentage
-         * @param string $leftStyles Left cell styles
-         * @param string $rightStyles Right cell styles
-         * @param string $containerStyles Container styles
-         * @return string Table HTML
-         */
-        protected function buildTableLayout(string $leftContent, string $rightContent, int $leftWidth, int $rightWidth, string $leftStyles, string $rightStyles, string $containerStyles): string
-        {
-        }
-    }
-    /**
-     * Email Order Addresses Block Renderer
-     *
-     * Wrapper that checks if address data exists before rendering.
-     * Contains separators and an address-container child that handles layout.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class OrderAddressesBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * @var array Parser data containing order info
-         */
-        protected $parserData = [];
-        /**
-         * @param array $data
-         * @return self
-         */
-        public function setParserData(array &$data): self
-        {
-        }
-        public function render(): string
-        {
-        }
-        /**
-         * Build inline styles for the outer wrapper from block attributes.
-         *
-         * @return string
-         */
-        private function buildWrapperStyles(): string
-        {
-        }
-        /**
-         * Check if the order has any address data (billing or shipping).
-         *
-         * @return bool
-         */
-        private function hasAddressData(): bool
-        {
-        }
-    }
-    /**
-     * Paragraph Block Renderer for Email
-     *
-     * Converts Gutenberg core/paragraph blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class ParagraphBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the paragraph block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Get text color from attributes
-         *
-         * @return string|null
-         */
-        protected function getTextColor(): ?string
-        {
-        }
-        /**
-         * Get wrapper color styles (background, gradient)
-         *
-         * @return string
-         */
-        protected function getWrapperColorStyles(): string
-        {
-        }
-    }
-    /**
-     * Preformatted Block Renderer for Email
-     *
-     * Converts Gutenberg core/preformatted blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class PreformattedBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the preformatted block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Pullquote Block Renderer for Email
-     *
-     * Converts Gutenberg core/pullquote blocks to email-compatible HTML.
-     * Pullquotes are more prominent than regular quotes, typically used to highlight key text.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class PullquoteBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the pullquote block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract quote content from innerHTML
-         *
-         * @return string
-         */
-        protected function extractQuoteContent(): string
-        {
-        }
-        /**
-         * Extract citation from innerHTML
-         *
-         * @return string
-         */
-        protected function extractCitation(): string
-        {
-        }
-    }
-    /**
-     * Quote Block Renderer for Email
-     *
-     * Converts Gutenberg core/quote blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class QuoteBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the quote block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract quote content from innerHTML, stripping outer blockquote wrapper
-         *
-         * @return string
-         */
-        protected function extractQuoteContent(): string
-        {
-        }
-        /**
-         * Extract citation from innerHTML or attrs
-         *
-         * @return string
-         */
-        protected function extractCitation(): string
-        {
-        }
-    }
-    /**
-     * Separator Block Renderer for Email
-     *
-     * Converts Gutenberg core/separator blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class SeparatorBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the separator block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-    }
-    class ShortcodeConditionBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        protected $parserData = [];
-        public function setParserData(array &$data): self
-        {
-        }
-        public function render(): string
-        {
-        }
-        private function renderSlot(string $blockName): string
-        {
-        }
-    }
-    /**
-     * Social Links Block Renderer for Email
-     *
-     * Converts Gutenberg core/social-links blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class SocialLinksBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Brand colors for social services
-         *
-         * @var array
-         */
-        protected $brandColors = ['facebook' => '#1877f2', 'twitter' => '#1da1f2', 'x' => '#000000', 'linkedin' => '#0077b5', 'instagram' => '#e4405f', 'github' => '#181717', 'wordpress' => '#21759b', 'amazon' => '#ff9900', 'youtube' => '#ff0000', 'tiktok' => '#000000', 'pinterest' => '#bd081c', 'telegram' => '#26a5e4', 'whatsapp' => '#25d366', 'discord' => '#5865f2', 'slack' => '#4a154b', 'dribbble' => '#ea4c89', 'behance' => '#1769ff', 'medium' => '#000000', 'reddit' => '#ff4500', 'twitch' => '#9146ff', 'spotify' => '#1db954', 'link' => '#0073aa'];
-        /**
-         * SVG icons for social services
-         *
-         * @var array
-         */
-        protected $icons = ['facebook' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>', 'twitter' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>', 'x' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>', 'linkedin' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>', 'instagram' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>', 'github' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>', 'wordpress' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21.469 6.825c.84 1.537 1.318 3.3 1.318 5.175 0 3.979-2.156 7.456-5.363 9.325l3.295-9.527c.615-1.54.82-2.771.82-3.864 0-.405-.026-.78-.07-1.11zm-7.981.105c.647-.03 1.232-.105 1.232-.105.582-.075.514-.93-.067-.899 0 0-1.755.135-2.88.135-1.064 0-2.85-.15-2.85-.15-.585-.03-.661.855-.075.885 0 0 .54.061 1.125.09l1.68 4.605-2.37 7.08L5.354 6.9c.649-.03 1.234-.1 1.234-.1.585-.075.516-.93-.065-.896 0 0-1.746.138-2.874.138-.2 0-.438-.008-.69-.015C4.911 3.15 8.235 1.215 12 1.215c2.809 0 5.365 1.072 7.286 2.833-.046-.003-.091-.009-.141-.009-1.06 0-1.812.923-1.812 1.914 0 .89.513 1.643 1.06 2.531.411.72.89 1.643.89 2.977 0 .915-.354 1.994-.821 3.479l-1.075 3.585-3.9-11.61.001.014zM12 22.784c-1.059 0-2.081-.153-3.048-.437l3.237-9.406 3.315 9.087c.024.053.05.101.078.149-1.12.393-2.325.607-3.582.607zM1.211 12c0-1.564.336-3.05.935-4.39L7.29 21.709C3.694 19.96 1.212 16.271 1.212 12zm10.785-10.784C6.596 1.215 1.214 6.597 1.214 12s5.382 10.785 10.784 10.785S22.784 17.403 22.784 12 17.402 1.215 11.996 1.215z"/></svg>', 'amazon' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M.045 18.02c.072-.116.187-.124.348-.022 3.636 2.11 7.594 3.166 11.87 3.166 2.852 0 5.668-.533 8.447-1.595l.315-.14c.138-.06.234-.1.293-.13.226-.088.39-.046.493.13.116.19.088.347-.084.47-.104.073-.207.146-.31.22-.295.211-.59.416-.884.615-.543.352-1.086.672-1.63.957-.903.453-1.836.846-2.797 1.18-.96.332-1.926.596-2.898.79-.972.19-1.948.29-2.93.29-1.64 0-3.2-.225-4.682-.675-1.483-.45-2.868-1.09-4.153-1.92-.285-.18-.557-.372-.817-.573C.253 20.64.107 20.478.02 20.26c-.05-.13-.05-.26.002-.388.05-.127.132-.233.246-.318.11-.082.232-.148.362-.198l.164-.06c.243-.085.462-.165.66-.24.295-.112.584-.227.868-.344l.242-.1c.168-.068.334-.135.5-.2.17-.066.343-.13.518-.193.15-.052.3-.103.45-.153.147-.05.294-.098.44-.145l.152-.048c.196-.066.39-.127.58-.186.192-.056.385-.11.58-.16l.16-.04c.12-.03.24-.06.362-.088l.16-.04c.16-.04.32-.077.478-.113.157-.035.314-.07.472-.104l.272-.055c.093-.018.186-.036.28-.054l.175-.03c.123-.02.246-.04.37-.058l.232-.033c.3-.044.598-.082.895-.115.297-.032.592-.058.885-.078l.06-.005c.166-.012.332-.02.497-.025.166-.005.332-.007.498-.007 1.188 0 2.36.108 3.512.325 1.152.216 2.27.527 3.358.935.09.034.18.07.27.106.087.034.174.07.26.106l.137.058c.065.027.13.054.194.08.082.034.165.07.247.104.264.11.526.225.787.34.156.07.312.14.467.21.237.108.472.22.706.332.167.08.333.16.498.24.115.054.228.11.34.165.172.085.343.17.513.256.136.07.272.138.407.208l.287.148c.163.085.326.17.488.256.188.1.375.2.56.302l.238.132c.136.076.27.152.404.228l.232.133c.136.078.27.156.404.235l.26.152c.242.142.482.284.72.43l.2.12c.196.117.39.235.582.356l.17.105c.188.116.374.234.558.355l.153.098c.18.116.358.233.535.352l.14.093c.178.12.355.24.53.362l.126.087c.178.124.354.248.528.375l.11.08c.178.13.354.26.528.392l.092.07c.18.138.356.275.53.414l.07.055c.186.148.368.296.548.447l.04.033c.198.166.392.334.582.503.19.17.377.34.56.514l.073.07c.163.157.323.317.48.477.158.162.313.326.465.49l.068.075c.142.157.282.317.418.478.137.162.27.326.402.49l.068.086c.127.16.25.323.37.486.122.164.24.33.357.496l.07.1c.113.163.223.328.33.494.108.167.213.336.316.504l.066.108c.103.172.203.345.3.52.097.174.191.35.283.527l.057.11c.098.19.19.38.28.573.09.192.176.386.26.58l.04.097c.09.208.175.417.256.628.08.21.158.423.232.636l.03.087c.083.24.16.48.234.723.073.243.142.488.207.733l.02.075c.073.276.14.553.2.832.062.28.118.56.168.843l.008.05c.06.32.11.642.154.965.044.324.08.65.108.976l.004.05c.034.363.06.728.076 1.093.017.366.025.733.025 1.1 0 .37-.008.738-.025 1.104-.017.366-.042.73-.076 1.095l-.004.05c-.028.327-.064.652-.108.976-.044.323-.095.645-.155.965l-.007.05c-.05.283-.106.564-.168.843-.06.28-.127.557-.2.832l-.02.076c-.065.245-.134.49-.207.733-.074.242-.15.482-.234.72l-.03.09c-.074.213-.152.425-.232.635-.08.21-.166.42-.256.628l-.04.097c-.084.194-.17.388-.26.58-.09.193-.182.384-.28.573l-.057.11c-.092.177-.186.353-.283.528-.097.174-.197.347-.3.52l-.066.107c-.103.17-.208.337-.316.504-.107.166-.217.33-.33.494l-.07.1c-.117.166-.235.332-.357.496-.12.163-.243.326-.37.486l-.068.086c-.132.165-.265.328-.402.49-.136.16-.276.32-.418.478l-.068.075c-.152.165-.307.328-.465.49-.157.16-.317.32-.48.477l-.073.07c-.183.174-.37.345-.56.513-.19.17-.384.337-.582.503l-.04.034c-.18.15-.362.3-.548.446l-.07.055c-.174.132-.35.262-.528.39l-.092.07c-.178.138-.354.277-.53.415l-.11.08c-.174.126-.35.252-.528.375l-.126.087c-.175.122-.352.243-.53.362l-.14.093c-.176.12-.356.24-.535.353l-.153.098c-.184.12-.37.24-.558.355l-.17.104c-.192.12-.386.24-.582.357l-.2.12c-.238.145-.478.288-.72.43l-.26.15c-.134.08-.268.158-.404.236l-.232.133c-.134.076-.268.152-.404.227l-.238.133c-.185.102-.372.202-.56.302-.162.086-.325.17-.488.256l-.287.147c-.135.07-.27.14-.407.208-.17.087-.34.172-.513.257-.112.055-.225.11-.34.164-.165.08-.33.16-.498.24-.234.112-.47.223-.706.332-.155.07-.31.14-.467.21-.26.115-.523.23-.787.34-.082.034-.165.07-.247.105-.064.026-.13.053-.194.08l-.137.056c-.086.037-.173.073-.26.107-.09.036-.18.072-.27.106-1.088.408-2.206.72-3.358.936-1.153.216-2.324.324-3.513.324-.166 0-.332-.002-.498-.006-.165-.005-.33-.013-.497-.025l-.06-.005c-.293-.02-.588-.046-.885-.078-.297-.033-.595-.07-.895-.115l-.232-.033c-.124-.018-.247-.038-.37-.06l-.175-.03c-.094-.017-.187-.035-.28-.053l-.272-.055c-.158-.034-.315-.07-.472-.104-.158-.036-.318-.074-.478-.114l-.16-.04c-.122-.028-.242-.058-.362-.088l-.16-.04c-.195-.05-.388-.104-.58-.16-.19-.06-.384-.12-.58-.186l-.152-.05c-.146-.046-.293-.095-.44-.144-.15-.05-.3-.1-.45-.153-.175-.063-.348-.127-.518-.193-.166-.065-.332-.132-.5-.2l-.242-.1c-.284-.117-.573-.232-.868-.344-.198-.075-.417-.155-.66-.24l-.164-.06c-.13-.05-.252-.116-.362-.198-.114-.085-.196-.19-.246-.318-.052-.128-.052-.258-.002-.388.087-.218.233-.38.445-.49.26-.18.532-.373.817-.573 1.285-.83 2.67-1.47 4.153-1.92 1.482-.45 3.042-.675 4.682-.675.98 0 1.958.098 2.93.29.972.194 1.938.458 2.898.79.96.334 1.894.727 2.798 1.18.543.285 1.086.605 1.63.957.293.2.588.404.883.615.103.074.206.147.31.22.172.123.2.28.084.47"/></svg>', 'youtube' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>', 'tiktok' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>', 'pinterest' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z"/></svg>', 'telegram' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>', 'whatsapp' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>', 'discord' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>', 'link' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>'];
-        /**
-         * Service detection patterns (URL contains => service name)
-         *
-         * @var array
-         */
-        protected $servicePatterns = ['facebook.com' => 'facebook', 'twitter.com' => 'twitter', 'x.com' => 'x', 'linkedin.com' => 'linkedin', 'instagram.com' => 'instagram', 'github.com' => 'github', 'wordpress.org' => 'wordpress', 'wordpress.com' => 'wordpress', 'amazon.com' => 'amazon', 'youtube.com' => 'youtube', 'youtu.be' => 'youtube', 'tiktok.com' => 'tiktok', 'pinterest.com' => 'pinterest', 't.me' => 'telegram', 'telegram.me' => 'telegram', 'wa.me' => 'whatsapp', 'whatsapp.com' => 'whatsapp', 'discord.gg' => 'discord', 'discord.com' => 'discord', 'slack.com' => 'slack', 'dribbble.com' => 'dribbble', 'behance.net' => 'behance', 'medium.com' => 'medium', 'reddit.com' => 'reddit', 'twitch.tv' => 'twitch', 'spotify.com' => 'spotify'];
-        /**
-         * Render the social links block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract social links from innerBlocks or innerHTML
-         *
-         * @return array Array of social link data
-         */
-        protected function extractSocialLinks(): array
-        {
-        }
-        /**
-         * Extract social links from innerBlocks
+         * Get theme color palette from editor-color-palette support or theme.json.
          *
          * @return array
          */
-        protected function extractFromInnerBlocks(): array
+        public static function getThemeColorPalette()
         {
         }
         /**
-         * Extract social links from innerHTML (fallback)
+         * Get theme preference scheme (colors + font sizes).
          *
          * @return array
          */
-        protected function extractFromInnerHtml(): array
-        {
-        }
-        /**
-         * Detect social service from URL
-         *
-         * @param string $url
-         * @return string Service name
-         */
-        protected function detectServiceFromUrl(string $url): string
-        {
-        }
-        /**
-         * Detect service from HTML match and URL
-         *
-         * @param string $match HTML match
-         * @param string $url URL
-         * @return string Service name
-         */
-        protected function detectServiceFromMatch(string $match, string $url): string
-        {
-        }
-        /**
-         * Size presets: maps Gutenberg size attr to icon dimensions
-         *
-         * @var array
-         */
-        protected $sizePresets = ['small' => ['outer' => 36, 'inner' => 20, 'padding' => 8], 'normal' => ['outer' => 44, 'inner' => 24, 'padding' => 10], 'large' => ['outer' => 56, 'inner' => 32, 'padding' => 12], 'huge' => ['outer' => 72, 'inner' => 42, 'padding' => 15]];
-        /**
-         * Build container styles
-         *
-         * @return string CSS styles
-         */
-        protected function buildContainerStyles(): string
-        {
-        }
-        /**
-         * Get icon dimensions based on block size attribute
-         *
-         * @return array ['outer' => int, 'inner' => int, 'padding' => int]
-         */
-        protected function getIconDimensions(): array
-        {
-        }
-        /**
-         * Get icon background color, checking custom colors then brand fallback
-         *
-         * @param string $service The social service name
-         * @return string Hex color
-         */
-        protected function getIconBackgroundColor(string $service): string
-        {
-        }
-        /**
-         * Get icon color (SVG fill color)
-         *
-         * @return string Hex color
-         */
-        protected function getIconColor(): string
-        {
-        }
-        /**
-         * Render a single social link
-         *
-         * @param array $link Social link data
-         * @return string HTML
-         */
-        protected function renderSocialLink(array $link): string
+        public static function getThemePrefScheme()
         {
         }
     }
-    /**
-     * Spacer Block Renderer for Email
-     *
-     * Converts Gutenberg core/spacer blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class SpacerBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the spacer block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Subscription Details Loop Block Renderer for Email
-     *
-     * Iterates over order subscriptions, renders InnerBlocks per subscription,
-     * and replaces {{subscription.*}} shortcodes with actual values.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class SubscriptionDetailsLoopBlock extends \FluentCart\App\Services\Email\Blocks\OrderItemsLoopBlock
-    {
-        public function render(): string
-        {
-        }
-    }
-    /**
-     * Table Block Renderer for Email
-     *
-     * Converts Gutenberg core/table blocks to email-compatible HTML.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class TableBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the table block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Get table caption from attrs or innerHTML
-         *
-         * @return string Caption text
-         */
-        protected function getCaption(): string
-        {
-        }
-        /**
-         * Build table element styles
-         *
-         * @return string CSS styles for table
-         */
-        protected function buildTableStyles(): string
-        {
-        }
-        /**
-         * Build table alignment styles
-         *
-         * @return string CSS alignment styles
-         */
-        protected function buildTableAlignmentStyles(): string
-        {
-        }
-        /**
-         * Build cell (td) styles
-         *
-         * @return string CSS styles for td elements
-         */
-        protected function buildCellStyles(): string
-        {
-        }
-        /**
-         * Build header cell (th) styles
-         *
-         * @return string CSS styles for th elements
-         */
-        protected function buildHeaderCellStyles(): string
-        {
-        }
-        /**
-         * Get cell border styles
-         *
-         * @return string CSS border styles for cells
-         */
-        protected function getCellBorderStyles(): string
-        {
-        }
-        /**
-         * Process table content and apply cell styles
-         *
-         * @param string $cellStyles Styles for td elements
-         * @param string $thStyles Additional styles for th elements
-         * @return string Processed table content
-         */
-        protected function processTableContent(string $cellStyles, string $thStyles): string
-        {
-        }
-    }
-    /**
-     * Verse Block Renderer for Email
-     *
-     * Converts Gutenberg core/verse blocks to email-compatible HTML.
-     * Used for poetry and other content where line breaks are significant.
-     *
-     * @package FluentCart\App\Services\Email\Blocks
-     */
-    class VerseBlock extends \FluentCart\App\Services\Email\Blocks\BaseBlock
-    {
-        /**
-         * Render the verse block
-         *
-         * @return string Email-compatible HTML
-         */
-        public function render(): string
-        {
-        }
-        /**
-         * Extract verse content from innerHTML
-         *
-         * @return string
-         */
-        protected function extractVerseContent(): string
-        {
-        }
-    }
-}
-namespace FluentCart\App\Services\Email {
     class ConditionPresets
     {
         /**
@@ -26475,6 +25191,15 @@ namespace FluentCart\App\Services\Email {
         public function sendAsyncSubscriptionMail($emailName, $subscriptionId)
         {
         }
+        /**
+         * Generate a PDF receipt for the order in the given data array.
+         *
+         * @param array $data Event data containing 'order' key
+         * @return string|null Path to generated PDF or null
+         */
+        private function generateOrderPdf(array $data, string $templateId = 'order_receipt'): ?string
+        {
+        }
     }
     class EmailNotifications
     {
@@ -26537,274 +25262,6 @@ namespace FluentCart\App\Services\Email {
         {
         }
     }
-    /**
-     * Gutenberg Block Parser for Email
-     * Converts Gutenberg blocks to email-compatible HTML
-     */
-    class FluentBlockParser
-    {
-        private $data = [];
-        public function __construct($data = [])
-        {
-        }
-        private function isEmailEditorBlock($blockName)
-        {
-        }
-        /**
-         * Parse Gutenberg blocks and convert to email HTML
-         *
-         * @param string $content The post content with Gutenberg blocks
-         * @return string Email-compatible HTML
-         */
-        public function parse($content)
-        {
-        }
-        /**
-         * Public proxy for renderBlocks — allows block renderers to
-         * render nested inner blocks without using reflection.
-         *
-         * @param array $blocks
-         * @return string
-         */
-        public function renderNestedBlocks(array $blocks): string
-        {
-        }
-        /**
-         * Public proxy for renderBlock — allows block renderers to
-         * render a single nested block without using reflection.
-         *
-         * @param array $block
-         * @return string
-         */
-        public function renderNestedBlock(array $block): string
-        {
-        }
-        /**
-         * Render blocks to email HTML
-         */
-        private function renderBlocks($blocks, $nested = false, $isRoot = false)
-        {
-        }
-        /**
-         * Render individual block
-         */
-        private function renderBlock($block, $isRoot = false)
-        {
-        }
-        public function renderOrderWrapper($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        public function renderOrderItemsTable($innerHTML, $attrs)
-        {
-        }
-        public function renderOrderSubscriptionsDetails($innerHTML, $attrs)
-        {
-        }
-        public function renderOrderLicenseDetails($innerHTML, $attrs)
-        {
-        }
-        public function renderOrderDownloadsDetails($innerHTML, $attrs)
-        {
-        }
-        public function renderOrderAddressesDetails($innerHTML, $attrs)
-        {
-        }
-        public function renderEmailHeader($innerHTML, $attrs)
-        {
-        }
-        /**
-         * Render an email wrapper block (email-header, email-order-summary, etc.)
-         * with its own style attributes (background, border, padding) applied.
-         */
-        private function renderEmailWrapperBlock($innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render celebration block directly for email (avoids render_block CSS bloat).
-         */
-        private function renderCelebration($attrs)
-        {
-        }
-        /**
-         * Render paragraph block
-         */
-        private function renderParagraph($block, $content, $attrs)
-        {
-        }
-        /**
-         * Render heading block
-         */
-        private function renderHeading($content, $attrs)
-        {
-        }
-        /**
-         * Render image block
-         */
-        private function renderImage($attrs, $innerHTML = '')
-        {
-        }
-        /**
-         * Render list block
-         */
-        private function renderList($content, $innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render list item
-         */
-        private function renderListItem($content, $attrs)
-        {
-        }
-        /**
-         * Render quote block
-         */
-        private function renderQuote($content, $attrs)
-        {
-        }
-        /**
-         * Render buttons container
-         */
-        private function renderButtons($block, $innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render button block
-         */
-        private function renderButton($content, $attrs)
-        {
-        }
-        /**
-         * Render columns block
-         */
-        private function renderColumns($innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render column block
-         */
-        private function renderColumn($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Render cover block
-         */
-        private function renderCover($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Render separator block
-         */
-        private function renderSeparator($attrs)
-        {
-        }
-        /**
-         * Render spacer block
-         */
-        private function renderSpacer($attrs)
-        {
-        }
-        /**
-         * Render group block
-         */
-        private function renderGroup($innerBlocks, $attrs, $innerHTML, $isRoot = false)
-        {
-        }
-        /**
-         * Render table block
-         */
-        private function renderTable($content, $attrs)
-        {
-        }
-        /**
-         * Render social links block
-         */
-        private function renderSocialLinks($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Get social media icon HTML (with better styling)
-         */
-        private function getSocialIconHtml($service, $label = '')
-        {
-        }
-        /**
-         * Get social media icon SVG or text representation
-         */
-        private function getSocialIconSVG($service)
-        {
-        }
-        /**
-         * Parse CSS variable format and extract the slug
-         * Handles formats like:
-         * - var:preset|color|accent-4
-         * - var(--wp--preset--color--accent-4)
-         * - accent-4 (plain slug)
-         */
-        private function parseColorSlug($value)
-        {
-        }
-        /**
-         *  Get color from WordPress color slug
-         * */
-        public function getColorFromSlug($slug)
-        {
-        }
-        public function getThemeColorPalette()
-        {
-        }
-        public function getThemePrefScheme()
-        {
-        }
-        public function getFontSizeFromSlug($slug)
-        {
-        }
-        public static function getThemeFontSizes()
-        {
-        }
-        /**
-         * Debug helper: Log all theme colors (for development only)
-         * Uncomment the call in getColorFromSlug() to use
-         */
-        private function debugThemeColors()
-        {
-        }
-        /**
-         * Wrap content in email-safe table structure
-         */
-        private function wrapInTable($content)
-        {
-        }
-        /**
-         * Generate complete email HTML with wrapper
-         */
-        public function generateEmailHtml($content, $title = '')
-        {
-        }
-        public function getCommonStyles()
-        {
-        }
-        public function replaceCssVars($content = '')
-        {
-        }
-        /**
-         * Resolve a spacing value that might be a CSS variable reference
-         *
-         * @param string $value The spacing value
-         * @return string Resolved pixel value
-         */
-        public function resolveSpacingValue($value)
-        {
-        }
-        private function getSpacingFromSlug($slug)
-        {
-        }
-        /**
-         * Get shadow value from slug or preset
-         */
-        private function getShadowFromSlug($slug)
-        {
-        }
-    }
     class Mailer
     {
         private string $subject = '';
@@ -26816,6 +25273,7 @@ namespace FluentCart\App\Services\Email {
         private array $bcc = [];
         private string $replyTo = '';
         private bool $isHtml = true;
+        private array $attachments = [];
         public function __construct($to = '', string $subject = '', string $body = '')
         {
         }
@@ -26847,6 +25305,12 @@ namespace FluentCart\App\Services\Email {
         {
         }
         public function setReplyTo($replyTo): \FluentCart\App\Services\Email\Mailer
+        {
+        }
+        public function addAttachment(string $filePath): \FluentCart\App\Services\Email\Mailer
+        {
+        }
+        public function setAttachments(array $attachments): \FluentCart\App\Services\Email\Mailer
         {
         }
         public function send($cssInliner = false)
@@ -27527,6 +25991,17 @@ namespace FluentCart\App\Services\Filter {
         public static function advanceFilterOptions(): array
         {
         }
+        /**
+         * Filter products by total available stock.
+         * Variants with manage_stock=0 are unlimited (always in-stock).
+         * For managed variants, SUM(available) is used.
+         */
+        private static function filterByTotalAvailable($query, $operator, $value)
+        {
+        }
+        public function centColumns(): array
+        {
+        }
         public static function makeNestedTreeOption($data): array
         {
         }
@@ -27614,197 +26089,6 @@ namespace FluentCart\App\Services {
         public static function getLocalizeData(): array
         {
         }
-    }
-    /**
-     * Gutenberg Block Parser for Email
-     * Converts Gutenberg blocks to email-compatible HTML
-     */
-    class GutenbergEmailParser
-    {
-        /**
-         * Parse Gutenberg blocks and convert to email HTML
-         *
-         * @param string $content The post content with Gutenberg blocks
-         * @return string Email-compatible HTML
-         */
-        public function parse($content)
-        {
-        }
-        /**
-         * Manual block parser (fallback if parse_blocks not available)
-         */
-        private function parseBlocksManually($content)
-        {
-        }
-        /**
-         * Render blocks to email HTML
-         */
-        private function renderBlocks($blocks, $nested = false)
-        {
-        }
-        /**
-         * Render individual block
-         */
-        private function renderBlock($block)
-        {
-        }
-        /**
-         * Render paragraph block
-         */
-        private function renderParagraph($content, $attrs)
-        {
-        }
-        /**
-         * Render heading block
-         */
-        private function renderHeading($content, $attrs)
-        {
-        }
-        /**
-         * Render image block
-         */
-        private function renderImage($attrs, $innerHTML = '')
-        {
-        }
-        /**
-         * Render list block
-         */
-        private function renderList($content, $innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render list item
-         */
-        private function renderListItem($content, $attrs)
-        {
-        }
-        /**
-         * Render quote block
-         */
-        private function renderQuote($content, $attrs)
-        {
-        }
-        /**
-         * Render buttons container
-         */
-        private function renderButtons($innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render button block
-         */
-        private function renderButton($content, $attrs)
-        {
-        }
-        /**
-         * Render columns block
-         */
-        private function renderColumns($innerBlocks, $attrs)
-        {
-        }
-        /**
-         * Render column block
-         */
-        private function renderColumn($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Render cover block
-         */
-        private function renderCover($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Render separator block
-         */
-        private function renderSeparator($attrs)
-        {
-        }
-        /**
-         * Render spacer block
-         */
-        private function renderSpacer($attrs)
-        {
-        }
-        /**
-         * Render group block
-         */
-        private function renderGroup($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Render table block
-         */
-        private function renderTable($content, $attrs)
-        {
-        }
-        /**
-         * Render social links block
-         */
-        private function renderSocialLinks($innerBlocks, $attrs, $innerHTML)
-        {
-        }
-        /**
-         * Get social media icon HTML (with better styling)
-         */
-        private function getSocialIconHtml($service, $label = '')
-        {
-        }
-        /**
-         * Get social media icon SVG or text representation
-         */
-        private function getSocialIconSVG($service)
-        {
-        }
-        /**
-         * Get color from WordPress color slug
-         */
-        private function getColorFromSlug($slug)
-        {
-        }
-        private function getFontSizeFromSlug($slug)
-        {
-        }
-        /**
-         * Debug helper: Log all theme colors (for development only)
-         * Uncomment the call in getColorFromSlug() to use
-         */
-        private function debugThemeColors()
-        {
-        }
-        /**
-         * Wrap content in email-safe table structure
-         */
-        private function wrapInTable($content)
-        {
-        }
-        /**
-         * Generate complete email HTML with wrapper
-         */
-        public function generateEmailHtml($content, $title = '')
-        {
-        }
-        public static function getThemeFontSizes()
-        {
-        }
-        //    public static function getThemeColorPalette()
-        //    {
-        //        $color_palette = current((array)get_theme_support('editor-color-palette'));
-        //        $theme_json_path = get_theme_file_path('theme.json');
-        //
-        //        if (file_exists($theme_json_path)) {
-        //            $theme_json = json_decode(file_get_contents($theme_json_path), true);
-        //
-        //            if (isset($theme_json['settings']['color']['palette'])) {
-        //                $color_palette = $theme_json['settings']['color']['palette'];
-        //            }
-        //        }
-        //        if (!$color_palette) {
-        //            $color_palette = [];
-        //        }
-        //
-        //        return (array)$color_palette;
-        //    }
     }
     class Integration
     {
@@ -35545,6 +33829,250 @@ namespace FluentCart\App\Services {
         }
     }
 }
+namespace FluentCart\App\Services\PDF {
+    /**
+     * Default block-editor PDF structures for FluentCart receipts.
+     *
+     * Design system (A4 Portrait) — minimal:
+     *   TEXT    #111111  primary text
+     *   META    #666666  labels / secondary text
+     *   BORDER  #DDDDDD  dividers
+     *   WHITE   #FFFFFF
+     */
+    class DefaultPdfStructures
+    {
+        private const TEXT = '#111111';
+        private const META = '#666666';
+        private const BORDER = '#DDDDDD';
+        private const WHITE = '#FFFFFF';
+        /**
+         * Default meta for all PDF templates.
+         */
+        public static function getDefaultMeta(): array
+        {
+        }
+        // ── Order Receipt ────────────────────────────────────────────────────────
+        /**
+         * @return array{content:string, blocks:array, meta:array}
+         */
+        public static function getDefaultReceiptStructure(): array
+        {
+        }
+        private static function buildReceiptBlocks(): array
+        {
+        }
+        // ── Renewal Receipt ───────────────────────────────────────────────────────
+        /**
+         * @return array{content:string, blocks:array, meta:array}
+         */
+        public static function getDefaultRenewalReceiptStructure(): array
+        {
+        }
+        private static function buildRenewalReceiptBlocks(): array
+        {
+        }
+        // ── Refund Notice ─────────────────────────────────────────────────────────
+        /**
+         * @return array{content:string, blocks:array, meta:array}
+         */
+        public static function getDefaultRefundNoticeStructure(): array
+        {
+        }
+        private static function buildRefundNoticeBlocks(): array
+        {
+        }
+        // ── Proforma Invoice ──────────────────────────────────────────────────────
+        /**
+         * @return array{content:string, blocks:array, meta:array}
+         */
+        public static function getDefaultProformaInvoiceStructure(): array
+        {
+        }
+        private static function buildProformaInvoiceBlocks(): array
+        {
+        }
+        // ── Shared block builders ─────────────────────────────────────────────────
+        /**
+         * Document header: logo left, title right, bottom rule.
+         */
+        private static function header(string $title): array
+        {
+        }
+        /**
+         * Two-column FROM / BILL TO address block.
+         */
+        private static function addressColumns(string $billingLabel = 'BILL TO'): array
+        {
+        }
+        /**
+         * Key/value meta rows (order number, date, etc.).
+         *
+         * @param array<string,string> $rows label => smartcode
+         */
+        private static function metaTable(array $rows): array
+        {
+        }
+        /**
+         * Line-items table (delegated to the order variable).
+         */
+        private static function itemsTable(): array
+        {
+        }
+        /**
+         * Payment summary with optional sub-rows and a bold total row.
+         *
+         * @param array<string,string> $rows label => smartcode
+         */
+        private static function summaryTable(array $rows, string $totalLabel, string $totalValue): array
+        {
+        }
+        /**
+         * Footer note, centred, small text.
+         */
+        private static function footer(string $text): array
+        {
+        }
+        // ── Low-level helpers ─────────────────────────────────────────────────────
+        private static function block(string $name, array $attrs = [], ?string $content = null, array $innerBlocks = []): array
+        {
+        }
+        /**
+         * Serialize blocks array to Gutenberg block comment format.
+         */
+        public static function blocksToContent(array $blocks): string
+        {
+        }
+    }
+    class OrderReceiptPdfService
+    {
+        /**
+         * Generate a PDF receipt for the given order.
+         *
+         * @param \FluentCart\App\Models\Order $order Order model with relations loaded
+         * @return string|null Absolute path to the generated temp PDF file, or null on failure
+         */
+        public function generateReceiptPdf(\FluentCart\App\Models\Order $order, string $templateId = 'order_receipt'): ?string
+        {
+        }
+        /**
+         * Parse Gutenberg block content to HTML for PDF rendering.
+         *
+         * Dynamic blocks (fluent-cart/* PDF blocks) are rendered server-side via
+         * render_block() so their render() methods generate HTML from attributes.
+         * Static blocks (core/html, etc.) use innerHTML directly.
+         */
+        private function parseBlocksToHtml(string $content): string
+        {
+        }
+        /**
+         * Wrap parsed block HTML in a simple document structure for PDF rendering.
+         */
+        private function wrapHtmlForPdf(string $body): string
+        {
+        }
+    }
+    class PdfGeneratorService
+    {
+        private $workingDir = '';
+        private $tempDir = '';
+        private $pdfCacheDir = '';
+        private $fontDir = '';
+        public function __construct()
+        {
+        }
+        public function getGenerator(array $mpdfConfig = []): \FluentPdf\Vendor\Mpdf\Mpdf
+        {
+        }
+        public function getTempDirectory(): string
+        {
+        }
+        /**
+         * Resolve same-site image URLs in HTML to local filesystem paths for mPDF.
+         *
+         * @param string $html
+         * @return string
+         */
+        public function prepareHtmlForPdf(string $html): string
+        {
+        }
+        /**
+         * If $path is a PNG with an alpha channel, composite it onto a white
+         * canvas and return a base64 JPEG data URI.
+         *
+         * @param string $path
+         * @return string|null
+         */
+        private function flattenPngTransparency(string $path): ?string
+        {
+        }
+    }
+    class ReceiptPdfTemplateService
+    {
+        protected $metaKey = 'receipt_pdf_templates';
+        /**
+         * Get all built-in default templates.
+         */
+        public function getDefaultTemplates(): array
+        {
+        }
+        /**
+         * Get saved templates, migrating from old format if needed.
+         */
+        public function getTemplates(): array
+        {
+        }
+        /**
+         * Migrate from old single 'default' template to new multi-template format.
+         */
+        private function migrateOldFormat(array $saved): array
+        {
+        }
+        /**
+         * Update a template by key.
+         */
+        public function updateTemplate(string $key, array $template): bool
+        {
+        }
+        /**
+         * Save the PDF structure for a specific template.
+         */
+        public function setTemplateProperties(array $data, string $templateId = 'order_receipt'): bool
+        {
+        }
+        /**
+         * Create a new custom template.
+         *
+         * @return string The generated template slug
+         */
+        public function createTemplate(string $title): string
+        {
+        }
+        /**
+         * Delete a custom template. Built-in templates cannot be deleted.
+         */
+        public function deleteTemplate(string $key): bool
+        {
+        }
+        /**
+         * Get the factory default template structures (ignoring saved data).
+         */
+        public function getFactoryDefault(): array
+        {
+        }
+        /**
+         * Get the current PDF structure for a specific template.
+         */
+        public function getPdfStructure(string $templateId = 'order_receipt'): array
+        {
+        }
+        /**
+         * Get a simplified list of templates for dropdown selection.
+         */
+        public function getTemplateList(): array
+        {
+        }
+    }
+}
 namespace FluentCart\App\Services\Payments {
     class PaymentHelper
     {
@@ -36435,6 +34963,9 @@ namespace FluentCart\App\Services\Renderer {
         public function renderShipping($atts = '')
         {
         }
+        public function renderFees()
+        {
+        }
         public function renderTotal($atts = '')
         {
         }
@@ -36981,6 +35512,9 @@ namespace FluentCart\App\Services\Renderer {
         public function renderExcerpt()
         {
         }
+        public function renderDescription()
+        {
+        }
         public function renderPrices()
         {
         }
@@ -37130,6 +35664,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         public function renderShipping()
         {
         }
+        public function renderFees()
+        {
+        }
         public function renderTaxTotal()
         {
         }
@@ -37210,6 +35747,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function renderShipping()
+        {
+        }
+        public function renderFees()
         {
         }
         public function renderTaxTotal()
@@ -37428,75 +35968,20 @@ namespace FluentCart\App\Services\Renderer {
         }
     }
 }
-namespace FluentCart\App\Services\Report {
-    abstract class ReportService
+namespace FluentCart\App\Services\Report\Concerns {
+    trait CanParseAddressField
     {
-        protected $data = null;
-        protected $selects = '*';
-        protected array $filters = [];
-        protected bool $loaded = false;
-        protected array $amountColumns = [];
-        public function __construct(array $filters = [])
-        {
-        }
-        public function getModel(): string
-        {
-        }
-        protected function prepareReportData(): void
-        {
-        }
-        public function setAmountColumns(array $columns)
-        {
-        }
-        public function mergeAmountColumns(array $columns)
-        {
-        }
-        public function getAmountColumns(): array
-        {
-        }
-        public static function make(array $filters = [])
-        {
-        }
-        public function setSelects($selects)
-        {
-        }
-        protected function getFilters(): array
-        {
-        }
-        protected function buildQuery(): \FluentCart\Framework\Database\Orm\Builder
-        {
-        }
-        protected function modifyQuery(\FluentCart\Framework\Database\Orm\Builder $query): \FluentCart\Framework\Database\Orm\Builder
-        {
-        }
-        protected function transformAmountColumns()
-        {
-        }
-        public function getOriginalData()
-        {
-        }
-        public function generate()
-        {
-        }
         /**
-         * Begin a fluent query against a database table.
-         * @return \FluentCart\Framework\Database\Query\Builder
+         * Parse Address value from given data
+         *
+         * @param mixed $item
+         * @param string $groupKey The name of the group
+         * @return string
          */
-        public function addFiltersToQuery($query, $filters, $table = null): \FluentCart\Framework\Database\Query\Builder
-        {
-        }
-        public function applyFilters(\FluentCart\Framework\Database\Query\Builder $query, array $filters): \FluentCart\Framework\Database\Query\Builder
-        {
-        }
-        protected function getPeriodRange($startDate, $endDate, $groupKey, $keys = [])
-        {
-        }
-        public function getFutureInstallments($params = [])
+        protected function parseAddressField($item, string $groupKey): string
         {
         }
     }
-}
-namespace FluentCart\App\Services\Report\Concerns {
     trait HasRange
     {
         protected string $rangeKey = 'created_at';
@@ -37566,48 +36051,6 @@ namespace FluentCart\App\Services\Report\Concerns {
         {
         }
         public function test()
-        {
-        }
-    }
-}
-namespace FluentCart\App\Services\Report {
-    class CartReportService extends \FluentCart\App\Services\Report\ReportService
-    {
-        use \FluentCart\App\Services\Report\Concerns\HasRange;
-        protected $idleCartCount = 0;
-        protected $abandonedCartCount = 0;
-        protected $totalAbandonedCartTotal = 0;
-        protected $averageAbandonedCartTotal = 0;
-        protected $totalAbandonedItems = 0;
-        protected $averageAbandonedItems = 0;
-        public function getModel(): string
-        {
-        }
-        protected function modifyQuery(\FluentCart\Framework\Database\Orm\Builder $query): \FluentCart\Framework\Database\Orm\Builder
-        {
-        }
-        protected function prepareReportData(): void
-        {
-        }
-        public function getAbandonedCartItems()
-        {
-        }
-        public function getSummary()
-        {
-        }
-    }
-}
-namespace FluentCart\App\Services\Report\Concerns {
-    trait CanParseAddressField
-    {
-        /**
-         * Parse Address value from given data
-         *
-         * @param mixed $item
-         * @param string $groupKey The name of the group
-         * @return string
-         */
-        protected function parseAddressField($item, string $groupKey): string
         {
         }
     }
@@ -38003,6 +36446,72 @@ namespace FluentCart\App\Services\Report\Concerns\Subscription {
     }
 }
 namespace FluentCart\App\Services\Report {
+    abstract class ReportService
+    {
+        protected $data = null;
+        protected $selects = '*';
+        protected array $filters = [];
+        protected bool $loaded = false;
+        protected array $amountColumns = [];
+        public function __construct(array $filters = [])
+        {
+        }
+        public function getModel(): string
+        {
+        }
+        protected function prepareReportData(): void
+        {
+        }
+        public function setAmountColumns(array $columns)
+        {
+        }
+        public function mergeAmountColumns(array $columns)
+        {
+        }
+        public function getAmountColumns(): array
+        {
+        }
+        public static function make(array $filters = [])
+        {
+        }
+        public function setSelects($selects)
+        {
+        }
+        protected function getFilters(): array
+        {
+        }
+        protected function buildQuery(): \FluentCart\Framework\Database\Orm\Builder
+        {
+        }
+        protected function modifyQuery(\FluentCart\Framework\Database\Orm\Builder $query): \FluentCart\Framework\Database\Orm\Builder
+        {
+        }
+        protected function transformAmountColumns()
+        {
+        }
+        public function getOriginalData()
+        {
+        }
+        public function generate()
+        {
+        }
+        /**
+         * Begin a fluent query against a database table.
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        public function addFiltersToQuery($query, $filters, $table = null): \FluentCart\Framework\Database\Query\Builder
+        {
+        }
+        public function applyFilters(\FluentCart\Framework\Database\Query\Builder $query, array $filters): \FluentCart\Framework\Database\Query\Builder
+        {
+        }
+        protected function getPeriodRange($startDate, $endDate, $groupKey, $keys = [])
+        {
+        }
+        public function getFutureInstallments($params = [])
+        {
+        }
+    }
     class CustomerReportService extends \FluentCart\App\Services\Report\ReportService
     {
         public function getCustomerReportData($params = [])
@@ -38061,9 +36570,6 @@ namespace FluentCart\App\Services\Report {
         public static function getRecentOrders()
         {
         }
-        public static function getUnfulfilledOrders()
-        {
-        }
         public static function getRecentActivities($groupKey)
         {
         }
@@ -38085,7 +36591,13 @@ namespace FluentCart\App\Services\Report {
         private function calculateFluctuation($currentValue, $previousValue)
         {
         }
+        private function getProductNames(array $productIds): array
+        {
+        }
         private function getProductImages(array $productIds): array
+        {
+        }
+        private function getVariantMeta(array $variationIds): array
         {
         }
         private function getVariationImages(array $variationIds): array
@@ -38648,7 +37160,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         //    ];
         protected array $methodMap = ['item_count' => 'getItemCount', 'is_digital' => 'getIsDigital'];
         protected array $attributeMap = ['id' => 'order.id', 'status' => 'order.status', 'created_at' => 'order.created_at', 'updated_at' => 'order.updated_at'];
-        protected array $centColumns = ['total_amount', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'tax_total', 'total_paid', 'total_refund'];
+        protected array $centColumns = ['total_amount', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'total_paid', 'total_refund'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
         {
         }
@@ -38677,6 +37189,9 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         private function getDiscountTotalInCents(): int
+        {
+        }
+        public function getOrderRef(): string
         {
         }
         public function getCustomerDashboardAnchorLink($accessor, $code = null, $conditions = [])
@@ -41840,11 +40355,10 @@ namespace FluentCart\Framework\Database\Concerns {
     trait ManagesTransactions
     {
         /**
-         * @template TReturn of mixed
-         *
          * Execute a Closure within a transaction.
          *
-         * @param  (\Closure(static): TReturn)  $callback
+         * @template TReturn
+         * @param  \Closure(static): TReturn  $callback
          * @param  int  $attempts
          * @return TReturn
          *
@@ -41854,155 +40368,103 @@ namespace FluentCart\Framework\Database\Concerns {
         {
         }
         /**
-         * Handle an exception encountered when running a transacted statement.
-         *
-         * @param  \Throwable  $e
-         * @param  int  $currentAttempt
-         * @param  int  $maxAttempts
-         * @return void
-         *
-         * @throws \Throwable
-         */
-        protected function handleTransactionException(\Throwable $e, $currentAttempt, $maxAttempts)
-        {
-        }
-        /**
-         * Start a new database transaction.
-         *
-         * @return void
-         *
-         * @throws \Throwable
+         * Begin transaction or create savepoint.
          */
         public function beginTransaction()
         {
         }
         /**
-         * Create a transaction within the database.
-         *
-         * @return void
-         *
-         * @throws \Throwable
+         * Create root transaction.
          */
         protected function createTransaction()
         {
         }
         /**
-         * Create a save point within the database.
-         *
-         * @return void
-         *
-         * @throws \Throwable
+         * Create savepoint.
          */
         protected function createSavepoint()
         {
         }
         /**
-         * Handle an exception from a transaction beginning.
-         *
-         * @param  \Throwable  $e
-         * @return void
-         *
-         * @throws \Throwable
-         */
-        protected function handleBeginTransactionException(\Throwable $e)
-        {
-        }
-        /**
-         * Commit the active database transaction.
-         *
-         * @return void
-         *
-         * @throws \Throwable
+         * Commit transaction or release savepoint.
          */
         public function commit()
         {
         }
         /**
-         * Handle an exception encountered when committing a transaction.
-         *
-         * @param  \Throwable  $e
-         * @param  int  $currentAttempt
-         * @param  int  $maxAttempts
-         * @return void
-         *
-         * @throws \Throwable
-         */
-        protected function handleCommitTransactionException(\Throwable $e, $currentAttempt, $maxAttempts)
-        {
-        }
-        /**
-         * Rollback the active database transaction.
-         *
-         * @param  int|null  $toLevel
-         * @return void
-         *
-         * @throws \Throwable
+         * Rollback transaction.
          */
         public function rollBack($toLevel = null)
         {
         }
         /**
-         * Perform a rollback within the database.
-         *
-         * @param  int  $toLevel
-         * @return void
-         *
-         * @throws \Throwable
+         * Perform rollback.
          */
         protected function performRollBack($toLevel)
         {
         }
         /**
-         * Handle an exception from a rollback.
-         *
-         * @param  \Throwable  $e
-         * @return void
-         *
-         * @throws \Throwable
+         * Determine if savepoints are supported.
+         */
+        protected function supportsSavepoints()
+        {
+        }
+        /**
+         * Handle transaction exception.
+         */
+        protected function handleTransactionException(\Throwable $e, $currentAttempt, $maxAttempts)
+        {
+        }
+        /**
+         * Handle commit exception.
+         */
+        protected function handleCommitTransactionException(\Throwable $e, $currentAttempt, $maxAttempts)
+        {
+        }
+        /**
+         * Handle begin exception.
+         */
+        protected function handleBeginTransactionException(\Throwable $e)
+        {
+        }
+        /**
+         * Handle rollback exception.
          */
         protected function handleRollBackException(\Throwable $e)
         {
         }
         /**
-         * Get the number of active transactions.
-         *
-         * @return int
+         * Get savepoint name.
+         */
+        protected function getSavepointName($level)
+        {
+        }
+        /**
+         * Transaction nesting level.
          */
         public function transactionLevel()
         {
         }
         /**
-         * Execute the callback after a transaction commits.
-         *
-         * @param  callable  $callback
-         * @return void
-         *
-         * @throws \RuntimeException
+         * After commit callback.
          */
         public function afterCommit($callback)
         {
         }
         /**
-         * Determine if the connection is in a "transaction".
-         * 
-         * @return bool
+         * In transaction?
          */
         public function inTransaction()
         {
         }
         /**
-         * Set the transaction manager instance on the connection.
-         *
-         * @param  \FluentCart\Framework\Database\DatabaseTransactionsManager  $manager
-         * @return $this
+         * Set transaction manager.
          */
         public function setTransactionManager($manager)
         {
         }
         /**
-         * Unset the transaction manager for this connection.
-         *
-         * @return void
+         * Unset transaction manager.
          */
         public function unsetTransactionManager()
         {
@@ -42032,39 +40494,35 @@ namespace FluentCart\Framework\Database {
          *
          * @param  string  $query
          * @param  array  $bindings
-         * @param  bool  $useReadPdo
          * @return mixed
          */
-        public function selectOne($query, $bindings = [], $useReadPdo = true);
+        public function selectOne($query, $bindings = []);
         /**
          * Run a select statement and return the first column of the first row.
          *
          * @param  string  $query
          * @param  array  $bindings
-         * @param  bool  $useReadPdo
          * @return mixed
          *
          * @throws \FluentCart\Framework\Database\MultipleColumnsSelectedException
          */
-        public function scalar($query, $bindings = [], $useReadPdo = true);
+        public function scalar($query, $bindings = []);
         /**
          * Run a select statement against the database.
          *
          * @param  string  $query
          * @param  array  $bindings
-         * @param  bool  $useReadPdo
          * @return array
          */
-        public function select($query, $bindings = [], $useReadPdo = true);
+        public function select($query, $bindings = []);
         /**
          * Run a select statement against the database and returns a generator.
          *
          * @param  string  $query
          * @param  array  $bindings
-         * @param  bool  $useReadPdo
          * @return \Generator
          */
-        public function cursor($query, $bindings = [], $useReadPdo = true);
+        public function cursor($query, $bindings = []);
         /**
          * Run an insert statement against the database.
          *
@@ -42659,6 +41117,386 @@ namespace FluentCart\Framework\Database {
         {
         }
     }
+}
+namespace FluentCart\Framework\Database\Migration {
+    class Blueprint
+    {
+        protected $table;
+        protected $mode;
+        /**
+         * @var ColumnDefinition[]
+         */
+        protected $columns = [];
+        /**
+         * Index definitions for CREATE mode.
+         * Each: ['type' => 'KEY|UNIQUE KEY', 'columns' => [...], 'name' => '...']
+         */
+        protected $indexes = [];
+        /**
+         * Alter operations (executed in order).
+         * Each: ['type' => string, 'data' => mixed]
+         */
+        protected $operations = [];
+        public function __construct($table, $mode = 'create')
+        {
+        }
+        // ══════════════════════════════════════════════════════════
+        //  CREATE MODE — Column Definitions
+        // ══════════════════════════════════════════════════════════
+        public function id($name = 'id')
+        {
+        }
+        public function string($name, $length = 255)
+        {
+        }
+        public function char($name, $length = 1)
+        {
+        }
+        public function text($name)
+        {
+        }
+        public function mediumText($name)
+        {
+        }
+        public function longText($name)
+        {
+        }
+        public function integer($name)
+        {
+        }
+        public function bigInteger($name)
+        {
+        }
+        public function tinyInteger($name)
+        {
+        }
+        public function smallInteger($name)
+        {
+        }
+        public function mediumInteger($name)
+        {
+        }
+        public function decimal($name, $precision = 8, $scale = 2)
+        {
+        }
+        public function float($name)
+        {
+        }
+        public function double($name)
+        {
+        }
+        public function boolean($name)
+        {
+        }
+        public function json($name)
+        {
+        }
+        public function binary($name, $length = 255)
+        {
+        }
+        public function blob($name)
+        {
+        }
+        public function mediumBlob($name)
+        {
+        }
+        public function longBlob($name)
+        {
+        }
+        public function enum($name, array $values)
+        {
+        }
+        public function set($name, array $values)
+        {
+        }
+        public function timestamp($name)
+        {
+        }
+        public function date($name)
+        {
+        }
+        public function datetime($name)
+        {
+        }
+        public function time($name)
+        {
+        }
+        public function year($name)
+        {
+        }
+        // ── Compound Shortcuts ───────────────────────────────────
+        public function timestamps()
+        {
+        }
+        public function softDeletes()
+        {
+        }
+        public function morphs($name)
+        {
+        }
+        public function nullableMorphs($name)
+        {
+        }
+        // ── Index Definitions ────────────────────────────────────
+        /**
+         * Add a regular index.
+         */
+        public function index($columns, $name = null)
+        {
+        }
+        /**
+         * Add a unique index.
+         */
+        public function unique($columns, $name = null)
+        {
+        }
+        // ══════════════════════════════════════════════════════════
+        //  ALTER MODE — Guarded Operations
+        // ══════════════════════════════════════════════════════════
+        /**
+         * Add a column (only if it doesn't exist).
+         */
+        public function addColumn($name)
+        {
+        }
+        /**
+         * Drop a column (only if it exists).
+         */
+        public function dropColumn($name)
+        {
+        }
+        /**
+         * Modify a column type/size (only if it exists).
+         */
+        public function modifyColumn($name)
+        {
+        }
+        /**
+         * Rename a column (only if old exists and new doesn't).
+         */
+        public function renameColumn($from, $to)
+        {
+        }
+        /**
+         * Drop an index (only if it exists).
+         */
+        public function dropIndex($name)
+        {
+        }
+        // ══════════════════════════════════════════════════════════
+        //  EXECUTION
+        // ══════════════════════════════════════════════════════════
+        /**
+         * Execute CREATE TABLE via dbDelta (idempotent).
+         */
+        public function executeCreate()
+        {
+        }
+        /**
+         * Execute ALTER operations with guards.
+         */
+        public function executeAlter()
+        {
+        }
+        // ══════════════════════════════════════════════════════════
+        //  INTERNAL HELPERS
+        // ══════════════════════════════════════════════════════════
+        /**
+         * Build the column+index SQL block for CREATE TABLE.
+         * Uses KEY (not INDEX) for dbDelta compatibility.
+         */
+        protected function buildCreateSql()
+        {
+        }
+        /**
+         * Check if an index exists on this table.
+         */
+        protected function hasIndex($indexName)
+        {
+        }
+        /**
+         * Get the current column definition for CHANGE COLUMN.
+         */
+        protected function getCurrentColumnDef($column)
+        {
+        }
+        public function getTable()
+        {
+        }
+    }
+    class ColumnDefinition
+    {
+        protected $name;
+        protected $type = '';
+        protected $isNullable = false;
+        protected $defaultValue = null;
+        protected $hasDefault = false;
+        protected $isUnsigned = false;
+        protected $afterColumn = null;
+        protected $isPrimary = false;
+        protected $isAutoIncrement = false;
+        protected $isUnique = false;
+        protected $isIndex = false;
+        protected $comment = null;
+        protected $charset = null;
+        protected $collation = null;
+        public function __construct($name)
+        {
+        }
+        // ── Type Methods ─────────────────────────────────────────
+        /**
+         * Auto-increment primary key (bigint unsigned).
+         */
+        public function id()
+        {
+        }
+        public function string($length = 255)
+        {
+        }
+        public function char($length = 1)
+        {
+        }
+        public function text()
+        {
+        }
+        public function mediumText()
+        {
+        }
+        public function longText()
+        {
+        }
+        public function integer()
+        {
+        }
+        public function bigInteger()
+        {
+        }
+        public function tinyInteger()
+        {
+        }
+        public function smallInteger()
+        {
+        }
+        public function mediumInteger()
+        {
+        }
+        public function decimal($precision = 8, $scale = 2)
+        {
+        }
+        public function float()
+        {
+        }
+        public function double()
+        {
+        }
+        public function boolean()
+        {
+        }
+        public function json()
+        {
+        }
+        public function binary($length = 255)
+        {
+        }
+        public function blob()
+        {
+        }
+        public function mediumBlob()
+        {
+        }
+        public function longBlob()
+        {
+        }
+        public function enum(array $values)
+        {
+        }
+        public function set(array $values)
+        {
+        }
+        public function timestamp()
+        {
+        }
+        public function date()
+        {
+        }
+        public function datetime()
+        {
+        }
+        public function time()
+        {
+        }
+        public function year()
+        {
+        }
+        // ── Modifier Methods ─────────────────────────────────────
+        public function nullable()
+        {
+        }
+        public function default($value)
+        {
+        }
+        public function unsigned()
+        {
+        }
+        public function after($column)
+        {
+        }
+        public function primary()
+        {
+        }
+        public function autoIncrement()
+        {
+        }
+        public function unique()
+        {
+        }
+        public function index()
+        {
+        }
+        public function comment($comment)
+        {
+        }
+        public function charset($charset)
+        {
+        }
+        public function collation($collation)
+        {
+        }
+        // ── SQL Generation ───────────────────────────────────────
+        public function getName()
+        {
+        }
+        public function isUnique()
+        {
+        }
+        public function isIndex()
+        {
+        }
+        /**
+         * Column definition for CREATE TABLE (used by dbDelta).
+         * e.g. "status varchar(20) NOT NULL DEFAULT 'pending'"
+         */
+        public function toSql()
+        {
+        }
+        /**
+         * For ALTER TABLE ADD COLUMN.
+         */
+        public function toAlterAddSql()
+        {
+        }
+        /**
+         * For ALTER TABLE MODIFY COLUMN.
+         */
+        public function toAlterModifySql()
+        {
+        }
+        protected function formatDefault($value)
+        {
+        }
+    }
+}
+namespace FluentCart\Framework\Database {
     class MultipleColumnsSelectedException extends \RuntimeException
     {
         //...
@@ -53593,12 +52431,13 @@ namespace FluentCart\Framework\Database\Query {
          * Add an "order by" clause to the query.
          *
          * @param  \Closure|\FluentCart\Framework\Database\Orm\Builder|\FluentCart\Framework\Database\Query\Builder|\FluentCart\Framework\Database\Query\Expression|string  $column
-         * @param  string  $direction
+         * @param  string $direction
+         * @param  array  $allowedColumns
          * @return $this
          *
          * @throws \InvalidArgumentException
          */
-        public function orderBy($column, $direction = 'asc')
+        public function orderBy($column, $direction = 'asc', $allowedColumns = [])
         {
         }
         /**
@@ -56075,6 +54914,19 @@ namespace FluentCart\Framework\Database\Query\Grammars {
         {
         }
         /**
+         * Compile a "JSON overlaps" statement into SQL.
+         *
+         * SQLite has no native json_overlaps(), so we emulate it by checking
+         * whether any element in the column's JSON array exists in the given array.
+         *
+         * @param  string  $column
+         * @param  string  $value
+         * @return string
+         */
+        protected function compileJsonOverlaps($column, $value)
+        {
+        }
+        /**
          * Prepare the binding for a "JSON contains" statement.
          *
          * @param  mixed  $binding
@@ -56667,10 +55519,9 @@ namespace FluentCart\Framework\Database\Query {
          *
          * @param string $query
          * @param array $bindings
-         * @param bool $useReadPdo
          * @return mixed
          */
-        public function selectOne($query, $bindings = [], $useReadPdo = true)
+        public function selectOne($query, $bindings = [])
         {
         }
         /**
@@ -56678,12 +55529,11 @@ namespace FluentCart\Framework\Database\Query {
          *
          * @param string $query
          * @param array $bindings
-         * @param bool $useReadPdo
          * @return mixed
          *
          * @throws \FluentCart\Framework\Database\MultipleColumnsSelectedException
          */
-        public function scalar($query, $bindings = [], $useReadPdo = true)
+        public function scalar($query, $bindings = [])
         {
         }
         /**
@@ -56691,33 +55541,19 @@ namespace FluentCart\Framework\Database\Query {
          *
          * @param string $query
          * @param array $bindings
-         * @param bool $useReadPdo
          * @return array
          */
-        public function select($query, $bindings = [], $useReadPdo = true)
+        public function select($query, $bindings = [])
         {
         }
         /**
-         * A hacky way to emulate bind parameters into SQL query
+         * Bind the parameters into SQL query
          *
          * @param $query
          * @param $bindings
-         *
-         * @return mixed
+         * @return string
          */
-        protected function bindParams($query, $bindings, $update = false)
-        {
-        }
-        /**
-         * A hacky way to emulate bind parameters into SQL query for mysqli
-         * Only used to run a cursor query using the underlying mysqli instance.
-         *
-         * @param $query
-         * @param $bindings
-         *
-         * @return mixed
-         */
-        protected function bindParamsForSqli($query, $bindings, $update = false)
+        protected function bindParams(string $query, array $bindings)
         {
         }
         /**
@@ -56725,11 +55561,10 @@ namespace FluentCart\Framework\Database\Query {
          *
          * @param string $query
          * @param array $bindings
-         * @param bool $useReadPdo
          * @return \Generator
-         * @throws \FluentCart\Framework\Database\QueryException
+         * @throws \FluentAccount\Framework\Database\QueryException
          */
-        public function cursor($query, $bindings = [], $useReadPdo = true)
+        public function cursor($query, $bindings = [])
         {
         }
         /**
@@ -56738,7 +55573,7 @@ namespace FluentCart\Framework\Database\Query {
          * @param  string $query
          * @param  array  $bindings
          * @return \Generator
-         * @throws \FluentCart\Framework\Database\QueryException
+         * @throws \FluentAccount\Framework\Database\QueryException
          */
         public function rawCursor($query, $bindings = [])
         {
@@ -57082,6 +55917,12 @@ namespace FluentCart\Framework\Database {
     {
         use \FluentCart\Framework\Database\Concerns\MaintainsDatabase;
         /**
+         * Keep track of custom tables when unit testing
+         * 
+         * @var array
+         */
+        public static $customTempTables = [];
+        /**
          * Get the global $wpdb instance
          * 
          * @return \wpdb The global $wpdb
@@ -57193,14 +56034,24 @@ namespace FluentCart\Framework\Database {
         }
         /**
          * Alters an existing table
-         * 
+         *
          * @param  string $table The table name without the prefix
          * @param  string $sql   The sql to create table or an absolute path of a
          * .sql file containing the column definations for creating the new table.
-         * 
+         *
          * @return string message
          */
         public static function alterTable($table, $sql)
+        {
+        }
+        /**
+         * Split a comma-separated ALTER TABLE clause list, respecting parentheses
+         * so that DECIMAL(10,2) and similar types are not split mid-definition.
+         *
+         * @param  string $sql
+         * @return string[]
+         */
+        protected static function splitAlterClauses($sql)
         {
         }
         /**
@@ -57225,6 +56076,16 @@ namespace FluentCart\Framework\Database {
         {
         }
         /**
+         * Drops/deletes an existing table.
+         * 
+         * @param string $table The table name without the prefix
+         * @param bool $disableForeignKeyCheck Optional.
+         * @return bool
+         */
+        public static function dropTable($table, $disableForeignKeyCheck = true)
+        {
+        }
+        /**
          * Drops/deletes an existing table if exists
          *
          * @param string $table The table name without the prefix
@@ -57236,7 +56097,7 @@ namespace FluentCart\Framework\Database {
         }
         /**
          * Truncate a table.
-         * 
+         *
          * @param  string $table
          * @return bool
          */
@@ -57245,7 +56106,7 @@ namespace FluentCart\Framework\Database {
         }
         /**
          * Truncate a table if exists.
-         * 
+         *
          * @param  string $table
          * @return bool
          */
@@ -57287,9 +56148,9 @@ namespace FluentCart\Framework\Database {
         }
         /**
          * Get a list of all columns from the given table name.
-         * 
+         *
          * @param  string $table The table name without the prefix
-         * @return array
+         * @return array|null
          */
         public static function getColumns($table)
         {
@@ -57357,6 +56218,25 @@ namespace FluentCart\Framework\Database {
         {
         }
         /**
+         * Retrieves the list of all available views in the database.
+         *
+         * @param  string $dbname optional
+         * @return array
+         */
+        public static function getViews($dbname = null)
+        {
+        }
+        /**
+         * Retrieves the SQL definition of a specific view.
+         *
+         * @param  string $name   The view name
+         * @param  string $dbname optional
+         * @return string|null
+         */
+        public static function getView($name, $dbname = null)
+        {
+        }
+        /**
          * Determine if the connected database is a sqlite database.
          *
          * @return bool
@@ -57388,6 +56268,12 @@ namespace FluentCart\Framework\Database {
          * @return mixed
          */
         public static function callDBDelta($sql)
+        {
+        }
+        /**
+         * Helper to get the driver-specific JSON type.
+         */
+        public static function jsonType()
         {
         }
     }
@@ -58569,6 +57455,9 @@ namespace FluentCart\Framework\Foundation\Concerns {
          * @return mixed
          */
         public function user()
+        {
+        }
+        public function enableApplicationPassword()
         {
         }
     }
@@ -60121,118 +59010,120 @@ namespace FluentCart\Framework\Http {
     }
 }
 namespace FluentCart\Framework\Http\Middleware {
+    /**
+     * Class RateLimiter
+     *
+     * Handles per-IP and per-endpoint rate limiting for REST requests.
+     *
+     * Features:
+     * - IP + endpoint aware
+     * - Retry-After header for 429 responses
+     * - X-RateLimit-Limit and X-RateLimit-Remaining headers
+     * - Optional bypass for admin users
+     * - Transient-based storage, safe for PHP 7.4+
+     */
     class RateLimiter
     {
         /**
-         * The maximum number of requests allowed within the interval.
+         * Maximum requests allowed per interval.
          *
          * @var int
          */
         protected $limit;
         /**
-         * The time interval for the rate limit in seconds.
+         * Interval in seconds for rate limiting.
          *
          * @var int
          */
         protected $interval;
         /**
-         * Constructor to initialize the rate limiter.
+         * Constructor.
          *
-         * @param int $limit    Maximum number of requests allowed.
-         * @param int $interval Time interval for the rate limit in seconds.
+         * @param int $limit
+         * @param int $interval
          */
         public function __construct($limit, $interval)
         {
         }
         /**
-         * Handle an incoming request and apply rate limiting.
+         * Handle incoming request.
          *
          * @param \FluentCart\Framework\Http\Request\Request $request
          * @param callable $next
-         * 
          * @return mixed
          */
         public function handle($request, $next)
         {
         }
         /**
-         * Determine if the request should bypass rate limiting.
+         * Determine if request should bypass rate limiting.
          *
          * @param \FluentCart\Framework\Http\Request\Request $request
-         * 
          * @return bool
          */
         protected function shouldAllow($request)
         {
         }
         /**
-         * Get the current rate limit settings for the request.
+         * Check if user is authenticated in admin (optional bypass).
+         *
+         * @return bool
+         */
+        protected function isCookieAuthenticated()
+        {
+        }
+        /**
+         * Get current rate limit settings from transient.
          *
          * @param \FluentCart\Framework\Http\Request\Request $request
          * @param int $currentTime
-         * 
          * @return array
          */
         protected function getSettings($request, $currentTime)
         {
         }
         /**
-         * Check if the rate limit interval has expired.
+         * Check if interval expired.
          *
          * @param array $settings
          * @param int $currentTime
-         * 
          * @return bool
          */
         protected function isIntervalExpired($settings, $currentTime)
         {
         }
         /**
-         * Reset the rate limit for a new interval.
+         * Reset rate limit for a new interval.
          *
          * @param int $currentTime
-         * 
          * @return array
          */
         protected function resetRateLimit($currentTime)
         {
         }
         /**
-         * Check if the rate limit has been exceeded.
+         * Check if limit exceeded.
          *
          * @param array $settings
-         * 
          * @return bool
          */
         protected function isRateLimitExceeded($settings)
         {
         }
         /**
-         * Retrieve the transient data for the current request's rate limit.
-         *
-         * @param \FluentCart\Framework\Http\Request\Request $request
-         * 
-         * @return array|null
-         */
-        protected function getTransient($request)
-        {
-        }
-        /**
-         * Update the rate limit settings in the transient storage.
+         * Update transient with proper TTL.
          *
          * @param \FluentCart\Framework\Http\Request\Request $request
          * @param array $settings
-         * 
-         * @return void
+         * @param int $currentTime
          */
-        protected function updateSettings($request, $settings)
+        protected function updateSettings($request, $settings, $currentTime)
         {
         }
         /**
-         * Generate a unique transient key for the current request.
+         * Generate a unique transient key per IP + endpoint.
          *
          * @param \FluentCart\Framework\Http\Request\Request $request
-         * 
          * @return string
          */
         protected function makeTransientKey($request)
@@ -60595,6 +59486,9 @@ namespace FluentCart\Framework\Http\Request {
         public function getSafe($key, $callback = null, $default = null)
         {
         }
+        protected function sanitizeByType($value)
+        {
+        }
         /**
          * Pick only the given keys from data.
          *
@@ -60847,9 +59741,102 @@ namespace FluentCart\Framework\Http\Request {
         {
         }
     }
+    /**
+     * Trait InteractsWithIPTrait
+     *
+     * Resolves the real client IP address securely.
+     *
+     * SECURITY:
+     * - By default, NO proxies are trusted.
+     * - Forwarded headers are only trusted if REMOTE_ADDR belongs to a trusted proxy.
+     * - Safe for normal hosting, Cloudflare (configured), and explicit proxy setups.
+     *
+     * EXTENSIBILITY:
+     * - Developers can add trusted proxies using the 'trusted_proxies' filter.
+     */
+    trait InteractsWithIPTrait
+    {
+        /**
+         * Cached resolved IP for the current request.
+         *
+         * Instance property (not static) so each Request instance gets its own
+         * cache. This is equivalent in production (one instance per HTTP request)
+         * but avoids cross-request contamination in tests where multiple dispatches
+         * share the same PHP process.
+         *
+         * @var string|null
+         */
+        protected $resolvedIp = null;
+        /**
+         * Get client IP.
+         *
+         * @param bool $anonymize Return anonymized IP if true.
+         * @return string
+         */
+        public function getIp($anonymize = false)
+        {
+        }
+        /**
+         * Resolve the real client IP.
+         *
+         * @return string
+         */
+        protected function resolveIp()
+        {
+        }
+        /**
+         * Determine if REMOTE_ADDR belongs to a trusted proxy.
+         *
+         * @param string $ip
+         * @return bool
+         */
+        protected function isTrustedProxy($ip)
+        {
+        }
+        /**
+         * Get an array of trusted proxy CIDR ranges.
+         *
+         * Reads from config/trustedproxy.php (proxies key) by default.
+         * Can be overridden or extended using the filter:
+         * add_filter('trusted_proxies', fn($proxies) => [...$proxies, '10.0.0.1']);
+         *
+         * @return array
+         */
+        protected function getTrustedProxies()
+        {
+        }
+        /**
+         * Validate IPv4 or IPv6 address.
+         *
+         * @param string $ip
+         * @return bool
+         */
+        protected function isValidIp($ip)
+        {
+        }
+        /**
+         * Sanitize server values (WordPress compatible).
+         *
+         * @param string $value
+         * @return string
+         */
+        protected function sanitize($value)
+        {
+        }
+        /**
+         * Check if an IPv4 address is within a CIDR range.
+         *
+         * @param string $ip   IP address to check (e.g., "173.245.50.10")
+         * @param string $cidr CIDR range (e.g., "173.245.48.0/20")
+         * @return bool        True if IP is inside the range, false otherwise
+         */
+        protected function ipInRange($ip, $cidr)
+        {
+        }
+    }
     class Request
     {
-        use \FluentCart\Framework\Http\Request\InteractsWithCleaningTrait, \FluentCart\Framework\Http\Request\InteractsWithHeadersTrait, \FluentCart\Framework\Http\Request\InputHelperMethodsTrait, \FluentCart\Framework\Http\Request\InteractsWithFilesTrait, \FluentCart\Framework\Support\MacroableTrait {
+        use \FluentCart\Framework\Http\Request\InteractsWithCleaningTrait, \FluentCart\Framework\Http\Request\InteractsWithHeadersTrait, \FluentCart\Framework\Http\Request\InputHelperMethodsTrait, \FluentCart\Framework\Http\Request\InteractsWithFilesTrait, \FluentCart\Framework\Http\Request\InteractsWithIPTrait, \FluentCart\Framework\Support\MacroableTrait {
             __call as macroCall;
         }
         /**
@@ -61190,13 +60177,6 @@ namespace FluentCart\Framework\Http\Request {
          * @return self
          */
         public function safe()
-        {
-        }
-        /**
-         * Get user ip address
-         * @return string
-         */
-        public function getIp()
         {
         }
         /**
@@ -62033,6 +61013,12 @@ namespace FluentCart\Framework\Http {
          */
         protected $endpointSignature = [];
         /**
+         * Response instance
+         * 
+         * @var \WP_REST_Response
+         */
+        protected $response = null;
+        /**
          * Construct the route instance
          *
          * @param \FluentCart\Framework\Foundation\Application $app
@@ -62048,9 +61034,18 @@ namespace FluentCart\Framework\Http {
          * Map the route to be used in front-end.
          *
          * @param mixed $handler
-         * @return null
+         * @return self
          */
-        protected function preparefrontendHandlers($handler)
+        public function preparefrontendHandlers()
+        {
+        }
+        /**
+         * Parse the action from the handler.
+         * 
+         * @param  mixed $handler
+         * @return string
+         */
+        protected function parseAction($handler)
         {
         }
         /**
@@ -62069,7 +61064,7 @@ namespace FluentCart\Framework\Http {
         /**
          * Set route meta
          *
-         * @param string|array $key
+         * @param string $key
          * @param mixed $value
          * @return self
          */
@@ -62255,7 +61250,8 @@ namespace FluentCart\Framework\Http {
         {
         }
         /**
-         * Set the namespace for controller/action
+         * Set the namespace for controller/action.
+         * 
          * @param string $ns
          * @return null
          */
@@ -62385,15 +61381,53 @@ namespace FluentCart\Framework\Http {
         /**
          * Route handler
          *
-         * @return mixed
+         * @return \WP_REST_Response
          */
         public function callback()
         {
         }
         /**
+         * Handle response from route.
+         * 
+         * @param  \WP_REST_Response $response
+         * @return \WP_REST_Response
+         */
+        protected function handleResponse($response)
+        {
+        }
+        /**
+         * Extract error message from response data.
+         *
+         * @param  \WP_REST_Response $response
+         * @return string
+         */
+        protected function extractErrorMessage($response)
+        {
+        }
+        /**
+         * Throw an exception based on the status code.
+         * 
+         * @param  string $message
+         * @param  int $status
+         * @return null
+         * @throws \Exception
+         */
+        protected function throwException($message, $status)
+        {
+        }
+        /**
+         * Handle exception and send error response.
+         * 
+         * @param  \Throwable $e
+         * @return \WP_REST_Response
+         */
+        protected function handleUnknownException(\Throwable $e, $headers = [])
+        {
+        }
+        /**
          * Dispatch the route action.
          *
-         * @return mixed
+         * @return \WP_REST_Response
          */
         protected function dispatchRouteAction()
         {
@@ -62916,8 +61950,96 @@ namespace FluentCart\Framework\Http {
     }
     class URL
     {
-        protected $encrypter = null;
-        public function __construct($encrypter = null)
+        /**
+         * The full URL string.
+         *
+         * @var string
+         */
+        protected $url = '';
+        /**
+         * URL generator instance used for signing and route generation.
+         *
+         * @var UrlGenerator|null
+         */
+        protected $generator = null;
+        /**
+         * URL scheme (e.g., 'http', 'https').
+         *
+         * @var string
+         */
+        protected $scheme = '';
+        /**
+         * URL host (e.g., 'example.com').
+         *
+         * @var string|null
+         */
+        protected $host = null;
+        /**
+         * URL port (e.g., 80, 443).
+         *
+         * @var int|null
+         */
+        protected $port = null;
+        /**
+         * URL path (e.g., '/users/view').
+         *
+         * @var string
+         */
+        protected $path = '';
+        /**
+         * URL query parameters as an associative array.
+         *
+         * @var array
+         */
+        protected $query = [];
+        /**
+         * URL fragment (e.g., 'top' in '#top').
+         *
+         * @var string|null
+         */
+        protected $fragment = null;
+        /**
+         * URL username for authentication (if any).
+         *
+         * @var string|null
+         */
+        protected $user = null;
+        /**
+         * URL password for authentication (if any).
+         *
+         * @var string|null
+         */
+        protected $pass = null;
+        /**
+         * Constructor.
+         *
+         * @param string|null $url       Optional URL to initialize. Defaults to current URL.
+         * @param UrlGenerator|null $generator Optional generator instance for signing/routes.
+         *
+         * @throws \InvalidArgumentException If the given URL is invalid.
+         */
+        public function __construct($url = '', $generator = null)
+        {
+        }
+        /**
+         * Parse a URL according to RFC 3986 and populate internal components.
+         *
+         * @param string $url The URL to parse.
+         *
+         * @return void
+         *
+         * @throws \InvalidArgumentException If the URL cannot be parsed.
+         */
+        protected function prepareRfcProperties($url)
+        {
+        }
+        /**
+         * Create a new URL instance.
+         * 
+         * @param  string $uri
+         * @return static
+         */
+        public static function of($uri)
         {
         }
         /**
@@ -62958,41 +62080,12 @@ namespace FluentCart\Framework\Http {
         {
         }
         /**
-         * Normalize the expiry time.
-         * 
-         * @param  array $params
-         * @return array
-         * @throws \Exception
-         */
-        public function validateExpiryTime($params)
-        {
-        }
-        /**
          * Validate a URL
          * 
          * @param  string $url
          * @return mixed (false or array)
          */
         public function validate($url)
-        {
-        }
-        /**
-         * Parse query string from the url.
-         * 
-         * @param  string $url
-         * @return mixed (bool or array)
-         */
-        public function parseUrlAndGetQuery($url)
-        {
-        }
-        /**
-         * Verify the signature.
-         * 
-         * @param  array $data
-         * @param  string $signature
-         * @return mixed (bool or array)
-         */
-        public function verifySignature($data, $signature)
         {
         }
         /**
@@ -63064,9 +62157,10 @@ namespace FluentCart\Framework\Http {
          * Generate a URL from a file path.
          * 
          * @param  string $path
+         * @param  bool   $checkFile Whether to check if the file exists
          * @return string
          */
-        public function fromFile($path)
+        public function fromFile(string $path, bool $checkFile = false): string
         {
         }
         /**
@@ -63081,7 +62175,107 @@ namespace FluentCart\Framework\Http {
         {
         }
         /**
-         * Returns the string representation of the URL object
+         * Return a clone of the URL with a new path.
+         *
+         * @param string $path
+         * @return $this
+         */
+        public function withPath($path)
+        {
+        }
+        /**
+         * Return a clone of the URL with a new query.
+         *
+         * @param array|string $query  An array of query params or a query string
+         * @return $this
+         */
+        public function withQuery($query)
+        {
+        }
+        /**
+         * Return a clone of the URL with a new fragment.
+         *
+         * @param string $fragment
+         * @return $this
+         */
+        public function withFragment($fragment)
+        {
+        }
+        /**
+         * Return a clone of the URL with a new scheme.
+         *
+         * @param string $scheme
+         * @return $this
+         */
+        public function withScheme($scheme)
+        {
+        }
+        /**
+         * Get the URL scheme (e.g., 'http' or 'https').
+         *
+         * @return string
+         */
+        public function scheme()
+        {
+        }
+        /**
+         * Get the URL host.
+         *
+         * @return string|null
+         */
+        public function host()
+        {
+        }
+        /**
+         * Get the URL port.
+         *
+         * @return int|null
+         */
+        public function port()
+        {
+        }
+        /**
+         * Get the URL path.
+         *
+         * @return string
+         */
+        public function path()
+        {
+        }
+        /**
+         * Get the URL query as an array.
+         *
+         * @return array
+         */
+        public function query()
+        {
+        }
+        /**
+         * Get the URL fragment.
+         *
+         * @return string|null
+         */
+        public function fragment()
+        {
+        }
+        /**
+         * Get the URL pass.
+         * 
+         * @return string|null
+         */
+        public function pass()
+        {
+        }
+        /**
+         * Get the URL user.
+         * 
+         * @return string
+         */
+        public function user()
+        {
+        }
+        /**
+         * Returns the string representation of the URL object.
          * 
          * @return string Current URL.
          */
@@ -63098,11 +62292,83 @@ namespace FluentCart\Framework\Http {
          */
         protected $app = null;
         /**
+         * The encrypter instance.
+         * @var \FluentCart\Framework\Encryption\Encrypter|null
+         */
+        protected $encrypter = null;
+        /**
          * Create a new URL Generator instance.
          *
          * @param  \FluentCart\Framework\Foundation\App|null  $app
+         * @param  \FluentCart\Framework\Encryption\Encrypter|null  $encrypter
          */
-        public function __construct($app = null)
+        public function __construct($app = null, $encrypter = null)
+        {
+        }
+        /**
+         * Sign a URL
+         * 
+         * @param  string $url
+         * @param  array $params
+         * @return string
+         */
+        public function sign($url, $params = [])
+        {
+        }
+        /**
+         * Normalize URL — handle relative routes, slugs, and REST routes.
+         * 
+         * @param  string $url
+         * @return string
+         */
+        protected function normalizeUrl($url)
+        {
+        }
+        /**
+         * Extract base URL and query array from a full URL.
+         *
+         * @param  string $url
+         * @return array
+         */
+        protected function extractUrlParts($url)
+        {
+        }
+        /**
+         * Normalize the expiry time.
+         * 
+         * @param  array $params
+         * @return array
+         * @throws \InvalidArgumentException
+         */
+        public function validateExpiryTime(array $params): array
+        {
+        }
+        /**
+         * Validate a URL
+         * 
+         * @param  string $url
+         * @return mixed (false or array)
+         */
+        public function validate($url)
+        {
+        }
+        /**
+         * Parse query string from the url.
+         * 
+         * @param  string $url
+         * @return mixed (bool or array)
+         */
+        public function parseUrlAndGetQuery($url)
+        {
+        }
+        /**
+         * Verify the signature.
+         * 
+         * @param  array $data
+         * @param  string $signature
+         * @return mixed (bool or array)
+         */
+        public function verifySignature($data, $signature)
         {
         }
         /**
@@ -63114,6 +62380,14 @@ namespace FluentCart\Framework\Http {
          * @return string|null     The full REST URL or null if the route doesn't exist.
          */
         public function route($nameOrPath, $params = [], $query = [])
+        {
+        }
+        /**
+         * Resolve the encrypter.
+         * 
+         * @return \FluentCart\Framework\Encryption\Encrypter
+         */
+        protected function resolveEncrypter()
         {
         }
         /**
@@ -69273,12 +68547,39 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
+         * Sanitize an integer.
+         * 
+         * @param  string $arg
+         * @return integer
+         */
+        public static function sanitizeInt($arg)
+        {
+        }
+        /**
+         * Sanitize an float.
+         * 
+         * @param  string $arg
+         * @return float
+         */
+        public static function sanitizeFloat($arg)
+        {
+        }
+        /**
          * Sanitize a text field.
          *
          * @param string $arg
          * @return string
          */
         public static function sanitizeTextField($arg)
+        {
+        }
+        /**
+         * Sanitize a text field.
+         *
+         * @param string $arg
+         * @return string
+         */
+        public static function sanitizeText($arg)
         {
         }
         /**
@@ -69495,7 +68796,7 @@ namespace FluentCart\Framework\Support {
          * @param  string|null|\DateTimeZone  $tz
          * @return \FluentCart\Framework\Support\DateTime|null
          */
-        public function sanitizeDate($key, $format = null, $tz = null)
+        public static function sanitizeDate($value, $format, $tz)
         {
         }
         /**
@@ -71750,7 +71051,7 @@ namespace FluentCart\Framework\Support {
          * @param  string $filePath
          * @return string
          */
-        public static function pathToUrl($filePath = '')
+        public static function pathToUrl($filePath = '', $checkFile = false)
         {
         }
         /**
@@ -71772,7 +71073,7 @@ namespace FluentCart\Framework\Validator {
          *
          * @var array
          */
-        protected $bag = ['array' => 'The :attribute must be an array.', 'alpha' => 'The :attribute must contain only alphabetic characters.', 'alphanum' => 'The :attribute must contain only alphanumeric characters.', 'alphadash' => 'The :attribute must contain only alphanumeric and _- characters.', 'email' => 'The :attribute must be a valid email address.', 'date_format' => 'Unable to format the :attribute field from the :value format string.', 'exists' => 'The selected :attribute is invalid.', 'gt' => 'The :attribute must be greater than :value.', 'lt' => 'The :attribute must be less than :value.', 'gte' => 'The :attribute must be greater than or equal to :value.', 'lte' => 'The :attribute must be less than or equal to :value.', 'in' => 'The selected :attribute is invalid.', 'not_in' => 'The selected :attribute is invalid.', 'max' => ['numeric' => 'The :attribute may not be greater than :max.', 'file' => 'The :attribute may not be greater than :max kilobytes.', 'string' => 'The :attribute may not be greater than :max characters.', 'array' => 'The :attribute may not have more than :max items.'], 'mimes' => 'The :attribute must be a file of type: :values.', 'mimetypes' => 'The :attribute must be a file of type: :values.', 'min' => ['numeric' => 'The :attribute must be at least :min.', 'file' => 'The :attribute must be at least :min kilobytes.', 'string' => 'The :attribute must be at least :min characters.', 'array' => 'The :attribute must have at least :min items.'], 'string' => 'The :attribute must be a string.', 'integer' => 'The :attribute must be an integer.', 'numeric' => 'The :attribute must be a number.', 'required' => 'The :attribute field is required.', 'required_array_keys' => 'The :attribute must be an array and should contain :keys.', 'required_if' => 'The :attribute field is required when :other is :value.', 'required_with' => 'The :attribute field is required when the :other field is present.', 'required_with_all' => 'The :attribute field is required when the :other field is present.', 'same' => 'The :attribute and :other must match.', 'size' => ['numeric' => 'The :attribute must be :size.', 'file' => 'The :attribute must be :size kilobytes.', 'string' => 'The :attribute must be :size characters.', 'array' => 'The :attribute must contain :size items.'], 'url' => 'The :attribute format is invalid.', 'unique' => 'The :attribute attribute is already taken and must be unique.', 'digits' => 'The :attribute must be :digits characters.'];
+        protected $bag = ['array' => 'The :attribute must be an array.', 'alpha' => 'The :attribute must contain only alphabetic characters.', 'alphanum' => 'The :attribute must contain only alphanumeric characters.', 'alphadash' => 'The :attribute must contain only alphanumeric and _- characters.', 'email' => 'The :attribute must be a valid email address.', 'date_format' => 'Unable to format the :attribute field from the :value format string.', 'exists' => 'The selected :attribute is invalid.', 'gt' => 'The :attribute must be greater than :value.', 'lt' => 'The :attribute must be less than :value.', 'gte' => 'The :attribute must be greater than or equal to :value.', 'lte' => 'The :attribute must be less than or equal to :value.', 'in' => 'The selected :attribute is invalid.', 'not_in' => 'The selected :attribute is invalid.', 'max' => ['numeric' => 'The :attribute may not be greater than :max.', 'file' => 'The :attribute may not be greater than :max kilobytes.', 'string' => 'The :attribute may not be greater than :max characters.', 'array' => 'The :attribute may not have more than :max items.'], 'mimes' => 'The :attribute must be a file of type: :values.', 'mimetypes' => 'The :attribute must be a file of type: :values.', 'min' => ['numeric' => 'The :attribute must be at least :min.', 'file' => 'The :attribute must be at least :min kilobytes.', 'string' => 'The :attribute must be at least :min characters.', 'array' => 'The :attribute must have at least :min items.'], 'string' => 'The :attribute must be a string.', 'integer' => 'The :attribute must be an integer.', 'numeric' => 'The :attribute must be a number.', 'required' => 'The :attribute field is required.', 'required_array_keys' => 'The :attribute must be an array and should contain :keys.', 'required_if' => 'The :attribute field is required when :other is :value.', 'required_with' => 'The :attribute field is required when the :other field is present.', 'required_with_all' => 'The :attribute field is required when the :other field is present.', 'required_without' => 'The :attribute field is required when the :other field is not present.', 'required_without_all' => 'The :attribute field is required when the :other fields are not present.', 'same' => 'The :attribute and :other must match.', 'size' => ['numeric' => 'The :attribute must be :size.', 'file' => 'The :attribute must be :size kilobytes.', 'string' => 'The :attribute must be :size characters.', 'array' => 'The :attribute must contain :size items.'], 'url' => 'The :attribute format is invalid.', 'unique' => 'The :attribute attribute is already taken and must be unique.', 'digits' => 'The :attribute must be :digits characters.'];
         /**
          * Generate a validation error message.
          *
@@ -71934,6 +71235,28 @@ namespace FluentCart\Framework\Validator {
          * @return string
          */
         protected function replaceRequiredWithAll($attribute, $parameters, $originalKey)
+        {
+        }
+        /**
+         * Replace all place-holders for the required without rule.
+         *
+         * @param string $attribute
+         * @param array $parameters
+         * @param string $originalKey
+         * @return string
+         */
+        protected function replaceRequiredWithout($attribute, $parameters, $originalKey)
+        {
+        }
+        /**
+         * Replace all place-holders for the required without all rule.
+         *
+         * @param string $attribute
+         * @param array $parameters
+         * @param string $originalKey
+         * @return string
+         */
+        protected function replaceRequiredWithoutAll($attribute, $parameters, $originalKey)
         {
         }
         /**
@@ -72989,6 +72312,30 @@ namespace FluentCart\Framework\Validator {
         {
         }
         /**
+         * Validate that an attribute is required only if **any** of the
+         * other specified fields are **not present**.
+         *
+         * @param string $attribute
+         * @param mixed $value
+         * @param array $parameters
+         * @return bool
+         */
+        protected function validateRequiredWithout($attribute, $value, $parameters)
+        {
+        }
+        /**
+         * Validate that an attribute is required only if **all** of the
+         * other specified fields are **not present**.
+         *
+         * @param string $attribute
+         * @param mixed $value
+         * @param array $parameters
+         * @return bool
+         */
+        protected function validateRequiredWithoutAll($attribute, $value, $parameters)
+        {
+        }
+        /**
          * Determine if the given attribute is present.
          * 
          * @param  string  $attribute
@@ -73755,6 +73102,14 @@ namespace FluentCart\Framework\Validator {
         {
         }
         /**
+         * Get the first validation error message, or null if none exist.
+         *
+         * @return string|null
+         */
+        public function firstError()
+        {
+        }
+        /**
          * Get a single validation error message.
          *
          * @return array
@@ -74003,6 +73358,14 @@ namespace FluentCart\Framework\View {
          * @return void
          */
         public function share($key, $value)
+        {
+        }
+        /**
+         * Reset all shared view data (useful for test isolation).
+         * 
+         * @return void
+         */
+        public static function resetSharedData()
         {
         }
         /**
