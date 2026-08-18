@@ -4949,6 +4949,9 @@ namespace FluentCart\App\Helpers {
         public static function getAdminMenu($echo = false, $activeNav = '')
         {
         }
+        public static function getMenuItems($withSettings = false)
+        {
+        }
         public static function pushGlobalAdminAssets()
         {
         }
@@ -10584,12 +10587,6 @@ namespace FluentCart\App\Http\Requests {
     class AttrGroupRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
         /**
-         * title can not be empty
-         *
-         * todo - AR_Docs
-         *
-         * Usage of unique - unique:tbl,col ; unique:tbl,col,pk_val; unique:tbl,col,pk_col,pk_val; does not support more than 4 parameter.
-         *
          * @return string[]
          */
         public function rules()
@@ -16807,6 +16804,9 @@ namespace FluentCart\App\Models {
         public function getViewUrlAttribute()
         {
         }
+        public function getDisplayTitle()
+        {
+        }
     }
     /**
      *  Order Meta Model - DB Model for Order Meta table
@@ -22807,7 +22807,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class PriceRange extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-price-range';
         public $icon = 'ti-money';
         public function get_label()
@@ -22823,7 +22823,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductAddToCart extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-product-buy-section';
         public $icon = 'ti-shopping-cart';
         public function enqueue_scripts()
@@ -22850,7 +22850,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     }
     class ProductContent extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-product-content';
         public $icon = 'ti-wordpress';
         public function get_label()
@@ -22866,7 +22866,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductGallery extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-product-gallery';
         public $icon = 'ti-gallery';
         public function enqueue_scripts()
@@ -22885,7 +22885,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductShortDescription extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-product-short-description';
         public $icon = 'ti-paragraph';
         public function get_label()
@@ -22901,7 +22901,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductStock extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-product-stock';
         public $icon = 'ti-package';
         public function get_label()
@@ -22923,7 +22923,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductTitle extends \Bricks\Element
     {
-        public $category = 'fluent_cart_product';
+        public $category = 'fluentcart';
         public $name = 'fct-product-title';
         public $icon = 'ti-text';
         public $tag = 'h1';
@@ -35648,7 +35648,16 @@ namespace FluentCart\App\Services\Renderer {
         public function render()
         {
         }
-        public function renderVariant()
+        protected function groupVariants(string $groupBy): array
+        {
+        }
+        protected function renderTabs(array $groups)
+        {
+        }
+        protected function getTabLabel(string $key): string
+        {
+        }
+        public function renderVariant(array $variants = null)
         {
         }
         public function renderFeatureItems()
@@ -36304,6 +36313,7 @@ namespace FluentCart\App\Services\Renderer {
         protected $customFilters = [];
         protected $total = 0;
         protected $isWildcardFilterEnabled = false;
+        protected $enableSortBy = true;
         public function __construct($products = [], $config = [])
         {
         }
@@ -38117,6 +38127,14 @@ namespace FluentCart\App\Services\Tax {
          * @var array
          */
         private array $descriptionMap = [];
+        /** ISO country codes whose rates are stored under a parent country with state=<code>. */
+        private array $parentCountryMap = [
+            'GP' => 'FR',
+            // Guadeloupe
+            'MQ' => 'FR',
+            // Martinique
+            'RE' => 'FR',
+        ];
         /**
          * Private constructor to prevent direct instantiation
          */
@@ -38168,6 +38186,13 @@ namespace FluentCart\App\Services\Tax {
         public function getTaxRates(): array
         {
         }
+        /**
+         * Map territory country codes (e.g. GP) to their parent country + state
+         * so tax rate lookups hit the correct DB rows (e.g. country=FR, state=GP).
+         */
+        public function resolveTaxCountryAndState(string $country, ?string $state): array
+        {
+        }
         public function groupTaxRatesByGroup($taxRates): array
         {
         }
@@ -38208,6 +38233,7 @@ namespace FluentCart\App\Services {
 namespace FluentCart\App\Services\Theme {
     class AdminTheme
     {
+        const DARK_CLASS = 'fluent_theme_dark';
         public static function applyTheme()
         {
         }
