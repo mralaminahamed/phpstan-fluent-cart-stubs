@@ -26,6 +26,17 @@ namespace FluentCart\Api\Checkout {
         private static function finalizeOrder(\FluentCart\App\Models\Order $order, $args = [])
         {
         }
+        /**
+         * Serialize checkout submissions per cart with a MySQL named lock.
+         *
+         * Keyed on cart_hash (not order id) so concurrent FIRST submissions — no draft
+         * order yet — contend on the same lock. Release goes through a shutdown function,
+         * not try/finally: wp_send_json() exits via die() (skips finally), and persistent
+         * DB connections don't drop the lock on request end.
+         */
+        private static function acquireCartLock($cartHash)
+        {
+        }
         private static function syncCustomerNames($order, $args)
         {
         }
@@ -3323,6 +3334,9 @@ namespace FluentCart\Api\Resource {
         public static function update($product, $postId = '', $params = [])
         {
         }
+        public static function partialUpdate(array $data, $postId)
+        {
+        }
         public static function updateWpPost($postId, $params = [])
         {
         }
@@ -5511,6 +5525,24 @@ namespace FluentCart\App\Helpers {
         private function convertToSubscriptionFormat($inputData)
         {
         }
+        /**
+         * bill_count is derived from counting total > 0 CHARGE transactions linked to
+         * the subscription (see syncSubscriptionStates / getRequiredBillTimes), which
+         * can't tell "this was a billed cycle" from "this was something else
+         * charged alongside it." Two corrections needed only at initial checkout —
+         * is_trial_days_simulated alone can't be used at runtime because
+         * payment-method switching also sets that flag:
+         *
+         * - Simulated trial, $0 first cycle: consumes a cycle but produces no
+         *   total > 0 transaction — add billed_cycles_offset so it still counts.
+         * - Real trial with a signup fee: the initial charge is the signup fee only
+         *   (the recurring item isn't billed yet), but it IS a total > 0 transaction
+         *   linked to the subscription — mark billed_cycles_deduction so it does
+         *   NOT count as a cycle.
+         */
+        private function syncInitialCycleCounting()
+        {
+        }
     }
     /**
      * Class CouponHelper
@@ -6453,6 +6485,9 @@ namespace FluentCart\App\Helpers {
         {
         }
         public function changeOrderStatus($orderStatus, $paymentStatus, $title, $slug)
+        {
+        }
+        protected function completeRelatedCart()
         {
         }
         public function updateTotalPaid($amount)
@@ -9367,6 +9402,17 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
     }
+    class DataBackfillController extends \FluentCart\App\Http\Controllers\Controller
+    {
+        /**
+         * Run pending one-shot data backfills within this request's budget.
+         * The admin app silently re-calls this endpoint while the returned
+         * status is 'running'; 'locked' means another request is already on it.
+         */
+        public function run()
+        {
+        }
+    }
     class EmailNotificationController extends \FluentCart\App\Http\Controllers\Controller
     {
         public function index(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
@@ -9978,6 +10024,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function update(\FluentCart\App\Http\Requests\ProductUpdateRequest $request, $postId)
+        {
+        }
+        private function applyPartialPostUpdate(array $data, $postId)
         {
         }
         public function updateLongDescEditorMode(\FluentCart\Framework\Http\Request\Request $request, $postId)
@@ -18975,7 +19024,90 @@ namespace FluentCart\App\Models {
         public function getCurrentRenewalAmount()
         {
         }
+        /**
+         * Cycles the remote (vendor) plan must bill at INITIAL checkout.
+         * With a simulated trial the first installment is already collected outside
+         * the remote recurring cycles (one-time charge, paid/free trial cycle), so
+         * the remote plan only needs bill_times - 1.
+         *
+         * Only valid at initial checkout — do NOT use for renewals/reactivation
+         * (payment-method switching also sets is_trial_days_simulated; renewal flows
+         * must use getRequiredBillTimes() which is bill_count based).
+         *
+         * @return int 0 means unlimited
+         */
+        public function getInitialRemoteBillTimes()
+        {
+        }
         public function getRequiredBillTimes()
+        {
+        }
+        /**
+         * Canonical bill_count formula. Every writer of bill_count must go through
+         * this — a separate ad hoc count (e.g. StripeGateway\SubscriptionsManager
+         * previously) silently drops the offset/deduction corrections below and
+         * reports a wrong count until the next recompute.
+         *
+         * total > 0 CHARGE transactions linked to this subscription, adjusted for
+         * the two one-time corrections decided at creation (see
+         * CheckoutProcessor::syncInitialCycleCounting):
+         * - billed_cycles_offset: free simulated-trial first cycle consumed a
+         *   cycle without producing a total > 0 transaction.
+         * - billed_cycles_deduction: real-trial signup-fee-only charge is a
+         *   total > 0 transaction but isn't a billed cycle.
+         */
+        public function calculateBillCount()
+        {
+        }
+        /**
+         * Installment / split-pay plan: a finite-term subscription (a lifetime
+         * license paid off in a fixed number of charges), as opposed to an
+         * open-ended recurring subscription. The canonical structural signal is
+         * bill_times > 0 (0 = infinite/open-ended). Reused across analytics,
+         * filters and lifecycle handling — do NOT reintroduce title-string
+         * ("Split") matching, which the data does not reliably carry.
+         *
+         * @return bool
+         */
+        public function isInstallment()
+        {
+        }
+        /**
+         * Installments still owed: 0 for open-ended plans, or once the term is
+         * fully paid.
+         *
+         * @return int
+         */
+        public function installmentsRemaining()
+        {
+        }
+        /**
+         * Has a finite installment plan collected every scheduled charge (end of
+         * term)? Open-ended plans never reach term end.
+         *
+         * @return bool
+         */
+        public function hasReachedTermEnd()
+        {
+        }
+        /**
+         * Full committed price of an installment contract: recurring_total x
+         * bill_times, in cents. 0 for open-ended plans (no fixed total). This is
+         * the per-row form of the SUM(recurring_total * bill_times) used by the
+         * subscription analytics aggregate.
+         *
+         * @return int
+         */
+        public function totalContractValue()
+        {
+        }
+        /**
+         * Filter by plan type: 'installment' (finite term, bill_times > 0),
+         * 'recurring' (open-ended, bill_times = 0) or anything else (no filter).
+         * The bill_times threshold is kept identical to isInstallment() so the SQL
+         * and PHP definitions never drift apart.
+         */
+        public function scopeOfPlanType($query, $planType)
         {
         }
         public function getReactivationTrialDays()
@@ -18993,7 +19125,7 @@ namespace FluentCart\App\Models {
         * Processes all candidates in batches to avoid memory issues.
         * The query example works as follows:
         * SELECT * FROM subscriptions WHERE
-               status IN ('active', 'trialing', 'canceled')
+               status IN ('active', 'trialing', 'canceled', 'expiring', 'past_due')
                AND next_billing_date IS NOT NULL
                AND id > 0                          -- last processed ID for batch cursor
                AND next_billing_date < DATE_SUB(
@@ -19661,12 +19793,61 @@ namespace FluentCart\App\Modules\MCP {
         {
         }
         /**
+         * Register one ability definition with the Abilities API. Kept separate
+         * from register() so its try/catch stays a thin skip-and-continue shell.
+         */
+        private static function registerAbility($name, $definition)
+        {
+        }
+        /**
+         * Translate a tool's readable snake_case behavior hints into the MCP tool
+         * annotation keys clients actually read.
+         *
+         * Tool classes declare intent as readonly / destructive / idempotent /
+         * open_world / title. The MCP spec names them readOnlyHint / destructiveHint
+         * / idempotentHint / openWorldHint, and the WP MCP adapter forwards
+         * meta.annotations VERBATIM (it does not translate), so an unmapped
+         * 'readonly' key would never reach a client as a real hint. Unknown keys
+         * (e.g. a stray 'bulk') are dropped rather than emitted as noise a client
+         * cannot act on.
+         *
+         * @param array $annotations snake_case behavior hints from the tool definition
+         * @return array MCP-standard annotation keys
+         */
+        private static function mapAnnotations($annotations)
+        {
+        }
+        /**
+         * Portable params an agent naturally carries from one tool to a sibling but
+         * which only some tools accept. input_schema sets no additionalProperties, so
+         * an unsupported one is silently ignored and the agent gets a full,
+         * wrong-shaped result with no signal it wasn't filtered. We surface exactly
+         * these as meta.warnings. We deliberately do NOT warn on every unknown key:
+         * that risks false positives against a param a tool reads but doesn't declare,
+         * and would turn a typo into noise instead of a helpful correction.
+         */
+        const PORTABLE_PARAMS = ['product_id', 'variation_id', 'summary_only', 'fields', 'mode'];
+        /**
+         * Append a meta.warnings entry for each portable param the caller passed that
+         * this tool does not declare (and therefore ignored). Untouched when the
+         * result isn't a success envelope (e.g. a WP_Error) or nothing was ignored,
+         * so a tool's own warnings (list-reference-data) are preserved.
+         *
+         * @param mixed $result         the tool's return value
+         * @param mixed $params         the raw input params
+         * @param array $declaredParams input_schema property names this tool declares
+         * @return mixed
+         */
+        private static function annotateIgnoredParams($result, $params, $declaredParams)
+        {
+        }
+        /**
          * Convert any unhandled \Throwable from a tool into a structured WP_Error
          * carrying the real message (and, under WP_DEBUG, the file + a short trace).
          * Without this the agent only sees the adapter's generic failure surface and
          * retries blindly against tools that may have partially succeeded.
          */
-        private static function wrapExecuteCallback($toolName, $callback)
+        private static function wrapExecuteCallback($toolName, $callback, $declaredParams = [])
         {
         }
     }
@@ -19825,6 +20006,46 @@ namespace FluentCart\App\Modules\MCP\Support {
         {
         }
         // -----------------------------------------------------------------
+        // Output schema (advertised to clients; not validated server-side)
+        // -----------------------------------------------------------------
+        /**
+         * JSON Schema fragment for the full money object returned by money(). Inlined
+         * by each tool's output_schema (rather than a $ref) so it never depends on the
+         * client validator resolving $defs across JSON-Schema draft versions.
+         *
+         * @return array
+         */
+        public static function moneyDef()
+        {
+        }
+        /**
+         * JSON Schema for the shared meta block. Permissive (extra keys allowed) so a
+         * tool can add its own meta (mode, date_basis, page, warnings, …) without a
+         * client that validates structuredContent tripping on the extras.
+         *
+         * @param array $extraProps additional documented meta properties for this tool
+         * @return array
+         */
+        public static function metaSchema(array $extraProps = [])
+        {
+        }
+        /**
+         * Wrap a `data` schema in the canonical { summary, data, meta } envelope every
+         * tool returns.
+         *
+         * `data` keys are DESCRIBED but not required: the fields[] projection may prune
+         * them and summary_only omits records, so a client should treat declared data
+         * keys as optional. The adapter advertises this to the model but does not
+         * validate results against it, so it is documentation, not a runtime gate.
+         *
+         * @param array $dataSchema JSON Schema for the tool's data payload
+         * @param array $metaProps  extra documented meta properties
+         * @return array
+         */
+        public static function envelopeSchema(array $dataSchema, array $metaProps = [])
+        {
+        }
+        // -----------------------------------------------------------------
         // Money
         // -----------------------------------------------------------------
         /**
@@ -19921,8 +20142,86 @@ namespace FluentCart\App\Modules\MCP\Support {
         // -----------------------------------------------------------------
         // People / labels
         // -----------------------------------------------------------------
+        // -----------------------------------------------------------------
+        // Field selection
+        // -----------------------------------------------------------------
+        /**
+         * Project a record down to a caller-requested subset of top-level keys, to
+         * shrink heavy payloads. Returns the record UNCHANGED when $fields is empty
+         * or not an array (the default, backward-compatible behavior). Only keys that
+         * actually exist are kept, in the record's own order; unknown requested keys
+         * are ignored. Keys in $alwaysKeep (the record's identifier) are retained
+         * regardless so a projected record is never anonymous.
+         *
+         * @param array $row
+         * @param mixed $fields     array of key names, or null/non-array for "all"
+         * @param array $alwaysKeep keys to keep even if not requested (e.g. the id)
+         */
+        public static function pickFields($row, $fields, array $alwaysKeep = [])
+        {
+        }
         /** "First Last <email>" style name from a customer/person-ish model. */
         public static function personName($model)
+        {
+        }
+    }
+    /**
+     * Pure forward billing projection, shared by get-product-financials (via
+     * ProductFinancialsCalculator) and get-upcoming-payments. Given per-subscription
+     * anchors (next_billing_date), normalized intervals and finite remaining-bill
+     * caps, it walks each subscription forward from as_of to a horizon and sums the
+     * expected charges into calendar buckets — separating finite (split-pay)
+     * installments from open-ended recurring renewals.
+     *
+     * The billing rules it encodes (single source of truth for both tools):
+     *   - Anchor on next_billing_date, never created_at.
+     *   - Step by the subscription's own interval.
+     *   - A finite (bill_times > 0) subscription stops after its remaining bills;
+     *     a perpetual one runs to the horizon.
+     *
+     * No WordPress, no models — plain arrays of integer cents, so it is unit-tested
+     * without a database and both callers get identical numbers.
+     *
+     * PHP 7.4 safe: no null-safe, no match, no named args, no enums, no union types.
+     */
+    class PaymentProjector
+    {
+        /** Seconds in a day (WP's DAY_IN_SECONDS may be absent when run outside WordPress). */
+        const DAY_SECONDS = 86400;
+        /** Hard per-sub iteration cap (daily over 12 months ~ 366) so a bad interval/anchor can't spin. */
+        const MAX_EVENTS = 4000;
+        /**
+         * Project a set of subscription descriptors onto calendar buckets.
+         *
+         * A descriptor is:
+         *   [
+         *     'settlement'      => 'finite'|'perpetual',
+         *     'interval'        => normalized interval string (monthly|quarterly|…),
+         *     'recur'           => int cents per charge,
+         *     'remaining_bills' => int (finite) | -1 (perpetual/unbounded),
+         *     'anchor'          => 'Y-m-d H:i:s' UTC next-bill anchor,
+         *   ]
+         *
+         * @param array  $projSubs      descriptors (see above)
+         * @param int    $asOfTs        unix ts — never bill before this instant
+         * @param int    $horizonEndTs  unix ts — never bill after this instant
+         * @param string $bucket        'day' | 'week' | 'month'
+         *
+         * @return array{
+         *   buckets: array<string, array{finite:int,recurring:int,finite_count:int,recurring_count:int}>,
+         *   recurring_next_30d:int, recurring_next_90d:int, by_interval_next_30d: array<string,int>
+         * } buckets are period-sorted; the next_30d/90d scalars are relative to as_of.
+         */
+        public static function project(array $projSubs, $asOfTs, $horizonEndTs, $bucket)
+        {
+        }
+        /**
+         * DateInterval-style modifier to advance one cycle. Calendar months for
+         * monthly+, days for weekly/daily, a 30-day fallback for unknowns so an
+         * unrecognized interval still projects rather than looping forever. Expects a
+         * value already run through ProductFinancialsCalculator::normalizeInterval.
+         */
+        public static function advanceModifier($interval)
         {
         }
     }
@@ -19989,6 +20288,99 @@ namespace FluentCart\App\Modules\MCP\Support {
          * no other module's settings are touched.
          */
         public static function setEnabled($enabled)
+        {
+        }
+    }
+    /**
+     * Pure financial math for get-product-financials. NO WordPress, NO models, NO
+     * __() — every method takes plain arrays and returns plain arrays of integer
+     * cents, so the full spec §9 test matrix runs without a database. The tool
+     * layer (ProductFinancialsTools) loads rows, normalizes them, calls compute(),
+     * and wraps the cents through MCPHelper::money().
+     *
+     * PHP 7.4 safe: no null-safe, no match, no named args, no enums, no union types.
+     *
+     * A normalized subscription row is:
+     *   [
+     *     'billing_interval'  => 'monthly'|'quarterly'|'half_yearly'|'yearly'|'weekly'|'daily'|<other>,
+     *     'recurring_total'   => int (cents),
+     *     'bill_count'        => int,
+     *     'bill_times'        => int,   // 0 => perpetual, >0 => finite
+     *     'status'            => string,
+     *     'next_billing_date' => 'Y-m-d H:i:s' (UTC) | null,
+     *   ]
+     *
+     * Settlement is derived from bill_times here (single source of truth) — callers
+     * never pass it, exactly as Subscription::isInstallment() decides it.
+     */
+    class ProductFinancialsCalculator
+    {
+        /** Average days in a Gregorian month; keeps $150/half_yearly and $300/yearly both at $25 MRR. */
+        const DAYS_PER_MONTH = 30.436875;
+        /** Seconds in a day (WP's DAY_IN_SECONDS may be absent when run outside WordPress). */
+        const DAY_SECONDS = 86400;
+        /** Statuses that never collected real money — excluded from every money figure. */
+        const NON_COLLECTING = ['intended', 'pending'];
+        /** Canonical status set, seeded to 0 so status_breakdown is always complete. */
+        const STATUS_KEYS = ['active', 'trialing', 'paused', 'canceled', 'failing', 'expired', 'expiring', 'past_due', 'intended', 'pending', 'completed'];
+        /**
+         * Map an input interval onto the store's canonical value. Accepts the v1
+         * spec aliases (semiannual, annual) for caller convenience; passes real
+         * values through untouched.
+         */
+        public static function normalizeInterval($interval)
+        {
+        }
+        /**
+         * Split subscription rows into the ones matching $currency and the sorted,
+         * de-duplicated list of OTHER currencies present. Comparison is
+         * case-insensitive (gateways store 'usd'; we report 'USD'). Rows without a
+         * currency are treated as the report currency (store default). Never mixes
+         * currencies — the tool feeds only the kept rows to compute() and surfaces
+         * the others in meta.other_currencies.
+         *
+         * @return array{0: array, 1: array} [keptRows, otherCurrencies]
+         */
+        public static function filterByCurrency(array $rows, $currency)
+        {
+        }
+        /** 'finite' (split-pay) when bill_times > 0, else 'perpetual' (open-ended). */
+        public static function settlement($billTimes)
+        {
+        }
+        /**
+         * How many months one billing cycle spans, for MRR normalization. Returns
+         * null for an unknown interval so it is excluded from MRR (but still counted
+         * and still projected onto the calendar by its day cadence).
+         */
+        public static function intervalInMonths($interval)
+        {
+        }
+        /** Normalized monthly run-rate contribution in cents (float). 0 for unknown intervals. */
+        public static function mrrContributionCents($recurringTotal, $interval)
+        {
+        }
+        /**
+         * Full financial rollup. See class doc for the row shape. $opts:
+         *   as_of            'Y-m-d H:i:s' UTC (default now)
+         *   horizon_months   3|6|12 (default 12)
+         *   bucket           'month'|'week' (default month)
+         *   forward_statuses array of statuses that feed forward metrics, or ['all']
+         *   include_schedule bool — emit payment_schedule[] (30d/90d scalars always computed)
+         *   one_time         ['gross'=>int,'refunds'=>int,'units'=>int,'orders'=>int] | null
+         *
+         * Returns all money as integer cents; the tool wraps it through money().
+         */
+        public static function compute(array $subscriptions, array $opts = [])
+        {
+        }
+        /**
+         * Project future charges onto calendar buckets. Returns:
+         *   schedule                 [ {period, finite_installments, recurring_renewals, total_expected} ]
+         *   recurring_next_30d/90d   int cents of recurring renewals within 30/90 days of as_of
+         *   by_interval_next_30d     [ interval => int cents ] recurring renewals within 30d
+         */
+        private static function project(array $projSubs, $asOfTs, $horizonMonths, $bucket)
         {
         }
     }
@@ -20127,6 +20519,10 @@ namespace FluentCart\App\Modules\MCP\Tools {
             'shipping_statuses' => ['none', 'unshipped', 'shipped', 'delivered', 'unshippable'],
             'order_types' => ['payment', 'renewal', 'subscription'],
             'subscription_statuses' => ['active', 'trialing', 'paused', 'canceled', 'failing', 'expired', 'expiring', 'past_due', 'intended', 'pending', 'completed'],
+            // installment = fixed-term split-pay plan (a lifetime license paid off in
+            // a finite number of charges, bill_times > 0); recurring = open-ended
+            // subscription (bill_times = 0). Derived from bill_times, never the title.
+            'plan_types' => ['installment', 'recurring'],
             'billing_intervals' => ['daily', 'weekly', 'monthly', 'quarterly', 'half_yearly', 'yearly'],
             'fulfillment_types' => ['physical', 'digital'],
             'coupon_types' => ['fixed', 'percentage'],
@@ -20168,6 +20564,19 @@ namespace FluentCart\App\Modules\MCP\Tools {
         }
         /** Tells the agent what `kinds` it can pass to list-reference-data. */
         private static function referenceKinds()
+        {
+        }
+        /**
+         * Task → tool routing table so an agent picks the right ability among ~30
+         * without trial and error, grouped by intent (discovery / find / load /
+         * analytics / write).
+         *
+         * Derived from the LIVE registry so a newly registered tool can never
+         * silently go missing — each is annotated with a curated "reach for this
+         * when…" hint, and any tool without one still appears under its label.
+         * Filterable so pro / add-on tools can slot themselves in.
+         */
+        private static function toolIndex()
         {
         }
         private static function guidelines()
@@ -20483,6 +20892,27 @@ namespace FluentCart\App\Modules\MCP\Tools {
         private static function activityEvent($row)
         {
         }
+        /**
+         * Classify an activity row's money kind from its title so its amount can be
+         * backfilled from the matching transaction. Title-only (not content) to avoid
+         * false positives like a note that merely mentions "refund".
+         */
+        private static function activityMoneyKind($title)
+        {
+        }
+        /**
+         * Amount of the transaction closest in time to $ts, from a pool of
+         * ['ts' => int|null, 'amount' => money] entries. Returns null if $ts is unknown
+         * or the pool is empty. Refund activity rows match only refund transactions and
+         * payment rows only charges, so the nearest by time is the right money event.
+         */
+        private static function nearestTxnAmount($ts, array $pool)
+        {
+        }
+        /** Parse a stored GMT datetime to a UTC unix timestamp; null on empty/zero-date. */
+        private static function toTs($value)
+        {
+        }
         /** Human-readable title for a transaction timeline entry. */
         private static function txnTitle($type, $txn)
         {
@@ -20518,6 +20948,174 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         private static function invalidDateError($field)
+        {
+        }
+    }
+    /**
+     * get-upcoming-payments — the renewal cohort view: expected billings grouped by
+     * date over a window, separating finite (split-pay) installments from open-ended
+     * recurring renewals, with an at_risk figure derived from past_due subscriptions
+     * and the store's historical renewal success rate.
+     *
+     * It anchors on next_billing_date (never created_at), steps by each
+     * subscription's interval, and stops finite plans at their remaining bills —
+     * the exact projection get-product-financials uses, via the shared
+     * PaymentProjector, so the two never disagree.
+     *
+     * Single-currency (defaults to store currency); other currencies present are
+     * listed in meta.other_currencies rather than silently summed.
+     */
+    class PaymentScheduleTools
+    {
+        /** Statuses that produce a future charge and so feed the projection. */
+        const FORWARD_STATUSES = ['active', 'past_due', 'trialing'];
+        /** Safety ceiling on subscriptions loaded for one projection. */
+        const MAX_SUBS = 50000;
+        public static function definitions()
+        {
+        }
+        public static function getUpcomingPayments($params = [])
+        {
+        }
+        // -----------------------------------------------------------------
+        // Loaders / builders
+        // -----------------------------------------------------------------
+        /**
+         * Forward-billing subscriptions, optionally scoped to one product/variation.
+         * Currency is derived per row from the config JSON (there is no currency
+         * column) so the caller can single-currency scope. Reads a limited column set
+         * so the model's heavy $appends accessors never fire.
+         */
+        private static function loadSubs($productId, $variationId)
+        {
+        }
+        /** Normalize a sub row into a PaymentProjector descriptor, or null if it can't bill. */
+        private static function toProjSub($row)
+        {
+        }
+        private static function formatBuckets($buckets, $currency)
+        {
+        }
+        private static function totals($buckets)
+        {
+        }
+        /**
+         * Store-wide renewal charge success rate: succeeded / (succeeded + failed) over
+         * transaction_type=charge, order_type=renewal. null when there is no renewal
+         * history to learn from. Store-wide (not product-scoped) because renewal
+         * success is gateway/dunning-driven, and per-product scoping would not scale.
+         */
+        private static function renewalSuccessRate()
+        {
+        }
+        private static function resolveWindow($params)
+        {
+        }
+        /** Parse a date bound to UTC 'Y-m-d H:i:s'; date-only snaps to the day edge. */
+        private static function instant($value, $tz, $isEnd)
+        {
+        }
+        private static function summary($totals, $atRiskCents, $currency, $bucketCount)
+        {
+        }
+    }
+    /**
+     * get-product-financials — the one honest financial picture for a single
+     * product: one-time revenue, finite split-pay commitments, and perpetual
+     * run-rate (MRR/ARR + forward schedule), with no cross-currency summing and no
+     * folding of forward commitments into "revenue this period".
+     *
+     * The subtle rule the whole tool is built around (see spec §6):
+     *   - The `window` (range/date_from/date_to + date_basis) applies to the
+     *     one_time block ONLY.
+     *   - Everything under subscriptions.*, payment_schedule, and totals is
+     *     point-in-time as of `as_of` (lifetime-to-date or forward).
+     * This is echoed back in meta.field_semantics so an agent cannot misread it.
+     *
+     * All math lives in the pure ProductFinancialsCalculator (unit-tested without a
+     * DB); this class only loads rows, scopes currency, and wraps money.
+     */
+    class ProductFinancialsTools
+    {
+        /** Payment statuses that count as realized revenue (matches ReportTools/ContextTools). */
+        const PAID = ['paid', 'partially_paid', 'partially_refunded'];
+        /** Safety ceiling on subscriptions loaded for one product. */
+        const MAX_SUBS = 50000;
+        public static function definitions()
+        {
+        }
+        public static function getProductFinancials($params = [])
+        {
+        }
+        // -----------------------------------------------------------------
+        // Loaders
+        // -----------------------------------------------------------------
+        /**
+         * One-time revenue: non-subscription line items on realized-revenue orders,
+         * scoped to the report currency and the window (by date_basis column on the
+         * parent order). Returns integer cents/counts for the calculator.
+         */
+        private static function loadOneTime($productId, $variationId, $currency, $window)
+        {
+        }
+        /**
+         * All subscriptions for the product (every status — the breakdown must be
+         * complete). Currency is derived per row from config JSON (there is no
+         * currency column) so the calculator can scope by it. Columns are limited
+         * and the model is read attribute-by-attribute so the heavy $appends
+         * accessors (url, billingInfo, overridden_status, …) never fire.
+         */
+        private static function loadSubscriptions($productId, $variationId)
+        {
+        }
+        // -----------------------------------------------------------------
+        // Formatting (cents -> money envelope)
+        // -----------------------------------------------------------------
+        private static function formatData($product, $currency, $asOf, $window, $result)
+        {
+        }
+        private static function formatOneTime($o, $currency)
+        {
+        }
+        private static function formatSubscriptions($s, $currency)
+        {
+        }
+        private static function formatTotals($t, $currency)
+        {
+        }
+        private static function formatSchedule($schedule, $currency)
+        {
+        }
+        private static function summary($product, $currency, $result)
+        {
+        }
+        // -----------------------------------------------------------------
+        // Param resolvers
+        // -----------------------------------------------------------------
+        private static function resolveAsOf($params)
+        {
+        }
+        private static function resolveHorizonMonths($params)
+        {
+        }
+        private static function resolveForwardStatuses($params)
+        {
+        }
+        /**
+         * Resolve range / date_from / date_to into a UTC window for the one_time
+         * block. Mirrors the report tools: relative ranges resolve in UTC, custom
+         * dates override. all_time spans epoch..now.
+         *
+         * @return array{from:string,to:string,range:string,basis:string}|\WP_Error
+         */
+        private static function resolveWindow($params)
+        {
+        }
+        private static function quarterStart($now, $tz)
+        {
+        }
+        /** Parse a date bound to a UTC 'Y-m-d H:i:s' at day start/end; null on failure. */
+        private static function dayBound($value, $tz, $endOfDay)
         {
         }
     }
@@ -20599,8 +21197,20 @@ namespace FluentCart\App\Modules\MCP\Tools {
      */
     class ReportTools
     {
-        const PAID = ['paid', 'partially_paid', 'partially_refunded'];
-        const RANGES = ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'mtd', 'qtd', 'ytd', 'last_quarter', 'last_year'];
+        // Payment statuses for orders that CAPTURED PAYMENT at some point — including
+        // one later fully refunded (payment_status 'refunded', order status 'canceled').
+        // A fully refunded order captured payment then returned it, so it belongs in the
+        // refund metrics (it is the whole point of a refund report) and in the paid
+        // denominator of the refund rate, and it nets to zero in net_revenue
+        // (total_paid - total_refund). Gating refund aggregation on the narrower paid set
+        // silently undercounted every fully-refunded order. Including 'refunded' here
+        // matches FluentCart's own admin reports, which compute refunds from
+        // total_refund > 0 with no current-status gate (see RevenueReportService /
+        // RefundReportService::applyFilters — the default has no payment_status filter).
+        const PAID = ['paid', 'partially_paid', 'partially_refunded', 'refunded'];
+        // all_time is a documented alias of since_launch (see resolveRange) so the
+        // range vocabulary matches get-product-financials, which uses all_time.
+        const RANGES = ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'mtd', 'qtd', 'ytd', 'last_quarter', 'last_year', 'since_launch', 'all_time'];
         const MAX_BUCKETS = 180;
         const MAX_ROWS = 200;
         public static function definitions()
@@ -20612,7 +21222,7 @@ namespace FluentCart\App\Modules\MCP\Tools {
         public static function getSalesReport($params = [])
         {
         }
-        private static function salesMetrics($start, $end, $currency)
+        private static function salesMetrics($start, $end, $currency, $mode = 'all')
         {
         }
         private static function salesMetricsOut($m, $currency)
@@ -20661,6 +21271,24 @@ namespace FluentCart\App\Modules\MCP\Tools {
         public static function queryCustomers($params = [])
         {
         }
+        // -----------------------------------------------------------------
+        // query-subscriptions (flexible aggregate)
+        // -----------------------------------------------------------------
+        public static function querySubscriptions($params = [])
+        {
+        }
+        private static function subDateBasis($params)
+        {
+        }
+        /**
+         * Restrict an Order-model aggregate to orders CONTAINING a given product /
+         * variation. Uses whereHas on order_items (post_id = product, object_id =
+         * variation) so the filter is a subquery, not a join — order-level metrics stay
+         * per-order and never fan out. Both filters combine (AND) when both are given.
+         */
+        private static function applyOrderItemFilter($query, $params)
+        {
+        }
         private static function dimensionExpr($dim)
         {
         }
@@ -20671,16 +21299,56 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         /**
+         * Effective order-mode filter: 'live', 'test', or 'all'. Reports have always
+         * counted BOTH live and test orders, so 'all' (the default) keeps existing
+         * numbers unchanged; an agent opts into 'live' for clean revenue. Applied to
+         * the fct_orders.mode column.
+         */
+        private static function orderMode($params)
+        {
+        }
+        /**
+         * Apply the mode filter to an Order query (or an order-relation subquery /
+         * whereHas closure). 'all' is a no-op so existing numbers are unchanged. The
+         * column is fct_orders.mode; pass a qualified name via $column when the orders
+         * table is aliased (e.g. query-sources uses 'o.mode').
+         */
+        private static function applyMode($query, $mode, $column = 'mode')
+        {
+        }
+        /**
          * Resolve range/start/end into a UTC window plus the prior equal-length
          * window. Relative ranges are computed in store timezone, expressed in UTC.
+         *
+         * Public so the single source of truth for MCP date-window resolution is
+         * shared (e.g. list-transactions) instead of duplicated — every tool then
+         * accepts the identical range vocabulary and UTC semantics.
          */
-        private static function resolveRange($params)
+        public static function resolveRange($params)
         {
         }
         private static function quarterStart($now, $tz)
         {
         }
         private static function withPrior($startUtc, $endUtc, $label, $prevStartUtc = null, $prevEndUtc = null)
+        {
+        }
+        /**
+         * Parse an ISO-8601 / relative value to a UTC 'Y-m-d H:i:s'. A date-only input
+         * (YYYY-MM-DD) is snapped to the day start (or end when $isEnd); an explicit
+         * time is preserved. Returns null on an unparseable value so the caller can
+         * fall back to the next window source rather than silently matching all rows.
+         */
+        private static function instant($value, $tz, $isEnd = false)
+        {
+        }
+        /**
+         * The store's first paid order timestamp (UTC); null if the store has no paid
+         * orders yet. Only hit on the since_launch path (one indexed min per call), so
+         * it is not memoized — a static cache would leak across calls in a long-lived
+         * process (e.g. the test runner) for no real per-request gain.
+         */
+        private static function storeLaunchDate()
         {
         }
         private static function dayStart($value, $tz)
@@ -20693,6 +21361,23 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         private static function pickList($params, $key, array $allowed, array $default)
+        {
+        }
+        /**
+         * Page/offset for the query-* aggregates. per_page defaults to and is clamped
+         * at MAX_ROWS — grouped rows are compact but a single page still can't exceed
+         * the context guardrail. Returns page, per_page and the row offset.
+         */
+        private static function queryPaging($params)
+        {
+        }
+        /**
+         * meta.page block for a query-* aggregate. The query fetches per_page + 1 rows
+         * to peek past the page boundary; $fetchedCount is that raw count. `truncated`
+         * is kept (never removed — additive API rule) and now means "more rows exist
+         * beyond this page"; raise `page` to fetch them.
+         */
+        private static function pageMeta($paging, $fetchedCount)
         {
         }
         private static function pct($current, $prior)
@@ -20717,6 +21402,15 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         public static function listSubscriptions($params = [])
+        {
+        }
+        /**
+         * Aggregate-only response for summary_only: status counts, summed
+         * recurring_total and total remaining installments across the full filtered
+         * set. Two lightweight GROUP BY / SUM scans, no row hydration. Money is in the
+         * store currency (subscriptions are not currency-scoped), matching formatRow.
+         */
+        private static function summaryResponse($query)
         {
         }
         private static function formatRow($sub)
@@ -20750,6 +21444,66 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         private static function invalidDateError($field)
+        {
+        }
+    }
+    /**
+     * The payment ledger — every charge, refund, dispute and signup fee across all
+     * orders and subscriptions.
+     *
+     * This is the one surface the per-order / per-subscription views cannot answer:
+     * questions that cut ACROSS records — "all refunds last week", "failed renewal
+     * charges this month" (dunning triage), "this customer's payment history".
+     * Before this tool an agent had to fetch every order and stitch transactions by
+     * hand.
+     *
+     * Design rules (shared with ReportTools):
+     *  - Date window resolution is delegated to ReportTools::resolveRange, so the
+     *    range vocabulary (today … since_launch, date_from/date_to, since) and UTC
+     *    semantics are identical to every report.
+     *  - Money is NEVER summed across currencies: summary.amount_by_currency reports
+     *    one total per currency, and each row carries its own currency.
+     *  - Rows are compact (moneyCompact + explicit per-row currency); summary_only
+     *    returns just the aggregates for a tiny payload.
+     */
+    class TransactionTools
+    {
+        // transaction_type values (Status::TRANSACTION_TYPE_*).
+        const TYPES = ['charge', 'refund', 'dispute', 'signup_fee'];
+        // status values (Status::TRANSACTION_*).
+        const STATUSES = ['succeeded', 'authorized', 'pending', 'refunded', 'failed', 'dispute_lost'];
+        const DEFAULT_PER_PAGE = 25;
+        public static function definitions()
+        {
+        }
+        public static function listTransactions($params = [])
+        {
+        }
+        /**
+         * Live/test/all — filters the payment_mode column. 'all' (default) is a no-op
+         * so both are included, matching the report tools' mode convention.
+         */
+        private static function mode($params)
+        {
+        }
+        private static function applyFilters($query, $params, $mode)
+        {
+        }
+        /**
+         * Aggregate the filtered set WITHOUT crossing currencies. Counts are
+         * currency-agnostic (by_type, by_status); money is one total per currency.
+         */
+        private static function summarize($query)
+        {
+        }
+        /** COUNT(*) grouped by one column, as a { value: count } map. */
+        private static function countBy($query, $column)
+        {
+        }
+        private static function formatRow($txn)
+        {
+        }
+        private static function summaryLine($summary)
         {
         }
     }
@@ -21306,10 +22060,12 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
          * @param string $version API version ex: v1, v2 (Optional)
          * @param string $method HTTP method ex: GET, POST, DELETE (Optional)
          * @param array $args API request arguments (Optional)
+         * @param string $mode PayPal mode ex: live, test (Optional)
+         * @param string|null $requestId Idempotency id sent as PayPal-Request-Id (Optional)
          * @return mixed $response API response
          * @throws \Exception if error occurs
          */
-        public static function makeRequest($path, $version = 'v1', $method = 'POST', $args = [], $mode = '')
+        public static function makeRequest($path, $version = 'v1', $method = 'POST', $args = [], $mode = '', $requestId = null)
         {
         }
         public static function getResource($path, $data = [], $mode = '')
@@ -21324,7 +22080,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
         public static function getRequest($url, $accessToken = null, $mode = '')
         {
         }
-        public static function createOrder($purchaseUnit)
+        public static function createOrder($purchaseUnit, $requestId = null)
         {
         }
         public static function verifyPayment($paymentId)
@@ -22331,13 +23087,13 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway\API {
         public function getStripeObject($path, $data = [], $mode = 'current')
         {
         }
-        public function createStripeObject($path, $data = [], $mode = 'current')
+        public function createStripeObject($path, $data = [], $mode = 'current', $idempotencyKey = null)
         {
         }
         public function deleteStripeObject($path, $data = [], $mode = 'current')
         {
         }
-        public function remoteRequest($path, $data, $apiKey, $method)
+        public function remoteRequest($path, $data, $apiKey, $method, $idempotencyKey = null)
         {
         }
         public function verifyIPN()
@@ -24271,6 +25027,9 @@ namespace FluentCart\App\Modules\Tax {
         protected function getCheckoutTaxBreakdownDisplayMode()
         {
         }
+        protected function getTaxDisplayLabel()
+        {
+        }
         protected function normalizeCheckoutLineTaxRates($item)
         {
         }
@@ -24384,6 +25143,17 @@ namespace FluentCart\App\Modules\Tax {
          * Returns false when local_reverse_charge is off AND the country equals the store country.
          */
         public static function canApplyReverseCharge($countryCode)
+        {
+        }
+        /**
+         * The legal reverse-charge notice shown on checkout, invoices, receipts and emails.
+         * EU VAT Directive 2006/112/EC Article 226(11a) requires the invoice to carry the
+         * literal mention "Reverse charge" when the customer is liable for the VAT, so the
+         * default string must always start with those exact words. Article 196 covers
+         * services; stores supplying intra-EU goods (Art. 138) or needing other
+         * jurisdiction-specific wording can override via the filter.
+         */
+        public static function getReverseChargeNoticeText()
         {
         }
         public static function euVatCountyOptions()
@@ -24850,7 +25620,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-buy-section';
-        public $icon = 'ti-shopping-cart';
+        public $icon = 'ti-shopping-cart fluent-cart-element-icon';
         public function enqueue_scripts()
         {
         }
@@ -24878,7 +25648,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-price-range';
-        public $icon = 'ti-money';
+        public $icon = 'ti-money fluent-cart-element-icon';
         public function get_label()
         {
         }
@@ -24893,7 +25663,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-content';
-        public $icon = 'ion-md-list-box';
+        public $icon = 'ion-md-list-box fluent-cart-element-icon';
         public function get_label()
         {
         }
@@ -24909,7 +25679,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-gallery';
-        public $icon = 'ti-gallery';
+        public $icon = 'ti-gallery fluent-cart-element-icon';
         public function enqueue_scripts()
         {
         }
@@ -24928,7 +25698,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-short-description';
-        public $icon = 'ti-paragraph';
+        public $icon = 'ti-paragraph fluent-cart-element-icon';
         public function get_label()
         {
         }
@@ -24944,7 +25714,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-stock';
-        public $icon = 'ti-package';
+        public $icon = 'ti-package fluent-cart-element-icon';
         public function get_label()
         {
         }
@@ -24966,7 +25736,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-product-title';
-        public $icon = 'ti-text';
+        public $icon = 'ti-text fluent-cart-element-icon';
         public $tag = 'h1';
         public function get_label()
         {
@@ -24986,7 +25756,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     {
         public $category = 'fluent-cart';
         public $name = 'fct-products';
-        public $icon = 'ti-archive';
+        public $icon = 'ti-archive fluent-cart-element-icon';
         protected $cssRoot = '.fct-products-wrapper-inner .fct-products-container';
         public function enqueue_scripts()
         {
@@ -31612,6 +32382,22 @@ namespace FluentCart\App\Services\Payments {
         public function setTransaction(\FluentCart\App\Models\OrderTransaction $transaction)
         {
         }
+        /**
+         * Gateway-agnostic idempotency seed for the current charge attempt. The ONLY
+         * seed source for gateway idempotency keys — full contract in
+         * .claude/skills/coding-rules/payment-idempotency.md.
+         *
+         * Stable across duplicate submissions (transaction uuid survives draft-order
+         * re-submission -> gateway dedupes), fresh after an observed failure
+         * (payment_attempt is bumped when a FAILED transaction is re-submitted ->
+         * retries are never blocked or answered with a cached gateway error).
+         *
+         * @return string Empty string when no charge transaction exists — callers
+         *                must skip idempotency rather than share a static key.
+         */
+        public function getIdempotencySeed()
+        {
+        }
         public function getExtraAddonAmount()
         {
         }
@@ -33233,7 +34019,11 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         protected $settings = null;
         protected $vat_tax_id = null;
         protected $orderTz;
+        private $fctTaxSummaryCache = [];
         public function __construct($config = [])
+        {
+        }
+        private function getMemoizedTaxSummary($order)
         {
         }
         public function wrapperStart()
@@ -33296,12 +34086,6 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         public function renderFees()
         {
         }
-        public function renderTaxTotal()
-        {
-        }
-        public function renderShippingTax()
-        {
-        }
         public function renderRefund()
         {
         }
@@ -33337,6 +34121,12 @@ namespace FluentCart\App\Services\Renderer\Receipt {
          * shippingTax, payableTax, totalOrderTax — all amounts in cents.
          */
         public static function computeTaxSummary(\FluentCart\App\Models\Order $order)
+        {
+        }
+        /**
+         * Order items used to build the per-rate base map for the tax breakdown table.
+         */
+        private static function getOrderItemsForBaseMap(\FluentCart\App\Models\Order $order)
         {
         }
         /**
@@ -33388,6 +34178,20 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         /**
+         * Aggregate the real taxable base per rate from item-level tax data.
+         *
+         * For inclusive lines the stored taxable_amount is gross (base + tax), so the
+         * rate's own tax is subtracted to get the net base. Amounts can be fractional
+         * cents when the store uses subtotal tax rounding — callers round for display.
+         *
+         * @param iterable $items Order items (models or arrays) or cart line arrays,
+         *                        each carrying line_meta.tax_config.
+         * @return array [rate_id => ['base' => float, 'tax' => float]]
+         */
+        public static function computeRateBaseMap($items, $excludeInclusive = false)
+        {
+        }
+        /**
          * Build a folded per-rate row array for the 3-column tax breakdown table.
          *
          * Merges order-tax rate lines with shipping-tax lines by rate_id so each rate
@@ -33397,9 +34201,31 @@ namespace FluentCart\App\Services\Renderer\Receipt {
          * @param array  $shippingLines      Output of Order::getDisplayShippingTaxLines().
          * @param string $taxAmountKey       Key holding the order tax amount in each $rateLine ('order_tax').
          * @param bool   $isShippingInclusive Whether shipping tax is inclusive.
+         * @param array  $rateBaseMap        Output of computeRateBaseMap() — exact per-rate bases
+         *                                   from item data. A rate entry is only trusted when its
+         *                                   item tax sum matches the rate row's tax (guards fee
+         *                                   items and legacy rows missing from the item data).
          * @return array Each row: ['label'=>string,'base'=>int,'tax'=>int,'inclusive'=>bool]
          */
-        public static function buildFoldedRateRows($rateLines, $shippingLines, $taxAmountKey, $isShippingInclusive)
+        public static function buildFoldedRateRows($rateLines, $shippingLines, $taxAmountKey, $isShippingInclusive, $rateBaseMap = [])
+        {
+        }
+        /**
+         * Rebuild the per-rate breakdown rows for a reverse-charge order.
+         *
+         * Under reverse charge the stored tax lines (and shipping tax lines) are zeroed
+         * at order placement, but the original per-rate amounts survive in item-level
+         * `line_meta.tax_config.rates`, and the pre-zeroing shipping lines survive in the
+         * rate-meta snapshot (`vat_reverse.reverse_charge_shipping_tax_lines`). This
+         * restores both and folds shipping into the rate rows so post-order surfaces can
+         * render the same "Tax breakdown by rate" table as a normal order.
+         *
+         * Returns [] when no per-rate data is recoverable (old orders without line-level
+         * tax data) — callers must fall back to the simplified reverse-charge box.
+         *
+         * @return array Same row shape as buildFoldedRateRows().
+         */
+        public static function buildReverseChargeRateRows(\FluentCart\App\Models\Order $order)
         {
         }
         /**
@@ -33411,6 +34237,21 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         public static function isShippingTaxInclusiveFromTaxData(array $taxData)
         {
         }
+        protected static function getTaxSettings(): array
+        {
+        }
+        public static function getTaxDisplayMode(): string
+        {
+        }
+        protected static function getTaxDisplayLabel(): string
+        {
+        }
+        protected static function getPriceSuffixIncluded(): string
+        {
+        }
+        public static function buildSimpleLine(array $summary): array
+        {
+        }
     }
     class ThankYouRender
     {
@@ -33418,7 +34259,11 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         protected $settings = null;
         protected $is_first_time = false;
         protected $order_operation = null;
+        private $fctTaxSummaryCache = [];
         public function __construct($config)
+        {
+        }
+        private function getMemoizedTaxSummary($order)
         {
         }
         public function renderWrapperStart()
@@ -33473,12 +34318,6 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function renderFees()
-        {
-        }
-        public function renderTaxTotal()
-        {
-        }
-        public function renderShippingTax()
         {
         }
         public function renderRefund()
@@ -33540,6 +34379,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function renderTaxSummaryBox()
+        {
+        }
+        private function renderTaxBreakdownCardInner($summary)
         {
         }
         public function renderItemTaxPill($item, $order)
