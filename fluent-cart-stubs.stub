@@ -30225,7 +30225,9 @@ namespace FluentCart\App\Services {
     {
         /**
          * Fetch products formatted for bulk editing.
-         * Returns products with decimal prices and category terms.
+         * Returns money in CENTS and category terms. It said "decimal prices" back
+         * when a temporary adapter divided here for a dollars-based grid; the grid
+         * renders cents through PriceInput now, so nothing is scaled on the way out.
          */
         public function fetchForBulkEdit(\FluentCart\Framework\Http\Request\Request $request): array
         {
@@ -30287,7 +30289,11 @@ namespace FluentCart\App\Services {
         {
         }
         /**
-         * Convert cents-based fields in other_info to dollars for frontend display.
+         * Normalize the money fields in other_info for the bulk edit grid.
+         *
+         * Despite what this used to say, nothing is converted to dollars: signup_fee
+         * stays in CENTS and is only int-cast, because PriceInput does the rendering.
+         * Reintroducing a division here would halve-by-100 every setup fee in the grid.
          */
         protected function formatOtherInfoForEdit(array $otherInfo): array
         {
@@ -32226,6 +32232,14 @@ namespace FluentCart\App\Services\FileSystem\Drivers\Local {
         public function downloadFile(string $filePath, $fileName = null)
         {
         }
+        /**
+         * Absolute path for a stored file, or '' when $filePath escapes the
+         * storage directory.
+         *
+         * `..` survives both sanitize_text_field() and wp_normalize_path(), so
+         * composing the path by concatenation alone let a relative path address any
+         * file the web user could reach.
+         */
         public function getFilePath(string $filePath, $fileName = null): string
         {
         }
@@ -32761,6 +32775,55 @@ namespace FluentCart\App\Services\FileSystem {
         {
         }
         public function saveSettings($params)
+        {
+        }
+    }
+    /**
+     * Resolves a user supplied file path against a storage directory.
+     *
+     * `file_path` reaches the storage drivers from request input on several
+     * surfaces, and the drivers compose it onto their directory by plain string
+     * concatenation. Neither sanitize_text_field() nor wp_normalize_path() resolves
+     * a `..` segment, so the resolution has to happen here — once, so the path a
+     * write boundary stores and the path a read boundary consumes are reduced the
+     * same way.
+     *
+     * A leading separator is deliberately treated as relative rather than refused:
+     * `"{$dir}/" . "/etc/passwd"` always resolved inside the storage directory, so
+     * rejecting it would break stored paths that were never an escape.
+     */
+    class StoragePath
+    {
+        /**
+         * Reduce a path to the segments that stay inside a storage directory.
+         *
+         * @param mixed $filePath
+         * @return string The contained relative path, or '' when it escapes.
+         */
+        public static function relative($filePath): string
+        {
+        }
+        /**
+         * Whether a path can be stored and later resolved inside a storage directory.
+         *
+         * @param mixed $filePath
+         * @return bool
+         */
+        public static function isSafe($filePath): bool
+        {
+        }
+        /**
+         * Absolute path for $filePath inside $basePath.
+         *
+         * The file does not have to exist, so the result can address a destination
+         * that is about to be written. When it does exist its real path is checked
+         * too, because a symlink inside the directory can still point out of it.
+         *
+         * @param mixed $basePath
+         * @param mixed $filePath
+         * @return string The absolute path, or '' when it escapes $basePath.
+         */
+        public static function contain($basePath, $filePath): string
         {
         }
     }
