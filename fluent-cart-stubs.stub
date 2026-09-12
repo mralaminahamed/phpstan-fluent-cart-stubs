@@ -3680,6 +3680,39 @@ namespace FluentCart\Api\Resource {
         {
         }
         /**
+         * Expand the caller's `with` list so the relations that the models' default
+         * appends read are eager loaded rather than fetched one row at a time.
+         *
+         * `ProductVariation::$appends` renders `thumbnail` from its `media` relation and
+         * `ProductDetail::$appends` renders `featured_media` from `galleryImage`, so every
+         * serialized row issued its own query — one per variant plus one per product, on a
+         * public list endpoint. Only relations the caller already asked for are expanded,
+         * so the response shape is byte-identical; callers that never load `variants` or
+         * `detail` are untouched.
+         *
+         * @param array|string $with Relations the caller requested.
+         * @return array
+         */
+        protected static function expandAppendRelations($with): array
+        {
+        }
+        /**
+         * Prime the WordPress post cache for the products on this page.
+         *
+         * These rows come from the ORM, not WP_Query, so nothing populates the `posts`
+         * cache. Every `get_permalink()` behind the `view_url` append — and every core
+         * template helper a storefront card calls — then fell through to `get_post()`,
+         * one SELECT per product. This replaces them with a single `IN (...)` read.
+         * Terms and meta are deliberately not primed: no product-list path reads them
+         * here, and priming them would cost two more queries.
+         *
+         * @param mixed $products Paginator returned by the list query.
+         * @return void
+         */
+        protected static function primePostCaches($products)
+        {
+        }
+        /**
          * Find product by its ID.
          *
          * @param int $productId The ID of the post.
@@ -4172,14 +4205,14 @@ namespace FluentCart\Api\Validator {
 }
 namespace FluentCart\Framework\Foundation {
     /**
-     * @method static db();
-     * @method static view();
-     * @method static events();
-     * @method static config();
-     * @method static request();
-     * @method static response();
-     * @method static encrypter();
-     * @method static validator();
+     * @method static \FluentCart\Framework\Database\DatabaseManager db()
+     * @method static \FluentCart\Framework\View\View view()
+     * @method static \FluentCart\Framework\Events\Dispatcher events()
+     * @method static \FluentCart\Framework\Foundation\Config config()
+     * @method static \FluentCart\Framework\Http\Request\Request request()
+     * @method static \FluentCart\Framework\Http\Response\Response response()
+     * @method static \FluentCart\Framework\Encryption\Encrypter encrypter()
+     * @method static \FluentCart\Framework\Validator\Validator validator()
      */
     class App
     {
@@ -5450,6 +5483,16 @@ namespace FluentCart\App\Helpers {
         {
         }
         public static function make($disableCoupon = false): ?\FluentCart\App\Helpers\CartCheckoutHelper
+        {
+        }
+        /**
+         * Drop the request-scoped instance so the next make() re-initializes from
+         * the current request's cart. Production runs one request per process and
+         * never needs this; long-lived processes (the test suites) call it before
+         * each dispatched request so a helper bound to an earlier cart cannot leak
+         * into the next checkout.
+         */
+        public static function resetInstance(): void
         {
         }
         public function init()
@@ -6815,6 +6858,16 @@ namespace FluentCart\App\Helpers {
         protected function completeRelatedCart()
         {
         }
+        /**
+         * Backfills payment_method_title when it was never stamped at creation.
+         *
+         * Only changeOrderStatus() (the COD-only path) writes payment_method_title.
+         * Every other gateway settles via syncOrderStatuses(), which never touched
+         * it, so the column stays empty for those orders.
+         */
+        protected function resolvePaymentMethodTitle()
+        {
+        }
         public function updateTotalPaid($amount)
         {
         }
@@ -7578,6 +7631,161 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\Cart {
+    /**
+     * Container block for the cart page.
+     *
+     * Composes the cart out of three child blocks (items, totals, checkout button)
+     * rather than emitting one fixed lump of markup, so an editor can reorder the
+     * regions or drop their own blocks between them — the same shape the Checkout
+     * block uses. The empty-cart state stays in the container: it replaces every
+     * region at once, so no individual child owns it.
+     */
+    class CartBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'cart';
+        public function init(): void
+        {
+        }
+        public function getScripts(): array
+        {
+        }
+        public function getStyles(): array
+        {
+        }
+        /**
+         * No style supports.
+         *
+         * The cart's appearance is owned end to end by core's cart stylesheet, which
+         * this block and the [fluent_cart_cart] shortcode both render through. Any
+         * block support would layer wrapper-level colour, spacing or border on top
+         * of that and let a page drift away from the shipped design, so the Styles
+         * tab is deliberately empty. `html => false` is a capability switch, not a
+         * style; `align` is placement, and it is what lets the cart go full width.
+         */
+        public function supports(): array
+        {
+        }
+        /**
+         * The container renders its children itself so it can wrap them in the
+         * cart section and short-circuit to the empty state.
+         */
+        protected function skipInnerBlocks(): bool
+        {
+        }
+        public function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+        /**
+         * Wrap the child regions in the cart section.
+         *
+         * Labelled with aria-label rather than CartRenderer's aria-labelledby +
+         * screen-reader heading: that markup hardcodes id="fct-cart-page-title", so
+         * reusing it would emit a duplicate id whenever a page holds two carts, or a
+         * cart block alongside the [fluent_cart_cart] shortcode.
+         *
+         * @param \WP_Block $block
+         * @return void
+         */
+        private function renderRegions($block)
+        {
+        }
+    }
+}
+namespace FluentCart\App\Hooks\Handlers\BlockEditors\Cart\InnerBlocks {
+    /**
+     * Child blocks of fluent-cart/cart.
+     *
+     * The cart page is three regions — the item rows, the totals, and the checkout
+     * button — and CartRenderer already exposes each as its own method. Registering
+     * them as separate blocks lets an editor reorder or drop a region, or put their
+     * own blocks between them, the same way the Checkout block works.
+     */
+    class InnerBlocks
+    {
+        use \FluentCart\Api\Contracts\CanEnqueue;
+        public static $parentBlock = 'fluent-cart/cart';
+        /**
+         * No style supports on any cart block.
+         *
+         * The cart's appearance is owned end to end by core's cart stylesheet, which
+         * both this block and the [fluent_cart_cart] shortcode render through. Block
+         * supports would layer wrapper-level colour, spacing and border on top of
+         * that, so the Styles tab is deliberately empty: `html => false` is a
+         * capability switch, not a style.
+         */
+        private static function blockSupports(): array
+        {
+        }
+        private $cart = null;
+        private $renderer = null;
+        private function getCart()
+        {
+        }
+        /**
+         * One renderer per request, shared by all three children. Building a fresh
+         * CartRenderer per block would re-run loadBundleChild() on every region.
+         */
+        private function getRenderer(): \FluentCart\App\Services\Renderer\CartRenderer
+        {
+        }
+        private function hasItems(): bool
+        {
+        }
+        public static function register()
+        {
+        }
+        public function getInnerBlocks(): array
+        {
+        }
+        public function renderItems($attributes = [], $content = '', $block = null)
+        {
+        }
+        public function renderTotal($attributes = [], $content = '', $block = null)
+        {
+        }
+        /**
+         * Render a region with its label temporarily overridden.
+         *
+         * The strings live in CartRenderer so the block and the [fluent_cart_cart]
+         * shortcode stay identical; a custom label is applied through the renderer's
+         * own filter rather than by rebuilding its markup here, which would drift.
+         * The filter is removed straight after so it cannot leak into anything else
+         * rendered later in the request.
+         *
+         * @param string   $hook
+         * @param string   $label
+         * @param callable $render
+         * @return string
+         */
+        private function renderWithLabelOverride($hook, $label, callable $render)
+        {
+        }
+        public function renderCheckoutButton($attributes = [], $content = '', $block = null)
+        {
+        }
+        public function localizeData(): array
+        {
+        }
+        public function getScripts(): array
+        {
+        }
+        protected function generateEnqueueSlug(): string
+        {
+        }
+        /**
+         * Pinned rather than derived: the trait's default appends '_data' to the
+         * enqueue slug, and the JS reads this global by name. Checkout's inner
+         * blocks pin theirs the same way.
+         */
+        protected function getLocalizationKey(): string
         {
         }
     }
@@ -10913,6 +11121,18 @@ namespace FluentCart\App\Http\Controllers {
         public function syncDownloadableFiles(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
+        /**
+         * Replace the caller-supplied settings.bucket with the bucket the selected
+         * driver is actually configured to use.
+         *
+         * @param mixed $settings the submitted settings blob
+         * @param string $driver the submitted driver slug
+         * @return array|\WP_Error WP_Error when the driver is unknown, disabled, or
+         *                         bucket-backed with no configured bucket
+         */
+        private function withResolvedBucket($settings, $driver)
+        {
+        }
         public function getDownloadableUrl($downloadableId)
         {
         }
@@ -12207,6 +12427,7 @@ namespace FluentCart\App\Http\Requests {
     class GroupBulkUpdateVariantRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
         const MAX_VARIANTS_PER_REQUEST = 500;
+        const SKU_MAX_LENGTH = 30;
         public function rules()
         {
         }
@@ -12400,20 +12621,20 @@ namespace FluentCart\App\Http\Requests {
     class ProductUpdateRequest extends \FluentCart\Framework\Foundation\RequestGuard
     {
         /**
-         * Prepare and normalize the incoming data before validation.
+         * Drop the subscription fields from any variant saved as one-time, so a
+         * product switched back to a single payment does not keep billing settings
+         * the merchant can no longer see.
          *
-         * This method ensures that each variant in the request payload has the necessary structure
-         * expected for processing, particularly focusing on the `other_info` attribute.
+         * This does NOT fill missing keys. The block below it — which rebuilt
+         * `other_info` and `fulfillment_type` from defaults, as ProductRequest still
+         * does on create — stays commented out deliberately: on an update the payload
+         * is a partial row, so rebuilding the column from defaults would overwrite a
+         * stored subscription's interval and setup fee on an unrelated edit. Callers
+         * therefore have to send a complete variant row; the editor builds one in
+         * Models/Product/productUpdatePayload.js by merging each change record with
+         * the variation it came from.
          *
-         * If `other_info` is missing from a variant (common during data migration scenarios),
-         * this method sets default values to prevent validation or processing errors.
-         *
-         * It also ensures that:
-         * - `fulfillment_type` is consistently applied across all variants, defaulting to 'physical'.
-         * - `payment_type` is set (defaulting to 'onetime') and injected into `other_info`.
-         * - `other_info` is populated with a consistent structure containing default billing and setup fee options.
-         *
-         * @return array The normalized request data ready for validation.
+         * @return array The request data, with dead subscription fields removed.
          */
         public function beforeValidation()
         {
@@ -12691,10 +12912,97 @@ namespace FluentCart\App\Http\Rules {
         public function __invoke($attr, $value, $rules, $data, ...$params)
         {
         }
+        /**
+         * Build a closure rule that reuses this rule's length check but returns
+         * a caller-supplied message on failure instead of the generic one.
+         * Validator::validateAttribute() uses a closure rule's own return value
+         * as the final error message, bypassing messages() entirely — the only
+         * message channel that Validator::extend()-registered rules honor.
+         *
+         * @param int $maxLength
+         * @param string $message
+         * @return \Closure
+         */
+        public static function withMessage($maxLength, $message)
+        {
+        }
     }
     class MaxPostCodeRule
     {
         public function __invoke($attr, $value, $rules, $data, ...$params)
+        {
+        }
+    }
+    /**
+     * A closure replacement for the `required_if` rule string.
+     *
+     * `Validator::filterRequiredIf()` discards EVERY rule on an attribute whose
+     * `required_if` condition is unmet — `in:`, `numeric`, `min:` and closures
+     * alike — so a rule set that carried both a conditional requirement and value
+     * constraints silently lost the value constraints exactly when the condition
+     * did not apply. A closure carries the same condition without that side
+     * effect: with no `required_if` string left on the attribute,
+     * filterRequiredIf() returns the rule set untouched and the value rules keep
+     * running.
+     *
+     * Closures are also invoked before the presence check in
+     * Validator::validateAttribute(), so this still fires for an attribute the
+     * request never sent — which is what `required_if` did.
+     *
+     * Emptiness and the condition match mirror ValidatesAttributes::
+     * validateRequired() and validateRequiredIf() so the swap is behaviour-for-
+     * behaviour, with one deliberate exception: the wildcard in $otherField is
+     * resolved for every row, where the framework's `/\.\d\./` matched only
+     * single-digit indexes and quietly gave up from row 10 on.
+     *
+     * See dev-docs/framework-update-2.12.6-qa.md findings 5 and 10.
+     */
+    class RequiredWhenRule
+    {
+        /**
+         * Build the rule closure.
+         *
+         * @param string $otherField Dot path of the field the condition reads. May
+         *                           contain `*`, resolved against the attribute
+         *                           being validated.
+         * @param string|array $expectedValues Value(s) that make the field required.
+         * @param string $message Error message, already translated.
+         * @return \Closure
+         */
+        public static function make($otherField, $expectedValues, $message): \Closure
+        {
+        }
+        /**
+         * Substitute each `*` in the condition path with the row index the
+         * attribute under validation carries at the same position.
+         *
+         * @param string $path
+         * @param string $attribute
+         * @return string|null Null when the row index cannot be resolved.
+         */
+        protected static function resolvePath($path, $attribute)
+        {
+        }
+        /**
+         * Mirror validateRequiredIf(): compare as booleans when the other field
+         * holds one, so 'true' / 'false' in a rule definition still match.
+         *
+         * @param mixed $otherValue
+         * @param array $expectedValues
+         * @return array
+         */
+        protected static function matchTypeOf($otherValue, array $expectedValues): array
+        {
+        }
+        /**
+         * Mirror validateRequired(). Public so WhenFilledRule can draw the same
+         * empty/filled line this rule does — the two are complementary halves of one
+         * attribute's validation and must agree on where that line sits.
+         *
+         * @param mixed $value
+         * @return bool
+         */
+        public static function isFilled($value): bool
         {
         }
     }
@@ -12707,6 +13015,61 @@ namespace FluentCart\App\Http\Rules {
     class SanitizeTextArea
     {
         public function __invoke($attr, $value, $rules, $data, ...$params)
+        {
+        }
+    }
+    /**
+     * Value rules that apply only once a value is actually supplied.
+     *
+     * These exist because `nullable` cannot be used alongside a conditional
+     * requirement: Validator::filterExcludeables() drops EVERY rule on an attribute
+     * — closures included — the moment `nullable` is present and the value is falsy,
+     * which silently disarms the requirement sitting beside it. An attribute that
+     * must both be demanded under a condition and be shape-checked when present
+     * therefore has to express both halves as closures, with no `nullable` on it.
+     *
+     * Pair with RequiredWhenRule: that one decides whether an empty value is
+     * allowed, these decide whether a supplied value is acceptable. Neither fires on
+     * the other's territory, so "" and null pass through here untouched and are the
+     * requirement's business alone.
+     *
+     * See dev-docs/framework-update-2.12.6-qa.md finding 9.
+     */
+    class WhenFilledRule
+    {
+        /**
+         * Constrain a supplied value to a fixed set. Replaces `in:` on an attribute
+         * that cannot carry `nullable`.
+         *
+         * @param array $allowed
+         * @param string $message Already translated.
+         * @return \Closure
+         */
+        public static function in(array $allowed, $message): \Closure
+        {
+        }
+        /**
+         * Require a supplied value to be numeric and no smaller than $minimum.
+         * Replaces `numeric|min:` on an attribute that cannot carry `nullable`.
+         *
+         * @param int|float $minimum
+         * @param string $notNumericMessage Already translated.
+         * @param string $belowMinimumMessage Already translated.
+         * @return \Closure
+         */
+        public static function numericAtLeast($minimum, $notNumericMessage, $belowMinimumMessage): \Closure
+        {
+        }
+        /**
+         * Require a supplied value to be plain text within $maxLength characters.
+         * Replaces `sanitizeText|maxLength:` on an attribute that cannot carry
+         * `nullable` — and, unlike those, is never handed a null to trim().
+         *
+         * @param int $maxLength
+         * @param string $message Already translated.
+         * @return \Closure
+         */
+        public static function text($maxLength, $message): \Closure
         {
         }
     }
@@ -15399,6 +15762,12 @@ namespace FluentCart\Framework\Support {
     }
 }
 namespace FluentCart\Framework\Database\Orm {
+    /**
+     * Model forwards unknown instance/static calls to a new Orm Builder
+     * (see __call/__callStatic), which itself proxies to the Query Builder.
+     *
+     * @mixin \FluentCart\Framework\Database\Orm\Builder
+     */
     abstract class Model implements \FluentCart\Framework\Support\ArrayableInterface, \ArrayAccess, \FluentCart\Framework\Support\CanBeEscapedWhenCastToString, \FluentCart\Framework\Support\JsonableInterface, \JsonSerializable, \FluentCart\Framework\Support\UrlRoutable
     {
         use \FluentCart\Framework\Support\HelperFunctionsTrait;
@@ -18073,6 +18442,30 @@ namespace FluentCart\App\Models {
         public function getTotalPaidAmount()
         {
         }
+        /**
+         * Amount of VAT removed by a merchant-of-record gateway (e.g. Paddle) for a
+         * reverse-charge order that never ran the tax module (no `fct_order_tax_rate` row).
+         * Display-only — `total_amount`/`total_paid`/`txn.total` stay gross for such orders
+         * (cover invariant: the "fully paid" equality that drives due-amount checks, digital
+         * auto-complete, and dunning reminders depends on it), so this is never subtracted
+         * into the ledger, only into `getDisplayTotalPaid()` for the admin UI. Zero for
+         * core-handled reverse charge (tax-rate row present) — those are already net at
+         * creation time.
+         */
+        public function getMoRVatRemovedAmount(): int
+        {
+        }
+        /**
+         * Nets a raw gross ledger figure (total_paid, a live paid-total sum, a refund amount)
+         * by the MoR VAT removal — see getMoRVatRemovedAmount(). Single formula for every
+         * "what did we actually collect/need to refund" comparison, so callers never
+         * reimplement the subtraction themselves. Never use for due-amount, digital
+         * auto-complete, or reminder logic; those must keep comparing the gross ledger
+         * columns (total_amount vs total_paid) so the "fully paid" equality still holds.
+         */
+        public function netAmount(int $amount): int
+        {
+        }
         public function getTotalRefundAmount()
         {
         }
@@ -20239,6 +20632,19 @@ namespace FluentCart\App\Models {
         public function scopeOfPlanType($query, $planType)
         {
         }
+        /**
+         * Whether a lapsed/canceled subscription still has unexpired paid time to
+         * credit back on reactivation. Deliberately NOT hasAccessValidity() — that
+         * method answers "can the customer access content right now" and its status
+         * list is free to evolve for that purpose alone. This is its own copy so a
+         * future access-only change (e.g. a new status added for content gating)
+         * can't silently change how much reactivation trial credit gets granted.
+         *
+         * @return bool
+         */
+        public function hasReactivationTrialCredit(): bool
+        {
+        }
         public function getReactivationTrialDays()
         {
         }
@@ -20254,7 +20660,7 @@ namespace FluentCart\App\Models {
         * Processes all candidates in batches to avoid memory issues.
         * The query example works as follows:
         * SELECT * FROM subscriptions WHERE
-               status IN ('active', 'trialing', 'canceled', 'expiring', 'past_due')
+               status IN ('active', 'trialing', 'canceled', 'expiring', 'failing', 'past_due')
                AND next_billing_date IS NOT NULL
                AND id > 0                          -- last processed ID for batch cursor
                AND next_billing_date < DATE_SUB(
@@ -20568,6 +20974,263 @@ namespace FluentCart\App\Modules\Data {
         {
         }
         public function getConnectedTerms($types = [], $formatted = true)
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\FluentPlayer {
+    /**
+     * Enqueues the admin entry that pushes the Video tab into the Product Gallery
+     * dialog. The tab shows even while FluentPlayer is inactive so it can offer
+     * install/activate; the tab body branches on the localized config.
+     */
+    class FluentPlayerAdminAssets
+    {
+        const HANDLE = 'fluent_cart_fluent_player_gallery';
+        public function register(): void
+        {
+        }
+        public function enqueue(): void
+        {
+        }
+    }
+    /**
+     * Single seam to the FluentPlayer plugin. Every call is feature-detected so
+     * a missing or older FluentPlayer degrades to "no video" instead of a fatal.
+     */
+    class FluentPlayerBridge
+    {
+        const REST_NAMESPACE = 'fluent-player/v2';
+        const MEDIA_POST_TYPE = 'fluent_player_media';
+        const DEFAULT_AUTHORING_CAP = 'edit_others_posts';
+        const DEFAULT_PRESET_SLUG = 'course';
+        public static function isActive(): bool
+        {
+        }
+        /**
+         * True when the FluentPlayer plugin files are present but not (yet) active.
+         */
+        public static function isInstalled(): bool
+        {
+        }
+        public static function hasPro(): bool
+        {
+        }
+        public static function authoringCapability(): string
+        {
+        }
+        public static function defaultPresetSlug(): string
+        {
+        }
+        public static function adminAppConfig(): array
+        {
+        }
+        /**
+         * @return object|null Media the current visitor may see (FluentPlayer's
+         *                     Media::findVisible: read_post + its can_view_media filter).
+         */
+        public static function findVisibleMedia(int $mediaId): ?object
+        {
+        }
+        /**
+         * @return array|null ['id', 'title', 'poster', 'provider', 'src'], null when not visible.
+         */
+        public static function getMediaSummary(int $mediaId): ?array
+        {
+        }
+        /**
+         * @param object $media A FluentPlayer media model (or anything exposing ID, post_title, settings).
+         */
+        public static function summarize($media): array
+        {
+        }
+        /**
+         * Saved posterSrc, else the YouTube thumbnail FluentPlayer itself falls back to.
+         */
+        public static function resolvePoster(array $settings): string
+        {
+        }
+        /**
+         * Rendering also enqueues FluentPlayer's runtime and localizes the player
+         * config. Password-protected media renders FluentPlayer's unlock form.
+         */
+        public static function renderPlayer(int $mediaId, string $extraClasses = ''): string
+        {
+        }
+        /**
+         * A FluentPlayer failure must never break the product page, but it must not
+         * vanish either: it is logged under WP_DEBUG and exposed as an action.
+         */
+        protected static function reportFailure(string $stage, int $mediaId, \Throwable $e): void
+        {
+        }
+    }
+    /**
+     * Gallery markup for a product's FluentPlayer videos: one thumbnail in the
+     * strip and one hidden inline player per visible media.
+     *
+     * The strip is interleaved with the images: each video carries the number of
+     * images it sits behind (ProductVideoSettings), so the caller renders the
+     * videos due before image N, then image N, and flushes the rest at the end.
+     */
+    class ProductVideoRenderer
+    {
+        protected $product;
+        protected $config;
+        protected $videos = null;
+        protected $showFirstByDefault = false;
+        /** @var array<int, bool> media ids already written into the strip. */
+        protected $renderedThumbs = [];
+        public function __construct(\FluentCart\App\Models\Product $product)
+        {
+        }
+        public function getMediaIds(): array
+        {
+        }
+        /**
+         * Only media that is both visible and rendered by FluentPlayer: a thumb
+         * without a player would leave the gallery blank when clicked.
+         *
+         * @return array<int, array> media id => summary + 'player' html.
+         */
+        public function getVideos(): array
+        {
+        }
+        public function isAvailable(): bool
+        {
+        }
+        /**
+         * A product without gallery images opens on its first video instead of a
+         * placeholder image, so the video is visible without a click.
+         */
+        public function showFirstByDefault(bool $show): void
+        {
+        }
+        /**
+         * @return array<int, int|null> media id => images that precede it (null = last).
+         */
+        public function getPositions(): array
+        {
+        }
+        /**
+         * The video the page opens on: the one the admin dragged in front of every
+         * image, or — for a product with no image at all — the first video.
+         */
+        public function getDefaultMediaId(): int
+        {
+        }
+        /**
+         * FluentPlayer's player config is only printed by the normal page footer, so
+         * admin-ajax / REST fragments (shop quick-view) must not carry a player.
+         */
+        protected function isFullPageRender(): bool
+        {
+        }
+        protected function getVideoTitle(array $video): string
+        {
+        }
+        /**
+         * Never the product photo: a neutral placeholder when FluentPlayer has no poster.
+         */
+        protected function getPosterUrl(array $video): string
+        {
+        }
+        protected function playIconSvg(): string
+        {
+        }
+        /**
+         * The video thumbs due before the image about to be rendered: every video
+         * the admin placed after `$imageIndex` images or fewer. Videos with no
+         * position wait for the closing renderThumbControls() flush.
+         */
+        public function renderThumbControlsBefore(int $imageIndex, bool $claimFocus = false): void
+        {
+        }
+        /**
+         * Every video thumb not written yet — the ones placed after the last image
+         * and, when the strip was cut short by a thumbnail limit, the rest.
+         */
+        public function renderThumbControls(bool $claimFocus = false): void
+        {
+        }
+        /**
+         * Shares the thumb-control contract so keyboard navigation and variation
+         * filtering treat video thumbs like images; ImageGallery.js keys on
+         * data-fct-video-media-id.
+         *
+         * The strip uses a roving tabindex. When no image thumb holds the slot
+         * (a video-only product) the first video thumb takes it, otherwise the
+         * strip could never be reached with the keyboard. The default video's
+         * thumb is also selected, mirroring the default image thumb.
+         */
+        protected function renderThumbControl(int $mediaId, array $video, bool $claimFocus): void
+        {
+        }
+        /**
+         * Hidden until ImageGallery.js marks the matching container `is-active`,
+         * except the default video, which is active from the start.
+         */
+        public function renderInlinePlayers(): void
+        {
+        }
+    }
+    /**
+     * `fct_product_details.other_info.fluent_player_video` =>
+     * ['media_ids' => int[], 'positions' => (int|null)[]].
+     *
+     * `positions[i]` is how many gallery images precede `media_ids[i]` in the
+     * product gallery, so a video the admin dragged in front of everything has
+     * position 0. null (and any position past the last image) means "after every
+     * image" — which is where videos saved before ordering existed still sit.
+     * Pure PHP so the Unit suite can cover it.
+     */
+    class ProductVideoSettings
+    {
+        const KEY = 'fluent_player_video';
+        const MAX_VIDEOS = 20;
+        public static function defaults(): array
+        {
+        }
+        /**
+         * Wire shape from the admin is a comma-separated string ("12,15" with
+         * "0,,2" for the positions); an empty JSON array does not survive the
+         * product update request, so "no videos" could never arrive as `[]`. The
+         * stored shape is int[], which is why the array form is accepted too
+         * (fromOtherInfo re-runs this).
+         *
+         * @param mixed $value
+         */
+        public static function sanitize($value): array
+        {
+        }
+        /**
+         * @param mixed $value
+         * @return array
+         */
+        protected static function toList($value): array
+        {
+        }
+        /**
+         * @param mixed $value
+         * @return int|null null = after every image.
+         */
+        protected static function toPosition($value)
+        {
+        }
+        /**
+         * @return array<int, int|null> media id => position, in stored order.
+         */
+        public static function positionMap(array $config): array
+        {
+        }
+        /**
+         * @param mixed $otherInfo
+         * @return array|null null when no video is set.
+         */
+        public static function fromOtherInfo($otherInfo): ?array
+        {
+        }
+        public static function fromProduct(\FluentCart\App\Models\Product $product): ?array
         {
         }
     }
@@ -23662,6 +24325,17 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         public function cancelOnSwitchPaymentMethod($currentVendorSubscriptionId, $parentOrderId, $vendorSubscriptionId, $newPaymentMethod, $reason)
         {
         }
+        /**
+         * Pull the subscription's remote state and repair the local rows to match.
+         *
+         * Implementations may declare extra OPTIONAL parameters for pre-fetched
+         * vendor payloads (e.g. PayPal accepts the already-fetched subscription and
+         * transaction list so a webhook costs one remote pull). Callers typed
+         * against this base class must pass only the subscription model.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @return \FluentCart\App\Models\Subscription|\WP_Error
+         */
         public function reSyncSubscriptionFromRemote(\FluentCart\App\Models\Subscription $subscriptionModel)
         {
         }
@@ -24008,6 +24682,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
             ['name' => 'BILLING.SUBSCRIPTION.SUSPENDED'],
             ['name' => 'BILLING.SUBSCRIPTION.CANCELLED'],
             ['name' => 'BILLING.SUBSCRIPTION.EXPIRED'],
+            ['name' => 'BILLING.SUBSCRIPTION.PAYMENT.FAILED'],
             ['name' => 'CUSTOMER.DISPUTE.CREATED'],
             ['name' => 'CUSTOMER.DISPUTE.UPDATED'],
             ['name' => 'CUSTOMER.DISPUTE.RESOLVED'],
@@ -24038,6 +24713,15 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
         public function maybeSetWebhook($mode)
         {
         }
+        /**
+         * PayPal never adds newly introduced event types to an already-registered webhook
+         * on its own - registerWebhook() only sets event_types at creation time. Reconcile
+         * the remote subscription against our EVENTS list on every maybeSetWebhook() call
+         * so a store that connected before an event type was added still receives it.
+         */
+        public static function maybeSyncWebhookEvents($webhookData, $mode)
+        {
+        }
     }
 }
 namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
@@ -24066,7 +24750,20 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     {
         private const TEST_VERIFYING_URL = 'https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature';
         private const LIVE_VERIFYING_URL = 'https://api-m.paypal.com/v1/notifications/verify-webhook-signature';
+        private const RESYNC_RETRY_HOOK = 'fluent_cart/paypal/subscription_resync_retry';
+        private const PENDING_SALES_META = 'paypal_pending_sales';
         private static $paypalSettings = null;
+        /** @var \WP_Error|null unacknowledged failure from the recurring-payment handler */
+        private static $recurringPaymentError = null;
+        /**
+         * Indirection so PHPStan reads the declared property type instead of
+         * narrowing it to the literal null assigned right before processPaypalWebhookEvents().
+         *
+         * @return \WP_Error|null
+         */
+        private static function getRecurringPaymentError()
+        {
+        }
         public function init()
         {
         }
@@ -24083,19 +24780,98 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         /**
          * Verify the webhook signature
          *
-         * @param string $webhookId
-         * @return bool|\WP_Error
+         * @param string      $webhookId PayPal webhook ID for the current mode.
+         * @param string|null $rawBody   Raw request body; read from php://input when omitted.
+         * @return true|\WP_Error
          */
-        public function verifyWebhook($webhookId)
+        public function verifyWebhook($webhookId, $rawBody = null)
         {
         }
         public function processWebhook()
         {
         }
+        /**
+         * Handle one PayPal webhook delivery and return the HTTP status to answer with.
+         *
+         * Separated from processWebhook() so the request body, headers and status
+         * can be exercised without php://input or exit().
+         *
+         * @param string $rawBody Raw JSON request body.
+         * @return int
+         */
+        public function handleWebhookRequest($rawBody): int
+        {
+        }
+        /**
+         * Request headers, falling back to $_SERVER for SAPIs without getallheaders().
+         *
+         * @return array<string, string>
+         */
+        private static function getRequestHeaders(): array
+        {
+        }
         public function processSubscriptionActivated($data)
         {
         }
+        public function processSubscriptionPaymentFailed($data)
+        {
+        }
         public function processRecurringPaymentReceived($data)
+        {
+        }
+        /**
+         * Queue a resync at +1h / +6h / +24h as a backstop to PayPal's finite redelivery
+         * window. One ladder per subscription (args are [subscription, attempt]); the
+         * sale ids it chases accumulate in PENDING_SALES_META.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param string|null  $saleId  the sale this attempt is chasing, if any
+         * @param int          $attempt 1-based position on the delay ladder
+         * @return void
+         */
+        private static function scheduleResyncRetry(\FluentCart\App\Models\Subscription $subscriptionModel, $saleId = null, $attempt = 1)
+        {
+        }
+        public function handleResyncRetry($subscriptionId, $attempt = 1)
+        {
+        }
+        /**
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @return string[]
+         */
+        private static function getPendingSales(\FluentCart\App\Models\Subscription $subscriptionModel)
+        {
+        }
+        /**
+         * Drop the sales that now have a local transaction, keep the rest.
+         * A recorded-then-refunded row still counts as recorded.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @return bool true while at least one sale is still unaccounted for
+         */
+        private static function pruneResolvedSales(\FluentCart\App\Models\Subscription $subscriptionModel)
+        {
+        }
+        /**
+         * A retry only helps against transient remote failures. PayPal reports a
+         * missing/invalid resource in the error body's `name` field (the WP_Error
+         * code stays `general_error` for REST errors), so inspect the data.
+         *
+         * @param \WP_Error $error
+         * @return bool
+         */
+        private static function isRetryableRemoteError($error)
+        {
+        }
+        /**
+         * Errors redelivery can never fix (local records gone): log loudly and ack,
+         * since a 500 would make PayPal retry for days and can disable the endpoint.
+         *
+         * @param \WP_Error    $error
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @return bool true when the error was terminal and has been logged
+         */
+        private static function isTerminalRenewalError($error, $subscriptionModel)
         {
         }
         public function handleSinglePaymentRefund($data)
@@ -24359,6 +25135,57 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     class PayPalHelper
     {
         /**
+         * Currencies PayPal rejects a decimal amount for.
+         *
+         * "This currency does not support decimals. If you pass a decimal amount,
+         * an error occurs." — developer.paypal.com/api/rest/reference/currency-codes
+         *
+         * This is PayPal's own list, not ISO 4217 and not the store-wide
+         * CurrenciesHelper::zeroDecimalCurrencies() set — internal storage stays
+         * x100 for every currency, only what PayPal accepts differs.
+         */
+        const ZERO_DECIMAL_CURRENCIES = ['HUF', 'JPY', 'TWD'];
+        public static function currencyDecimals($currency): int
+        {
+        }
+        /**
+         * Cents to a decimal amount, rounded to the precision PayPal accepts for
+         * the currency. Amount arithmetic (breakdown sums, discount/adjustment
+         * reconciliation) must run on these rounded values so the breakdown still
+         * adds up to the total once every part is formatted.
+         */
+        public static function toDecimalAmount($amountInCents, $currency)
+        {
+        }
+        /**
+         * Format an already-converted decimal amount for the API payload.
+         */
+        public static function formatDecimalAmount($amount, $currency): string
+        {
+        }
+        public static function formatAmount($amountInCents, $currency): string
+        {
+        }
+        /**
+         * The cents PayPal will actually move for a stored amount.
+         *
+         * Storage stays x100 for every currency, so a zero-decimal amount can carry
+         * a residue PayPal cannot charge: JPY 100050 goes on the wire as "1001" and
+         * comes back through Helper::toCent() as 100100. Every equality check
+         * against a PayPal-reported amount compares to this, never to the raw
+         * stored total, or a correct payment reads as tampering. Identity for
+         * 2-decimal currencies.
+         *
+         * Routed through formatAmount() and Helper::toCent() rather than
+         * recomputing the arithmetic, so this is the same serialize-then-read-back
+         * path the payload and the gateway's reply actually travel. Recomputing it
+         * diverges from that path above ~1e15 cents, where number_format() still
+         * moves a value round() has stopped changing.
+         */
+        public static function wireCents($amountInCents, $currency): int
+        {
+        }
+        /**
          * Get or create a Stripe pricing plan for a product variation.
          *
          * @param array $data {
@@ -24444,7 +25271,157 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public function verifyVendorSubscription(array $args, $mode = 'current')
         {
         }
-        public function reSyncSubscriptionFromRemote(\FluentCart\App\Models\Subscription $subscriptionModel)
+        /**
+         * Fetch the subscription's remote transaction list and sort it ascending by
+         * time — PayPal's own ordering is never trusted, so "earliest" means the same
+         * thing to every consumer (the first-payment check, the resync loop).
+         *
+         * @param array $paypalSubscription already-fetched PayPal subscription payload
+         * @return array|\WP_Error
+         */
+        public function fetchSortedRemoteTransactions(\FluentCart\App\Models\Subscription $subscriptionModel, array $paypalSubscription)
+        {
+        }
+        /**
+         * Earliest completed sale on the remote list, or null when none completed yet.
+         *
+         * @param array $paypalTransactions sorted output of fetchSortedRemoteTransactions()
+         * @return array|null
+         */
+        public function getEarliestCompletedRemoteSale(array $paypalTransactions)
+        {
+        }
+        /**
+         * Credit the extra cycles a sale collected via auto_bill_outstanding: a gross of
+         * exactly k × recurring_total (k >= 2) means k − 1 missed cycles were billed with
+         * this one. Written as an early_payment_history entry, which calculateBillCount()
+         * already folds in. Idempotent per sale id; runs under acquireHistoryLock().
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param string       $saleId
+         * @param int          $grossCents
+         * @return bool|\WP_Error true when this call wrote the credit, false when none owed
+         *                        or already present, WP_Error on lock timeout (unknown —
+         *                        caller must retry, not record uncredited)
+         */
+        public function creditOutstandingCollection(\FluentCart\App\Models\Subscription $subscriptionModel, $saleId, $grossCents)
+        {
+        }
+        /**
+         * Undo a credit whose renewal recording rolled back. The credit meta commits
+         * outside recordRenewalPayment()'s DB transaction, so it must be revoked by hand.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param string       $saleId
+         * @return void
+         */
+        public function revokeOutstandingCollection(\FluentCart\App\Models\Subscription $subscriptionModel, $saleId)
+        {
+        }
+        /**
+         * Per-subscription lock for early_payment_history read-modify-writes (the blob
+         * is one row per subscription, so a per-sale lock would let two sales clobber
+         * it). Always released before recordRenewalPayment() takes its per-sale
+         * fc_webhook_ lock — the two are never held together.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @return bool
+         */
+        private function acquireHistoryLock(\FluentCart\App\Models\Subscription $subscriptionModel)
+        {
+        }
+        /**
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @return void
+         */
+        private function releaseHistoryLock(\FluentCart\App\Models\Subscription $subscriptionModel)
+        {
+        }
+        /**
+         * Repair local rows against PayPal: bind the earliest completed sale to the
+         * first-cycle transaction, record every missing sale as a dated renewal, sync
+         * status fields.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param array|null   $paypalSubscription  fetched here when null
+         * @param array|null   $paypalTransactions  sorted list; fetched here when null
+         * @return \FluentCart\App\Models\Subscription|\WP_Error
+         */
+        public function reSyncSubscriptionFromRemote(\FluentCart\App\Models\Subscription $subscriptionModel, $paypalSubscription = null, $paypalTransactions = null)
+        {
+        }
+        /**
+         * Whether a settled (succeeded or refunded) charge row exists for this sale.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param string       $saleId
+         * @return bool
+         */
+        public function hasRecordedSale(\FluentCart\App\Models\Subscription $subscriptionModel, $saleId): bool
+        {
+        }
+        /**
+         * Retroactive outstanding-collection credit for a sale recorded before the credit
+         * existed. Credits only when another completed sale on the list charged exactly
+         * the current recurring_total, since a historical gross is compared against the
+         * CURRENT price. Self-contained: this method and its single Step-1 call are the
+         * whole feature.
+         *
+         * @TODO REMOVE (do not patch) if recurring_total ever becomes updatable on a live
+         * subscription — the comparison is only sound while the vendor plan price is
+         * immutable.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param array        $completedRemoteSales completed entries of the sorted remote list
+         * @param string       $chargeId
+         * @param int          $grossCents
+         * @return void
+         */
+        private function maybeBackfillOutstandingCredit(\FluentCart\App\Models\Subscription $subscriptionModel, array $completedRemoteSales, $chargeId, $grossCents)
+        {
+        }
+        /**
+         * Find the first-cycle transaction the earliest completed sale should own.
+         * Two shapes, checked in order:
+         *   1. Row never got its vendor_charge_id (missed first-payment webhook).
+         *   2. Row was mis-stamped with a later sale id by the removed IPN fill-in.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param string       $chargeId  earliest completed remote sale id
+         * @param int          $amount    that sale's gross amount in cents
+         * @param array        $completedRemoteSales completed entries of the sorted remote list
+         * @return \FluentCart\App\Models\OrderTransaction|null
+         */
+        private function findClaimableFirstCycleTransaction(\FluentCart\App\Models\Subscription $subscriptionModel, $chargeId, $amount, array $completedRemoteSales)
+        {
+        }
+        /**
+         * Bind a completed remote sale to its local transaction. A non-succeeded row
+         * goes through full payment confirmation (order paid, events fire); an already
+         * succeeded row only gets the id column restamped, since its paid side effects
+         * already ran.
+         *
+         * @param \FluentCart\App\Models\OrderTransaction $transaction
+         * @param string           $chargeId
+         * @param int              $amount
+         * @param array            $payer
+         * @param string           $settledAt
+         * @return void
+         */
+        public function bindSaleToTransaction(\FluentCart\App\Models\OrderTransaction $transaction, $chargeId, $amount, array $payer, $settledAt)
+        {
+        }
+        /**
+         * Find a first-cycle row mis-stamped with a later sale id by the removed IPN
+         * fill-in. Fingerprint: the row predates the sale it carries — a legit row never
+         * does. Restamping frees the displaced id to be recorded as its own renewal.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscriptionModel
+         * @param string       $earliestChargeId
+         * @param array        $completedRemoteSales completed entries of the sorted remote list
+         * @return \FluentCart\App\Models\OrderTransaction|null
+         */
+        private function findMisStampedFirstCycleTransaction(\FluentCart\App\Models\Subscription $subscriptionModel, $earliestChargeId, array $completedRemoteSales)
         {
         }
         public function cancel($vendorSubscriptionId, $args = [])
@@ -24555,7 +25532,12 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public function activateSubscription($paypalSubscription, \FluentCart\App\Models\OrderTransaction $transaction, $subscriptionModel = null)
         {
         }
-        private function toDecimal($cents)
+        /**
+         * Cents to a decimal amount rounded to the precision PayPal accepts for
+         * the currency (HUF/JPY/TWD take no decimals). Rounding before the
+         * breakdown arithmetic keeps the parts summing to the total.
+         */
+        private function toDecimal($cents, $currency)
         {
         }
         /**
@@ -25509,6 +26491,11 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     class Processor
     {
         /**
+         * Stripe Checkout caps a session at 100 line items. Kept below it with room
+         * for the tax and reconciliation lines this builder may append.
+         */
+        const MAX_HOSTED_LINE_ITEMS = 90;
+        /**
          * The return URL handed to Stripe for an onsite confirm.
          *
          * Onsite normally never navigates (`redirect: 'if_required'`), but an
@@ -25653,6 +26640,153 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         private function handleHostedCheckout(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $paymentArgs = [])
         {
         }
+        /**
+         * Itemised line_items for a hosted (mode: payment) Checkout Session.
+         *
+         * Unlike PayPal's purchase_unit — where we declare amount.value and the
+         * breakdown merely has to agree with it — Stripe DERIVES the session total
+         * from line_items. There is no total to assert and no subtractive field
+         * (order-level discounts need a Coupon object; negative unit_amount is
+         * rejected). So the sum of what we send IS what the buyer is charged, and a
+         * breakdown that is a cent off does not error, it mischarges.
+         *
+         * Everything is therefore reconciled against $chargeAmount before returning,
+         * in wire units, and null is returned for any order this cannot prove exact.
+         * The caller then sends a single aggregate line — always the correct amount.
+         *
+         * Discounts need no line of their own: order_items.line_total is already
+         * subtotal minus discount_total (CheckoutProcessor::116), so item-level
+         * discounts are baked into the per-unit price.
+         *
+         * @param \FluentCart\App\Models\Order $order
+         * @param string $currency
+         * @param int    $chargeAmount Charge total in wire units (already divided for zero-decimal).
+         * @return array|null Null when no exact breakdown is possible.
+         */
+        /**
+         * Duplicate-charge defense for a hosted payment session: a pure duplicate
+         * replays the key and gets the original session back, while an edited-cart
+         * resubmit gets a fresh key instead of a same-key/changed-parameters 400.
+         *
+         * Derived from the FILTERED body, so a subscriber that changes what is
+         * actually charged changes the key with it. Metadata is excluded — a
+         * volatile metadata filter must not roll the key on a genuine duplicate.
+         *
+         * @param string|null $seed
+         * @param array $sessionData
+         * @return string|null
+         */
+        private function hostedSessionIdempotencyKey($seed, $sessionData)
+        {
+        }
+        private function buildHostedLineItems($order, $currency, $chargeAmount)
+        {
+        }
+        /**
+         * The historical single-line body: one item worth the whole charge. Always a
+         * correct amount, and the fallback for every path the breakdown declines.
+         *
+         * @param \FluentCart\App\Models\Order $order
+         * @param string $currency
+         * @param int    $chargeAmount
+         * @return array
+         */
+        private function aggregateHostedLineItems($order, $currency, $chargeAmount)
+        {
+        }
+        /**
+         * @param string $name
+         * @param string $stripeCurrency
+         * @param int    $amount
+         * @return array
+         */
+        private function hostedFlatLineItem($name, $stripeCurrency, $amount)
+        {
+        }
+        /**
+         * @param \FluentCart\App\Models\OrderItem $item
+         * @return string
+         */
+        private function hostedLineItemName($item)
+        {
+        }
+        /**
+         * Storage cents to the units Stripe is charged in. Every part of the
+         * breakdown is converted individually and the caller reconciles the SUM
+         * against the converted charge total — converting after summing would
+         * disagree with Stripe, which only ever sees the per-item figures.
+         *
+         * @param mixed $cents
+         * @param bool  $isZeroDecimal
+         * @return int
+         */
+        private function toStripeWireAmount($cents, $isZeroDecimal)
+        {
+        }
+        /**
+         * Tax the buyer pays on top of item prices, in storage cents.
+         *
+         * Mirrors the PayPal purchase-unit breakdown (PayPalGateway/Processor.php):
+         * behaviour 1 is fully exclusive, 3 is mixed (only the exclusive portion is
+         * additive, with shipping and fee tax additive only when the store itself is
+         * exclusive), anything else is inclusive and contributes nothing.
+         *
+         * @param \FluentCart\App\Models\Order $order
+         * @return int
+         */
+        private function additiveTaxTotal($order)
+        {
+        }
+        /**
+         * True only for a structural rejection of the request body (Stripe
+         * `invalid_request_error`). A transport failure is deliberately excluded: the
+         * session may have been created, and retrying under a different idempotency
+         * key would give up the duplicate protection that key exists for.
+         *
+         * @param mixed $response
+         * @return bool
+         */
+        private function isStripeValidationError($response)
+        {
+        }
+        /**
+         * The one-time part of a hosted subscription session, itemised.
+         *
+         * `$initialAmount` is a bundle of up to four unrelated things — a merchant
+         * setup fee, one-time cart items, order fees, and a synthetic first-cycle
+         * delta the plan price cannot carry — so a single line can only ever be
+         * labelled correctly for one of them. Everything the order itemises gets its
+         * own line; whatever is left over (tax, the delta) becomes one remainder line
+         * named for the case that produced it.
+         *
+         * Returns null when the breakdown cannot be reconciled to `$initialAmount`,
+         * which sends the caller to the aggregate single line.
+         *
+         * @param \FluentCart\App\Services\Payments\PaymentInstance $paymentInstance
+         * @param string $stripeCurrency
+         * @param bool   $isZeroDecimal
+         * @param int    $initialAmount Wire amount, already converted.
+         * @param int    $existingCount Lines already in the session body.
+         * @return array|null
+         */
+        private function buildHostedSubscriptionInitialLineItems(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $stripeCurrency, $isZeroDecimal, $initialAmount, $existingCount)
+        {
+        }
+        /**
+         * Label for a one-time amount that the order does not itemise.
+         *
+         * A configured setup fee owns the label when one exists. Otherwise the amount
+         * is a first-cycle delta computed in CheckoutProcessor::convertToSubscriptionFormat():
+         * with a simulated trial the recurring line charges nothing now, so this line
+         * is the whole first payment; without one it is only the excess over recurring.
+         *
+         * @param \FluentCart\App\Models\Order $order
+         * @param \FluentCart\App\Models\Subscription|null $subscriptionModel
+         * @return string
+         */
+        private function hostedSubscriptionInitialName($order, $subscriptionModel)
+        {
+        }
         private function handleHostedSubscriptionCheckout(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $paymentArgs = [])
         {
         }
@@ -25792,6 +26926,18 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public static function getSubscriptionUpdateData($stripeSubscription, $subscriptionModel = null)
         {
         }
+        /**
+         * Convert a Stripe wire amount (invoice/charge/payment_intent) to FluentCart's
+         * internal ×100 unit. Zero-decimal currencies (JPY, KRW, ...) come off the wire
+         * unscaled, so they need the ×100 that non-zero-decimal currencies already have.
+         *
+         * @param int|float $amount
+         * @param string $currency
+         * @return int
+         */
+        public static function toInternalAmount($amount, $currency)
+        {
+        }
         public static function processRemoteRefund($transaction, $amount, $args)
         {
         }
@@ -25811,6 +26957,11 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     }
     class StripeSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
     {
+        /**
+         * Checkout Session submit_type values Stripe accepts. 'auto' is our stored
+         * spelling for "send nothing" — Stripe then picks pay/subscribe from the mode.
+         */
+        const SUBMIT_TYPES = ['auto', 'pay', 'book', 'donate', 'subscribe'];
         public $settings;
         public $methodHandler = 'fluent_cart_payment_settings_stripe';
         public function __construct()
@@ -25829,6 +26980,17 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         public function updateSettings($settings)
+        {
+        }
+        /**
+         * The Checkout Session submit_type to send, or null to let Stripe decide.
+         *
+         * Re-validated on read: `fluent_cart/stripe_settings` can rewrite the stored
+         * value, and an unknown one is a 400 from Stripe on a live checkout.
+         *
+         * @return string|null
+         */
+        public function getSubmitType()
         {
         }
         public function getMode()
@@ -26020,6 +27182,9 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway\Webhook {
         public function handleSubscriptionUpdated($data)
         {
         }
+        public function handleInvoicePaymentFailed($data)
+        {
+        }
         public function verifyAndProcess()
         {
         }
@@ -26051,6 +27216,16 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway\Webhook {
         {
         }
         public function processAndInsertOrderByEvent($event)
+        {
+        }
+        /**
+         * Resolve the local Subscription + parent Order for a Stripe invoice payload,
+         * shared by renewal-success (invoice.paid) and renewal-failure
+         * (invoice.payment_failed) handling.
+         *
+         * @return array{0: \FluentCart\App\Models\Subscription|null, 1: \FluentCart\App\Models\Order|null}
+         */
+        protected function resolveSubscriptionAndOrder($vendorInvoiceObject)
         {
         }
         public function processSubscriptionRenewal($vendorInvoiceObject)
@@ -27151,6 +28326,17 @@ namespace FluentCart\App\Modules\StorageDrivers {
         public function hasBucket(): bool
         {
         }
+        /**
+         * The bucket this driver is configured to use, resolved from server-side
+         * settings only. Bucket-backed drivers override this; it is the single
+         * source of truth for signing downloads, so a request-supplied bucket must
+         * never reach it.
+         *
+         * @return string '' when the driver has no bucket or none is configured yet
+         */
+        public function getEffectiveBucket(): string
+        {
+        }
         public function needsReconfigure(): bool
         {
         }
@@ -27281,6 +28467,9 @@ namespace FluentCart\App\Modules\StorageDrivers\S3 {
         {
         }
         public function hasBucket(): bool
+        {
+        }
+        public function getEffectiveBucket(): string
         {
         }
         public function needsReconfigure(): bool
@@ -27909,7 +29098,7 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
          * *    - Accepts all other filliable attributes of the Subscription model.
          * @return mixed
          */
-        public static function syncSubscriptionStates(\FluentCart\App\Models\Subscription $subscriptionModel, $subscriptionUpdateArgs = [])
+        public static function syncSubscriptionStates(\FluentCart\App\Models\Subscription $subscriptionModel, $subscriptionUpdateArgs = [], $expectedStatus = null)
         {
         }
         /**
@@ -27923,6 +29112,17 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
          * @return mixed
          */
         public static function recordManualRenewal(\FluentCart\App\Models\Subscription $subscriptionModel, \FluentCart\App\Models\OrderTransaction $transaction, $args = [])
+        {
+        }
+        /**
+         * A gateway-supplied charge time (meta.settled_at / created_at) normalized to a
+         * GMT datetime string, falling back to now when absent or unparseable — a
+         * malformed timestamp must never fatal a webhook.
+         *
+         * @param mixed $time
+         * @return string
+         */
+        private static function normalizeGatewayTime($time)
         {
         }
         /**
@@ -28906,6 +30106,13 @@ namespace FluentCart\App\Modules\Templating\Bricks {
     class BricksHelper
     {
         public static $forcedPost = null;
+        /**
+         * Settings of the Products Collection element currently being rendered.
+         * Exposed so DynamicData::renderValue() can read Sale/Sold Out badge
+         * settings when resolving the {fct_product_image} tag — that filter
+         * only receives ($tag, $post, $context), not the calling element.
+         */
+        public static $imageBadgeSettings = [];
         public static function getFormCurrentPost()
         {
         }
@@ -28919,6 +30126,21 @@ namespace FluentCart\App\Modules\Templating\Bricks {
         {
         }
         public static function isTemplate()
+        {
+        }
+        /**
+         * Returns concatenated Sale Badge / Sold Out Badge <span> markup for
+         * $product based on $settings (the Products Collection element's
+         * settings array). Mirrors the detection logic used by core's
+         * SaleBadgeBlockEditor::render() / SoldOutBadgeBlockEditor::render().
+         */
+        public static function renderProductBadges($product, array $settings)
+        {
+        }
+        private static function renderSaleBadge($product, array $settings)
+        {
+        }
+        private static function renderSoldOutBadge($product, array $settings)
         {
         }
         public static function getAllowedHtmlForContent()
@@ -29018,6 +30240,9 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         public $category = 'fluent-cart';
         public $name = 'fct-price-range';
         public $icon = 'ti-money fluent-cart-element-icon';
+        public function enqueue_scripts()
+        {
+        }
         public function get_label()
         {
         }
@@ -31754,6 +32979,17 @@ namespace FluentCart\App\Services\Email {
         public function mailByEmailName($emailName, $data)
         {
         }
+        /**
+         * Let third-party code adjust the fully prepared Mailer (recipients,
+         * subject, body, attachments already set) immediately before it sends.
+         *
+         * @param Mailer $mailer
+         * @param array $context event, mail_name, recipient, notification, data
+         * @return Mailer
+         */
+        private function applyMailerFilter(\FluentCart\App\Services\Email\Mailer $mailer, array $context): \FluentCart\App\Services\Email\Mailer
+        {
+        }
         public function getEmailFooter(): string
         {
         }
@@ -32491,6 +33727,27 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         protected function generatePresignedDownloadUrl(string $filePath, $expirationMinutes = 15, $bucket = null, $fileName = null): string
         {
         }
+        /**
+         * Builds an RFC 6266/RFC 5987-compliant Content-Disposition value.
+         * HTTP header values must be ISO-8859-1, so a raw Unicode filename (e.g.
+         * Bengali) in a plain filename="..." parameter makes S3 reject the
+         * request with "Header value cannot be represented using ISO-8859-1."
+         * This supplies both an ASCII-safe filename="..." fallback for clients
+         * that don't understand filename*, and a filename*=UTF-8''... parameter
+         * carrying the exact intended Unicode name that modern browsers use.
+         *
+         * The returned raw value is assigned into $canonicalQueryString as-is;
+         * the existing per-parameter rawurlencode() loop further down encodes
+         * it exactly once for the query string, so this method must not
+         * pre-encode the value itself (only the filename* attr-value, which is
+         * a distinct RFC 5987 encoding layer, not query-string encoding).
+         */
+        private function buildContentDispositionValue(string $fileName): string
+        {
+        }
+        private function buildAsciiFallbackFileName(string $fileName): string
+        {
+        }
         protected function retrieveFileForDownload(string $downloadableFilePath, $bucket = null)
         {
         }
@@ -32539,6 +33796,21 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         {
         }
         private function createCanonicalUrl(): string
+        {
+        }
+        /**
+         * Percent-encodes each "/"-separated segment of an S3 object key using
+         * AWS's UriEncode rules (rawurlencode leaves "/" alone). This keeps the
+         * canonical signing path and the actual request URL identical to what
+         * S3 receives on the wire, so multi-byte UTF-8 characters, spaces, and
+         * reserved characters ("+", "#", "?", literal "%") all round-trip to
+         * the exact key that was requested instead of a different object.
+         *
+         * Deliberately does not ltrim() leading slashes: "foo", "/foo", and
+         * "//foo" are three distinct S3 keys, and stripping the slash made a
+         * delete/upload targeting "/foo" silently operate on "foo" instead.
+         */
+        private function encodeS3ObjectKey(string $path): string
         {
         }
         private function getHost(): string
@@ -32670,6 +33942,21 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         {
         }
         /**
+         * Percent-encodes each "/"-separated segment of an S3 object key using
+         * AWS's UriEncode rules (rawurlencode leaves "/" alone). This keeps the
+         * canonical signing path and the actual request URL identical to what
+         * S3 receives on the wire, so multi-byte UTF-8 characters, spaces, and
+         * reserved characters ("+", "#", "?", literal "%") all round-trip to
+         * the exact key that was requested instead of a different object.
+         *
+         * Deliberately does not ltrim() leading slashes: "foo", "/foo", and
+         * "//foo" are three distinct S3 keys, and stripping the slash made a
+         * delete/upload targeting "/foo" silently operate on "foo" instead.
+         */
+        private function encodeS3ObjectKey(string $path): string
+        {
+        }
+        /**
          * @throws \Exception
          */
         private function createCanonicalUrl(): string
@@ -32775,6 +34062,40 @@ namespace FluentCart\App\Services\FileSystem {
         {
         }
         public function saveSettings($params)
+        {
+        }
+    }
+    /**
+     * Resolves which bucket a storage driver is configured to use.
+     *
+     * A downloadable file's bucket is server state: the store configures exactly one
+     * bucket per driver, and the admin file browser only ever echoes that same bucket
+     * back into the payload. Trusting the submitted value let a product editor point a
+     * download at any sibling bucket the store credentials could read, so both the
+     * write path (ProductDownloadablesController) and the read path (DownloadService)
+     * resolve it here instead.
+     */
+    class StorageBucketResolver
+    {
+        /**
+         * @param string $driver driver slug, e.g. 'local', 's3', 'r2'
+         * @return string|\WP_Error '' for drivers that have no bucket (local);
+         *                          WP_Error when the driver is unknown, disabled,
+         *                          or bucket-backed without a configured bucket
+         */
+        public static function resolve($driver)
+        {
+        }
+        /**
+         * Read-path variant: never fails, so a misconfigured driver degrades to the
+         * driver's own default bucket instead of breaking an existing download.
+         * Returns null when nothing can be resolved, which every driver reads as
+         * "use my configured bucket".
+         *
+         * @param string $driver
+         * @return string|null
+         */
+        public static function resolveOrNull($driver)
         {
         }
     }
@@ -36629,6 +37950,12 @@ namespace FluentCart\App\Services\Payments {
         public static function parsePaymentMethodDetails($paymentGateway, $paymentMethodDetails, $additionalData = []): array
         {
         }
+        /**
+         * Days in one billing cycle. Returns 0 when the interval cannot be resolved —
+         * neither a core interval nor one a fluent_cart/subscription_interval_in_days
+         * callback resolved to a positive day count. Callers must treat < 1 as
+         * unresolvable, never as a one-day cycle.
+         */
         public static function getIntervalDays($interval = ''): int
         {
         }
@@ -36731,6 +38058,17 @@ namespace FluentCart\App\Services\Payments {
     }
     class SubscriptionHelper
     {
+        /**
+         * When money actually moved for an order, not when the row was created.
+         * A pending/COD/bank-transfer order can sit for months before it is paid,
+         * so `created_at` is not a safe billing anchor. Prefers the latest succeeded
+         * charge's meta.settled_at (the gateway's own settlement time), falls back
+         * to that transaction's created_at, then the order's completed_at, and only
+         * falls back to order created_at when nothing else exists (e.g. a $0 order).
+         */
+        public static function resolvePaidAnchor(\FluentCart\App\Models\Order $order)
+        {
+        }
         /*
          * @param $subscriptionModel
          * @return string|null
@@ -36761,6 +38099,23 @@ namespace FluentCart\App\Services\Payments {
          * @return string|null
          */
         public static function safeTimestampToDatetime($value): ?string
+        {
+        }
+        /**
+         * Whether renewal work is restricted to the store's current mode. On by
+         * default; a live store deliberately flipped to test mode can turn it off
+         * so live subscriptions keep billing. Fail-closed: only an explicit 'no'
+         * disables — a malformed value written past the request sanitizer must
+         * not silently drop staging protection.
+         */
+        public static function isModeGuardEnabled(): bool
+        {
+        }
+        /**
+         * Whether renewal work (invoice creation, automatic charging) may run for
+         * an order of the given mode under the current store mode + guard setting.
+         */
+        public static function canProcessInMode(string $orderMode): bool
         {
         }
         public static function getSubscriptionsGracePeriodDays()
@@ -37268,6 +38623,14 @@ namespace FluentCart\App\Services\Reminders {
         {
         }
         protected function resolveEventName(string $stage): string
+        {
+        }
+        /**
+         * Map an overdue stage to a notification event by its position in the
+         * configured day list, not by a fixed day threshold — the escalation tone
+         * follows the admin's schedule (e.g. 14,30 → first at 14, final at 30).
+         */
+        protected function resolveOverdueEventName(int $daysAfter): string
         {
         }
     }
@@ -38215,6 +39578,16 @@ namespace FluentCart\App\Services\Renderer {
         public function renderOptions()
         {
         }
+        /**
+         * Render one option and, recursively, its whole subtree.
+         *
+         * Terms nest to an arbitrary depth (a child category can itself have
+         * children), so every node that has children gets its own child-group
+         * wrapper instead of only the top-level ones.
+         */
+        public function renderOptionNode($option, $key)
+        {
+        }
         public function renderCheckbox($option)
         {
         }
@@ -38263,6 +39636,16 @@ namespace FluentCart\App\Services\Renderer {
         public function render()
         {
         }
+        /**
+         * Related products below the modal's product, when the store asks for
+         * them. Off by default, so a quick view stays a quick view unless the
+         * setting is turned on.
+         *
+         * @return void
+         */
+        protected function renderRelevantProducts()
+        {
+        }
     }
     class ProductRenderer
     {
@@ -38277,6 +39660,7 @@ namespace FluentCart\App\Services\Renderer {
         protected $defaultVariationId = '';
         protected $defaultGalleryImageId = 0;
         protected $galleryActiveSet = false;
+        protected $productVideoRenderer = null;
         protected $paymentTypes = [];
         protected $variantsByPaymentTypes = [];
         protected $activeTab = 'onetime';
@@ -38309,6 +39693,16 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderGalleryThumb()
+        {
+        }
+        /**
+         * Whether any gallery / variant image exists to show in the main area.
+         * Only meaningful after renderGalleryThumb() has built $this->images.
+         */
+        protected function hasGalleryImages(): bool
+        {
+        }
+        public function getProductVideoRenderer(): \FluentCart\App\Modules\FluentPlayer\ProductVideoRenderer
         {
         }
         public function renderGalleryThumbControls($maxThumbnails = null)
@@ -38701,6 +40095,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function render($hide_wrapper = false)
+        {
+        }
+        protected function getHeaderState()
         {
         }
         public function renderHeader()
@@ -40291,17 +41688,12 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         /**
          * @var array $instances
          *
-         * This static property is used to cache the results of method and attribute lookups.
-         *
-         * The `BaseParser` class uses this array to store the values retrieved by the `get` method.
-         * When a value is requested for a specific code, the `get` method first checks if the value
-         * is already cached in this array. If it is, the cached value is returned, avoiding redundant
-         * lookups or method calls.
-         *
-         * This caching mechanism improves performance by reducing the number of times the same
-         * data needs to be retrieved or computed.
+         * Per-instance cache of method and attribute lookups for the record this parser
+         * was constructed with. Must stay instance-scoped, not static — a static cache
+         * keyed only by accessor bleeds values across different records parsed in the
+         * same request (e.g. two orders processed by one cron run).
          */
-        protected static array $instances = [];
+        protected array $instances = [];
         /**
          * @var array $methodMap
          *
@@ -40345,7 +41737,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         /**
          * Retrieves the value for the given code.
          *
-         * This method first checks if the value for the given code is already cached in the `static::$instances` array.
+         * This method first checks if the value for the given code is already cached in the `$this->instances` array.
          * If it is, the cached value is returned. If not, it checks if the code corresponds to a method or an attribute.
          * If the code corresponds to a method, the `getByMethod` method is called to retrieve the value.
          * If the code corresponds to an attribute, the `getAttribute` method is called to retrieve the value.
@@ -40362,7 +41754,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
          * Retrieves the value for the given code from the data array.
          *
          * This method uses the `attributeMap` array to find the corresponding key in the data array
-         * and retrieves its value. The result is then stored in the `static::$instances` array
+         * and retrieves its value. The result is then stored in the `$this->instances` array
          * to avoid redundant lookups in the future.
          *
          * @param string $code The code representing the attribute to be retrieved.
@@ -40375,7 +41767,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
          * Retrieves the value for the given code by invoking the corresponding method.
          *
          * This method checks the `methodMap` array for the provided code and calls the
-         * associated method. The result is then stored in the `static::$instances` array
+         * associated method. The result is then stored in the `$this->instances` array
          * to avoid redundant method calls in the future.
          *
          * @param string $accessor The code representing the method to be called.
@@ -44082,6 +45474,21 @@ namespace FluentCart\Framework\Database {
          * @return string
          */
         public function getDatabaseName();
+        /**
+         * Run a raw, unprepared query against the connection and return a cursor.
+         *
+         * @param  string  $query
+         * @param  array  $bindings
+         * @return \Generator
+         */
+        public function rawCursor($query, $bindings = []);
+        /**
+         * Set the transaction manager instance on the connection.
+         *
+         * @param  mixed  $manager
+         * @return $this
+         */
+        public function setTransactionManager($manager);
     }
     interface ConnectionResolverInterface
     {
@@ -54010,12 +55417,16 @@ namespace FluentCart\Framework\Database\Orm {
     trait Searchable
     {
         /**
-         * Searchable columns.
-         * 
+         * The property is intentionally NOT declared on the trait. Declaring it
+         * here with a default would make any model that redeclares it with its
+         * own columns (protected $searchableColumns = [...]) an incompatible
+         * trait composition and fatal in PHP. Models simply declare the property
+         * themselves; getSearchableColumns() reads it and defaults to an empty
+         * array when a model leaves it unset.
+         *
          * @var array
          */
-        protected $searchableColumns = [];
-        /**    
+        /**
          * Search the model in a case-insensitive manner.
          *
          * @param \FluentCart\Framework\Database\Orm\Builder $query
@@ -54024,6 +55435,56 @@ namespace FluentCart\Framework\Database\Orm {
          * @throws \Exception
          */
         public function scopeSearch($query, $value)
+        {
+        }
+        /**
+         * Search the searchable columns phonetically (SOUNDEX / "sounds like").
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @param string $value
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         * @throws \Exception
+         */
+        public function scopeSoundsLike($query, $value)
+        {
+        }
+        /**
+         * Search the searchable columns by full-text relevance, returning rows
+         * ranked by how well they match (a "relevance" column is added).
+         *
+         * On MySQL/MariaDB this uses native FULLTEXT ranking and requires a
+         * FULLTEXT index on the searchable columns (see Schema::fullText()). When
+         * $fuzzy is true, recall is widened with a phonetic ("sounds like") match
+         * so misspellings still surface (below the ranked hits).
+         *
+         * SQLite has no native FULLTEXT, so it degrades to a case-insensitive
+         * LIKE match across the columns (unranked).
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @param string $value
+         * @param bool $fuzzy
+         * @return \FluentCart\Framework\Database\Orm\Builder
+         * @throws \Exception
+         */
+        public function scopeRelevanceSearch($query, $value, $fuzzy = false)
+        {
+        }
+        /**
+         * Get the model's searchable columns, defaulting to an empty array when
+         * the model does not declare the $searchableColumns property.
+         *
+         * @return array
+         */
+        protected function getSearchableColumns()
+        {
+        }
+        /**
+         * Ensure searchable columns are defined on the model and return them.
+         *
+         * @return array
+         * @throws \Exception
+         */
+        protected function ensureSearchableColumns()
         {
         }
     }
@@ -55018,6 +56479,30 @@ namespace FluentCart\Framework\Database\Query {
         {
         }
         /**
+         * Add a phonetic "sounds like" (SOUNDEX) clause to the query.
+         *
+         * Matches values pronounced similarly, e.g. searching "heera" matches
+         * "hira"/"hera", "bol" matches "ball", "cloud" matches "claude".
+         *
+         * @param  \FluentCart\Framework\Database\Query\Expression|string  $column
+         * @param  string  $value
+         * @param  string  $boolean
+         * @return $this
+         */
+        public function whereSoundsLike($column, $value, $boolean = 'and')
+        {
+        }
+        /**
+         * Add an "or" phonetic "sounds like" clause to the query.
+         *
+         * @param  \FluentCart\Framework\Database\Query\Expression|string  $column
+         * @param  string  $value
+         * @return $this
+         */
+        public function orWhereSoundsLike($column, $value)
+        {
+        }
+        /**
          * Add a "where in" clause to the query.
          *
          * @param  string  $column
@@ -55661,6 +57146,34 @@ namespace FluentCart\Framework\Database\Query {
          * @return $this
          */
         public function orWhereFullText($columns, $value, array $options = [])
+        {
+        }
+        /**
+         * Add a full-text relevance score to the select clause.
+         *
+         * Compiles a "MATCH ... AGAINST" expression aliased as the given name so
+         * results can be ordered by how well they match. A flat list of columns
+         * produces a single composite match; an associative array of
+         * column => weight produces a weighted per-column sum, e.g.
+         * ['title' => 3, 'body' => 1].
+         *
+         * @param  string|array  $columns
+         * @param  string  $value
+         * @param  array  $options
+         * @param  string  $as
+         * @return $this
+         */
+        public function selectRelevance($columns, $value, array $options = [], $as = 'relevance')
+        {
+        }
+        /**
+         * Order the query by a previously selected relevance score.
+         *
+         * @param  string  $direction
+         * @param  string  $as
+         * @return $this
+         */
+        public function orderByRelevance($direction = 'desc', $as = 'relevance')
         {
         }
         /**
@@ -57079,6 +58592,27 @@ namespace FluentCart\Framework\Database\Query\Grammars {
         {
         }
         /**
+         * Compile the SQL for a phonetic "sounds like" (SOUNDEX) comparison.
+         *
+         * Both the column and the bound search term are encoded with the
+         * database engine's native SOUNDEX() function.
+         *
+         * @param  \FluentCart\Framework\Database\Query\Expression|string  $column
+         * @return string
+         */
+        public function compileSoundsLike($column)
+        {
+        }
+        /**
+         * Prepare the bound value for a "sounds like" comparison.
+         *
+         * @param  string  $value
+         * @return string
+         */
+        public function prepareSoundsLikeBinding($value)
+        {
+        }
+        /**
          * Compile a "where in" clause.
          *
          * @param  \FluentCart\Framework\Database\Query\Builder  $query
@@ -57407,6 +58941,20 @@ namespace FluentCart\Framework\Database\Query\Grammars {
          * @return string
          */
         public function whereFullText(\FluentCart\Framework\Database\Query\Builder $query, $where)
+        {
+        }
+        /**
+         * Compile a full-text relevance score expression.
+         *
+         * Returns a [sql, bindings] tuple where the sql is a "MATCH ... AGAINST"
+         * expression with "?" placeholders and bindings are the values for them.
+         *
+         * @param  array  $columns
+         * @param  array  $options
+         * @param  string  $value
+         * @return array
+         */
+        public function compileRelevance($columns, array $options, $value)
         {
         }
         /**
@@ -57963,6 +59511,21 @@ namespace FluentCart\Framework\Database\Query\Grammars {
         {
         }
         /**
+         * Compile a full-text relevance score expression.
+         *
+         * A flat list of columns yields a single composite "MATCH(a, b) AGAINST"
+         * expression; an associative column => weight array yields a weighted
+         * per-column sum.
+         *
+         * @param  array  $columns
+         * @param  array  $options
+         * @param  string  $value
+         * @return array
+         */
+        public function compileRelevance($columns, array $options, $value)
+        {
+        }
+        /**
          * Compile the index hints for the query.
          *
          * @param  \FluentCart\Framework\Database\Query\Builder  $query
@@ -58258,6 +59821,29 @@ namespace FluentCart\Framework\Database\Query\Grammars {
          * @return string
          */
         public function prepareWhereLikeBinding($value, $caseSensitive)
+        {
+        }
+        /**
+         * Compile the SQL for a phonetic "sounds like" comparison.
+         *
+         * SQLite has no native SOUNDEX(), so the search term is encoded in PHP
+         * (see prepareSoundsLikeBinding) and only the column is passed through a
+         * soundex() UDF that must be registered on the connection from PHP's own
+         * soundex(). Using the same PHP algorithm on both sides guarantees a match.
+         *
+         * @param  \FluentCart\Framework\Database\Query\Expression|string  $column
+         * @return string
+         */
+        public function compileSoundsLike($column)
+        {
+        }
+        /**
+         * Encode the search term with PHP's soundex() for SQLite.
+         *
+         * @param  string  $value
+         * @return string
+         */
+        public function prepareSoundsLikeBinding($value)
         {
         }
         /**
@@ -58902,6 +60488,35 @@ namespace FluentCart\Framework\Database\Query {
          * @return Null
          */
         protected function setupWpdbInstance($wpdb)
+        {
+        }
+        /**
+         * Register a PHP-backed SOUNDEX() function on the SQLite connection so
+         * phonetic ("sounds like") queries work, mirroring MySQL's native
+         * equivalent.
+         *
+         * SQLite doesn't ship the function; PHP provides it natively, so we bind
+         * it as a UDF. Using PHP's soundex() here matches the term that
+         * SQLiteGrammar encodes with the same soundex() on the binding side.
+         *
+         * No-ops on MySQL and silently skips if the underlying PDO is unreachable,
+         * so a missing SQLite layer never breaks booting.
+         *
+         * @return void
+         */
+        protected function registerSqliteFunctions()
+        {
+        }
+        /**
+         * Resolve the real PDO handle behind the WordPress SQLite layer.
+         *
+         * Supports the official "SQLite Database Integration" plugin
+         * (WP_SQLite_Translator::get_pdo()), a dbh that is itself a PDO
+         * (WP-SQLite-DB's PDOEngine), and the shared $GLOBALS['@pdo'] cache.
+         *
+         * @return \PDO|null
+         */
+        protected function resolveSqlitePdo()
         {
         }
         /**
@@ -59598,6 +61213,30 @@ namespace FluentCart\Framework\Database {
          * @see https://developer.wordpress.org/reference/functions/drop_index
          */
         public static function dropIndex($table, $index)
+        {
+        }
+        /**
+         * Add a FULLTEXT index to the given columns, required by the query
+         * builder's relevance ranking (selectRelevance/orderByRelevance and the
+         * Searchable relevanceSearch scope). No-ops on SQLite, which has no
+         * native FULLTEXT support and degrades to LIKE-based matching.
+         *
+         * @param  string  $table   Table name without prefix
+         * @param  string|array  $columns
+         * @param  string|null  $name  Optional index name
+         * @return mixed
+         */
+        public static function fullText($table, $columns, $name = null)
+        {
+        }
+        /**
+         * Drop a FULLTEXT index by name.
+         *
+         * @param  string  $table  Table name without prefix
+         * @param  string  $name   Index name
+         * @return mixed
+         */
+        public static function dropFullText($table, $name)
         {
         }
         /**
@@ -60964,7 +62603,7 @@ namespace FluentCart\Framework\Foundation {
      * @property \FluentCart\Framework\Foundation\Config        $config
      * @property \FluentCart\Framework\View\View                $view
      * @property \FluentCart\Framework\Cache\Cache              $cache
-     * @property \FluentCart\Framework\Http\Router\Router       $router
+     * @property \FluentCart\Framework\Http\Router              $router
      * @property \FluentCart\Framework\Http\Request\Request     $request
      * @property \FluentCart\Framework\Http\Response\Response   $response
      * @property \FluentCart\Framework\Validator\Validator      $validator
@@ -63050,10 +64689,14 @@ namespace FluentCart\Framework\Http {
     {
         protected $router = null;
         protected $callback = null;
+        protected $executed = false;
         public function __construct($router, $callback)
         {
         }
         public function __call($method, $params)
+        {
+        }
+        public function execute()
         {
         }
         public function __destruct()
@@ -63944,7 +65587,7 @@ namespace FluentCart\Framework\Http\Request {
         protected $request = [];
         /**
          * WP_REST_Request instance
-         * @var \WP_REST_Request
+         * @var \WP_REST_Request|false
          */
         protected $wpRestRequest = false;
         /**
@@ -63963,8 +65606,8 @@ namespace FluentCart\Framework\Http\Request {
         /**
          * Construct the request instance
          * @param \FluentCart\Framework\Foundation\Application $app
-         * @param $_GET $get
-         * @param $_POST $post
+         * @param array $get
+         * @param array $post
          */
         public function __construct(\FluentCart\Framework\Foundation\Application $app, $get, $post)
         {
@@ -65119,7 +66762,6 @@ namespace FluentCart\Framework\Http {
         /**
          * Map the route to be used in front-end.
          *
-         * @param mixed $handler
          * @return self
          */
         public function preparefrontendHandlers()
@@ -65861,6 +67503,11 @@ namespace FluentCart\Framework\Http {
          */
         protected $groupCount = 0;
         /**
+         * Weak references to groups pending execution.
+         * @var array
+         */
+        protected $pendingGroups = [];
+        /**
          * Construct the routet instance
          * @param \FluentCart\Framework\Foundation\Application $app
          */
@@ -65949,8 +67596,28 @@ namespace FluentCart\Framework\Http {
         {
         }
         /**
+         * Track a group so any instance kept alive past its statement
+         * can still be executed before routes are registered. A weak
+         * reference keeps the destructor firing at end of statement.
+         *
+         * @param  Group $group
+         * @return null
+         */
+        public function trackGroup(\FluentCart\Framework\Http\Group $group)
+        {
+        }
+        /**
+         * Execute any groups still pending execution because a
+         * reference to them was held beyond their statement.
+         *
+         * @return null
+         */
+        protected function executePendingGroups()
+        {
+        }
+        /**
          * Execute the route group callback
-         * 
+         *
          * @param  \Closure $callback
          * @return null
          */
@@ -71611,7 +73278,7 @@ namespace FluentCart\Framework\Support {
         /**
          * Get the values iterator.
          *
-         * @return \Traversable
+         * @return \Iterator
          */
         #[\ReturnTypeWillChange]
         public function getIterator()
@@ -71630,7 +73297,7 @@ namespace FluentCart\Framework\Support {
          * Make an iterator from the given source.
          *
          * @param  mixed  $source
-         * @return \Traversable
+         * @return \Iterator
          */
         protected function makeIterator($source)
         {
@@ -71960,6 +73627,140 @@ namespace FluentCart\Framework\Support {
         {
         }
     }
+}
+namespace FluentCart\Framework\Support\MBString {
+    /**
+     * A minimal, dependency-free fallback for the handful of ext-mbstring
+     * functions the framework relies on, for hosts where the extension is
+     * not installed.
+     *
+     * Everything for this polyfill lives under Support/MBString/ — this class,
+     * the global mb_* wrappers (polyfill.php), and the Unicode tables (unidata/).
+     * Deleting that one folder cleanly removes mbstring fallback support; the
+     * autoload shim Support/mbstring-loader.php then becomes a harmless no-op.
+     *
+     * Length/slice/position helpers are fully multibyte-correct via PCRE's
+     * UTF-8 mode (ext-pcre is compiled into PHP core and cannot be disabled).
+     *
+     * Case helpers (lower/upper/title) do full Unicode simple case mapping
+     * via the bundled tables in unidata/ (vendored from symfony/Unicode). They
+     * are driven with strtr(), which matches whole UTF-8 characters and never
+     * corrupts continuation bytes (unlike strtolower()/strtoupper(), which are
+     * locale-dependent and mangle bytes >= 0x80). Only simple (1:1, plus a few
+     * 1:n like ß->SS) mappings are covered; locale-specific tailoring (e.g.
+     * Turkish dotless i) and full case folding are not.
+     *
+     * The thin global mb_* wrappers live in polyfill.php and only delegate
+     * here when the native function is missing.
+     */
+    class Mbstring
+    {
+        /**
+         * Lazily-loaded Unicode case-mapping tables, keyed by file name.
+         *
+         * @var array<string, array<string, string>>
+         */
+        protected static $caseMaps = [];
+        /**
+         * Count the number of characters in a UTF-8 string.
+         *
+         * @param  string  $string
+         * @return int
+         */
+        public static function strlen($string)
+        {
+        }
+        /**
+         * Return a character-based slice of a UTF-8 string.
+         *
+         * @param  string  $string
+         * @param  int  $start
+         * @param  int|null  $length
+         * @return string
+         */
+        public static function substr($string, $start, $length = null)
+        {
+        }
+        /**
+         * Find the position (in characters) of the first occurrence of a needle.
+         *
+         * @param  string  $haystack
+         * @param  string  $needle
+         * @param  int  $offset
+         * @return int|false
+         */
+        public static function strpos($haystack, $needle, $offset = 0)
+        {
+        }
+        /**
+         * Find the position (in characters) of the last occurrence of a needle.
+         *
+         * @param  string  $haystack
+         * @param  string  $needle
+         * @param  int  $offset
+         * @return int|false
+         */
+        public static function strrpos($haystack, $needle, $offset = 0)
+        {
+        }
+        /**
+         * Split a UTF-8 string into an array of characters (or chunks).
+         *
+         * @param  string  $string
+         * @param  int  $length
+         * @return array
+         */
+        public static function strSplit($string, $length = 1)
+        {
+        }
+        /**
+         * Lower-case a UTF-8 string (Unicode simple mapping — see class docblock).
+         *
+         * @param  string  $string
+         * @return string
+         */
+        public static function strtolower($string)
+        {
+        }
+        /**
+         * Upper-case a UTF-8 string (Unicode simple mapping — see class docblock).
+         *
+         * @param  string  $string
+         * @return string
+         */
+        public static function strtoupper($string)
+        {
+        }
+        /**
+         * Apply a case-conversion mode to a UTF-8 string.
+         *
+         * @param  string  $string
+         * @param  int  $mode  One of MB_CASE_UPPER, MB_CASE_LOWER, MB_CASE_TITLE
+         * @return string
+         */
+        public static function convertCase($string, $mode)
+        {
+        }
+        /**
+         * Lazily load a Unicode case-mapping table from unidata/.
+         *
+         * @param  string  $name  'lowerCase' or 'upperCase'
+         * @return array<string, string>
+         */
+        protected static function caseMap($name)
+        {
+        }
+        /**
+         * Lazily load the title-case word-boundary regex.
+         *
+         * @return string
+         */
+        protected static function titleRegexp()
+        {
+        }
+    }
+}
+namespace FluentCart\Framework\Support {
     class Mail
     {
         protected array $to = [];
@@ -73313,7 +75114,7 @@ namespace FluentCart\Framework\Support {
         /**
          * Returns a DateTime object.
          *
-         * @param  string       $key
+         * @param  string       $value
          * @param  string|null  $format
          * @param  string|null|\DateTimeZone  $tz
          * @return \FluentCart\Framework\Support\DateTime|null
@@ -73349,6 +75150,7 @@ namespace FluentCart\Framework\Support {
          *
          * @param callable|string $callback
          * @return callable|null
+         * @throws \InvalidArgumentException If the rule resolves to nothing callable.
          */
         protected static function getCallback($callback)
         {
@@ -73446,8 +75248,8 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Makes an acronum from a string of words
-         * 
+         * Makes an acronym from a string of words
+         *
          * @param  string $string
          * @param  string $delimiter
          * @return string
@@ -73640,8 +75442,9 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Converts a non-boolean value to boolean
-         * @param  string|int $str
+         * Converts a non-boolean value to boolean (case-insensitive).
+         * Returns null when the value is not a recognized boolean word.
+         * @param  string|int|bool $str
          * @return bool|null
          */
         public static function toBool($str)
@@ -73660,7 +75463,7 @@ namespace FluentCart\Framework\Support {
         /**
          * Checks if the word(s) are in capitalized form.
          * @param  string $str
-         * @param  boolean $onlyFirst if true, checks only the first charatcer
+         * @param  boolean $onlyFirst if true, checks only the first character
          * @return boolean
          */
         public static function isCapitalized($str, $onlyFirst = false)
@@ -73676,8 +75479,8 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Checks if the chracters are in upper case
-         * 
+         * Checks if the characters are in upper case
+         *
          * @param string $str
          * @return boolean
          */
@@ -73685,8 +75488,8 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Checks if the chracters are in lower case
-         * 
+         * Checks if the characters are in lower case
+         *
          * @param string $str
          * @return boolean
          */
@@ -73715,12 +75518,12 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Checks if two words are similar
-         * 
+         * Gets the similarity of two words as a percentage.
+         *
          * @param string $str1
          * @param string $str2
-         * 
-         * @return bool
+         *
+         * @return float
          */
         public static function similarityOf($str1, $str2)
         {
@@ -73748,9 +75551,11 @@ namespace FluentCart\Framework\Support {
          * Determine if a given string is a valid UUID.
          *
          * @param  string  $value
+         * @param  int|null  $version Optional UUID version (e.g. 4 or 7) to
+         *                            require; null accepts any version.
          * @return bool
          */
-        public static function isUuid($value)
+        public static function isUuid($value, $version = null)
         {
         }
         /**
@@ -73900,8 +75705,8 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Parse a floasting point number from a string.
-         * 
+         * Parse a floating point number from a string.
+         *
          * @param  string $value
          * @return float|null
          */
@@ -74387,6 +76192,30 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
+         * Generate a UUID (version 7) per RFC 9562 — time-ordered.
+         *
+         * The leading 48 bits encode the creation time in milliseconds, so
+         * values sort chronologically as plain strings. Use this for sortable
+         * identifiers (log/event ids, filenames, correlation ids); use uuid()
+         * for opaque tokens, as uuid7 exposes its creation time.
+         *
+         * @return string
+         * @throws \RuntimeException When PHP integers are not 64-bit.
+         */
+        public static function uuid7()
+        {
+        }
+        /**
+         * Extract the embedded creation time from a version 7 UUID.
+         *
+         * @param  string  $uuid
+         * @return int|null Unix timestamp in milliseconds,
+         *                  or null if not a valid UUIDv7.
+         */
+        public static function uuid7Time($uuid)
+        {
+        }
+        /**
          * Increment a counter.
          * @return int
          */
@@ -74430,8 +76259,8 @@ namespace FluentCart\Framework\Support {
         {
         }
         /**
-         * Makes an acronum from a string of words
-         * 
+         * Makes an acronym from a string of words
+         *
          * @param  string $delimiter
          * @return self
          */
@@ -74533,15 +76362,15 @@ namespace FluentCart\Framework\Support {
          * 
          * @return bool
          */
-        public function isSimilar($str, $accuracy = 50)
+        public function isSimilar($str, $accuracy = 60)
         {
         }
         /**
-         * Checks if two words are similar
-         * 
+         * Gets the similarity of two words as a percentage.
+         *
          * @param string $str
-         * 
-         * @return bool
+         *
+         * @return float
          */
         public function similarityOf($str)
         {
@@ -74740,9 +76569,11 @@ namespace FluentCart\Framework\Support {
         /**
          * Determine if a given string is a valid UUID.
          *
+         * @param  int|null  $version Optional UUID version (e.g. 4 or 7) to
+         *                            require; null accepts any version.
          * @return bool
          */
-        public function isUuid()
+        public function isUuid($version = null)
         {
         }
         /**
