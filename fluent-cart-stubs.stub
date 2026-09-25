@@ -52,9 +52,6 @@ namespace FluentCart\Api\Checkout {
         private static function updateExistingCustomer($customer, $orderData, $billingAddress, $shippingAddress)
         {
         }
-        private static function handleUserCreation($orderData, &$billingAddress, $customer = null)
-        {
-        }
         private static function getCustomerEmail($billingAddress)
         {
         }
@@ -4099,6 +4096,97 @@ namespace FluentCart\Api {
         {
         }
         public function getCustomerDashboardPageSlug($pageId = null, $cached = true)
+        {
+        }
+        /**
+         * The Appearance settings tab.
+         *
+         * Built from the ColorPalette registry rather than written out by hand, so
+         * a colour added to the registry becomes settable here, sanitised on save
+         * and written to the storefront without three separate edits.
+         *
+         * @return array
+         */
+        protected function getAppearanceSchema(): array
+        {
+        }
+        /**
+         * What the storefront preview needs to paint itself.
+         *
+         * The preview is drawn from semantic roles rather than settings keys, so
+         * one mock card covers all three sources: `customize` reads the pickers the
+         * owner has filled in, and the other two are resolved here because their
+         * colors only exist server side — `inherit_from_theme` is mixed out of
+         * theme.json by ThemePalette and nothing about it reaches the browser.
+         *
+         * @return array
+         */
+        protected function getAppearancePreviewData(): array
+        {
+        }
+        /**
+         * Which custom property the preview paints each surface with.
+         *
+         * Keyed by settings key, not by role. Four separate globals claim the
+         * `accent` role — active text, the brand background and both active
+         * borders — so collapsing the preview to roles would let one picker drive
+         * surfaces the storefront keeps apart, and leave the others with no visible
+         * effect at all. `role` is carried only for theme inheritance, which
+         * genuinely is role-based: FrontendTheme::getThemeColors() gives every key
+         * sharing a role the same colour, so the preview collapsing there is the
+         * storefront's own behaviour rather than a shortcut.
+         *
+         * A slot with no `key` is a surface no global controls; it follows the
+         * role's default and cannot be edited.
+         *
+         * @return array
+         */
+        protected function getAppearancePreviewSlots(): array
+        {
+        }
+        /**
+         * Why the theme preview may not be the whole truth.
+         *
+         * Themes such as Astra publish their palette as `var(--ast-global-color-0)`
+         * rather than as colors. FrontendTheme writes those references straight
+         * through and the browser resolves them on the storefront, but the property
+         * is not declared in wp-admin, so the preview cannot show them. Saying so
+         * beats showing FluentCart's colors and letting the owner believe that is
+         * what inheriting will look like.
+         *
+         * @return string Empty when the preview is faithful.
+         */
+        protected function getAppearanceThemeNote(): string
+        {
+        }
+        /**
+         * The theme's colors for the preview, role by role.
+         *
+         * Only roles that resolved to a real color are returned — the preview
+         * falls back to each slot's own default for the rest.
+         *
+         * @return array Role => hex.
+         */
+        protected function getAppearanceThemeRoles(): array
+        {
+        }
+        /**
+         * The colour knobs, grouped the way the registry groups them, as data the
+         * appearance component renders its pickers from.
+         *
+         * @return array
+         */
+        protected function getAppearanceColorGroups(): array
+        {
+        }
+        /**
+         * The hint under one colour picker: what it drives, and the value it
+         * falls back to when left empty.
+         *
+         * @param array $definition
+         * @return string
+         */
+        protected function getAppearanceFieldNote(array $definition): string
         {
         }
         /**
@@ -9517,12 +9605,6 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
         public function userRegistrationHandler($userId)
-        {
-        }
-        private function updateCustomer(\FluentCart\App\Models\Customer $customer, object $user, int $userId): void
-        {
-        }
-        private function moveCustomerResources($fromCustomerId, $toCustomerId)
         {
         }
     }
@@ -17579,6 +17661,12 @@ namespace FluentCart\App\Models {
          * Deliberately distinct from isLocked(), which additionally requires order_id
          * and is therefore false for renewal and early-installment carts, which never
          * set that column.
+         *
+         * Filterable so an integration that locks its cart only to pin its own item
+         * (e.g. a booking) can still take order bumps. The filter only decides the
+         * lock; a cart carrying an upgrade is refused after it either way. The upgrade
+         * swap in WebCheckoutHandler::handleOrderBumpRequest() ignores this filter and
+         * keeps refusing any `is_locked` cart.
          */
         public function acceptsAdditionalItems()
         {
@@ -17908,6 +17996,12 @@ namespace FluentCart\App\Models {
         {
         }
         /**
+         * Customers not linked to any WordPress account. Legacy rows carry 0 as well as NULL.
+         */
+        public function scopeUnclaimed($query)
+        {
+        }
+        /**
          * todo - contact_id ? - do we need it anymore?
          */
         public function orders()
@@ -17991,6 +18085,16 @@ namespace FluentCart\App\Models {
         public function wpUser(): \FluentCart\Framework\Database\Orm\Relations\BelongsTo
         {
         }
+        /**
+         * The WordPress user this customer is linked to, or empty when unlinked.
+         *
+         * A read never rewrites identity. The old $recheck path looked the user up
+         * by email and saved that ID onto the row — a rebinding path every caller
+         * inherited, trusting an address its holder can change with no
+         * confirmation. The link is written where identity is established
+         * (explicit creation, verified claims, admin). $recheck is kept so existing
+         * callers and integrations need no change.
+         */
         public function getWpUserId($recheck = false)
         {
         }
@@ -18006,6 +18110,11 @@ namespace FluentCart\App\Models {
         public function updateMeta($metaKey, $metaValue)
         {
         }
+        /**
+         * @return \WP_User|false The linked WordPress user; false when unlinked or
+         *                        the linked account no longer exists. See getWpUserId()
+         *                        for why there is no email fallback.
+         */
         public function getWpUser()
         {
         }
@@ -20154,7 +20263,7 @@ namespace FluentCart\App\Models {
         use \FluentCart\App\Models\Concerns\HasActivity, \FluentCart\App\Models\Concerns\CanUpdateBatch;
         protected $table = 'fct_subscriptions';
         protected $primaryKey = 'id';
-        protected $appends = ['url', 'payment_info', 'billingInfo', 'overridden_status', 'currency', 'reactivate_url', 'permissions', 'display_item_name', 'system_charge_state'];
+        protected $appends = ['url', 'payment_info', 'billingInfo', 'overridden_status', 'currency', 'reactivate_url', 'permissions', 'display_item_name', 'system_charge_state', 'payment_method_title'];
         protected $guarded = ['id'];
         protected $fillable = ['customer_id', 'parent_order_id', 'product_id', 'item_name', 'variation_id', 'billing_interval', 'signup_fee', 'quantity', 'recurring_amount', 'recurring_tax_total', 'recurring_total', 'bill_times', 'bill_count', 'expire_at', 'trial_ends_at', 'canceled_at', 'restored_at', 'collection_method', 'trial_days', 'vendor_customer_id', 'vendor_plan_id', 'vendor_subscription_id', 'next_billing_date', 'status', 'original_plan', 'vendor_response', 'current_payment_method', 'config'];
         public static function boot()
@@ -20232,6 +20341,14 @@ namespace FluentCart\App\Models {
          * @return string
          */
         public function getDisplayItemNameAttribute()
+        {
+        }
+        /**
+         * Display label of the backing gateway ("Authorize.Net", "Cash"), the same
+         * source StatusHelper stamps into order.payment_method_title. Empty when the
+         * slug resolves to no registered gateway.
+         */
+        public function getPaymentMethodTitleAttribute(): string
         {
         }
         public function getUrlAttribute($value)
@@ -20918,6 +21035,38 @@ namespace FluentCart\App\Models\WpModels {
         }
     }
 }
+namespace FluentCart\App\Modules\AdminFooter {
+    /**
+     * WP admin footer on FluentCart screens: a quiet feedback link on the left,
+     * the FluentCart version on the right. Like FluentCRM, the Pro version is added
+     * only when Pro is active and its version differs from Core's.
+     */
+    class AdminFooter
+    {
+        public const FEEDBACK_URL = 'https://wordpress.org/support/plugin/fluent-cart/reviews/#new-post';
+        /**
+         * Called only on the FluentCart admin page (see MenuHandler::register()).
+         */
+        public function register(): void
+        {
+        }
+        public function filterFooterText($text): string
+        {
+        }
+        public function filterUpdateFooter($text): string
+        {
+        }
+        public static function getVersionLabel(?string $proVersion): string
+        {
+        }
+        /**
+         * Pro version only while FluentCart Pro is active (its constant is defined on load).
+         */
+        public static function getProVersion(): ?string
+        {
+        }
+    }
+}
 namespace FluentCart\App\Modules\Coupon {
     class CouponHandler
     {
@@ -21415,7 +21564,53 @@ namespace FluentCart\App\Modules\Integrations\FluentPlugins {
         public function pushInfoWidgetToContact($widgets, $subscriber)
         {
         }
-        public function getStatsHtml($customer)
+        /**
+         * The shared FluentCRM-context date formatter for every FluentCart date
+         * rendered inside a FluentCRM contact profile's Purchases page: the
+         * Commerce Info widget (via pushInfoWidgetToContact() below) AND the
+         * Purchase History tab's order table, Order Summary, and Purchased
+         * Products list, which the fluent-crm plugin renders in
+         * FluentCrm\App\Services\ExternalIntegrations\FluentCart\FluentCart and
+         * calls through this public method (cross-plugin, same as that class
+         * already importing FluentCart\App\Models\Customer).
+         *
+         * FluentCRM contacts can render every native date either as a relative
+         * difference ("2 hours ago") or, with its "classic" date/time preference
+         * enabled, as an absolute WordPress-formatted date -- both are
+         * FluentCRM's own display modes, produced by Helper::formatDateTime()
+         * itself. Product decision: on this FluentCRM-owned page, FluentCRM's
+         * preference always wins over FluentCart's own date format setting
+         * (DateFormatter / StoreSettings::date_time_format_source), in EITHER
+         * mode -- so both branches defer to Helper::formatDateTime() and neither
+         * falls through to DateFormatter for a reachable Helper.
+         *
+         * DateFormatter::format($datetime, false, wp_timezone()) remains only as
+         * the defensive fallback for when FluentCrm\App\Services\Helper can't be
+         * resolved at all (this plugin's own test suite doesn't load the
+         * FluentCRM plugin; see FluentCRMDeepIntegrationTest). Pinned to
+         * wp_timezone() so a store on FluentCart's 'fluent_cart' timezone source
+         * (no order context here) doesn't fall back to UTC.
+         *
+         * Scoped to this page: DateFormatter's own default behavior is unchanged
+         * everywhere else in FluentCart, including the FluentSupport customer
+         * widget, which renders this same getStatsHtml() markup but must NOT
+         * pick up FluentCRM's display preference -- see getStatsHtml()'s
+         * $dateFormatter parameter.
+         */
+        public function formatDateForFluentCrm($datetime): string
+        {
+        }
+        /**
+         * @param \FluentCart\App\Models\Customer $customer
+         * @param callable|null $dateFormatter Formats a single GMT datetime string
+         *        for display. Defaults to DateFormatter::format() unchanged, which
+         *        is what FluentSupportWidget::getPurchaseWidgets() relies on when
+         *        it calls this method directly -- FluentCRM's own date/time
+         *        preference must stay opt-in via formatDateForFluentCrm(),
+         *        passed explicitly by pushInfoWidgetToContact() below, or it would
+         *        leak into the unrelated FluentSupport widget.
+         */
+        public function getStatsHtml($customer, ?callable $dateFormatter = null)
         {
         }
     }
@@ -24730,7 +24925,13 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public static function getConnectConfig()
         {
         }
+        public static function handleConnect($data): void
+        {
+        }
         public static function parseConnectInfos($vendorData)
+        {
+        }
+        public static function validateConnectRequest($data, string $intent): string
         {
         }
         public function getSellerAuthToken(\FluentCart\Framework\Http\Request\Request $request)
@@ -26392,7 +26593,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public function savePaymentMethodToCustomerMeta($vendorCustomer, $paymentMethodId, $order)
         {
         }
-        public function confirmSetupIntent($setupIntent, $trxHash = null)
+        public function confirmSetupIntent($setupIntent, $trxHash = null, $mode = 'current')
         {
         }
         /**
@@ -26403,7 +26604,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         private function maybePersistSystemVaultToken($subscription, $order, $billingInfo)
         {
         }
-        public function getPaymentMethodDetails($methodId)
+        public function getPaymentMethodDetails($methodId, $mode = 'current')
         {
         }
         public function syncRemoteTransaction(\FluentCart\App\Models\OrderTransaction $transaction)
@@ -26899,6 +27100,12 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public function getOrderInfo($data)
         {
         }
+        public function getElementsAppearance(): array
+        {
+        }
+        public function getElementsFonts(): array
+        {
+        }
         public function getConnectInfo(): array
         {
         }
@@ -26936,6 +27143,18 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
          * @return int
          */
         public static function toInternalAmount($amount, $currency)
+        {
+        }
+        /**
+         * Convert a Stripe object's `livemode` flag to a getStripeObject()/getApiKey()
+         * `$mode` argument. The store's global mode toggle ('current') is not a reliable
+         * proxy for which key an already-fetched object needs — use its own livemode
+         * whenever one is available instead of guessing from the store setting.
+         *
+         * @param bool|null $livemode Null when no prior object/event is available yet.
+         * @return string 'live', 'test', or 'current'
+         */
+        public static function modeFromLivemode($livemode)
         {
         }
         public static function processRemoteRefund($transaction, $amount, $args)
@@ -31892,6 +32111,249 @@ namespace FluentCart\App\Services\CustomPayment {
         }
     }
 }
+namespace FluentCart\App\Services\CustomerIdentity {
+    /**
+     * Moves an unlinked customer's resources after proof of inbox ownership.
+     *
+     * Keep the source as a valid parent for in-flight checkout and extension writes.
+     * Without a writer protocol or foreign keys, an empty check cannot make deletion
+     * safe. Late resources stay unlinked and can be recovered by another email claim.
+     */
+    class CustomerMerger
+    {
+        const BATCH_SIZE = 100;
+        /** Fail closed: recovery relies on InnoDB rollback and row locks. */
+        public static function supportsTransactions(): bool
+        {
+        }
+        /**
+         * @param \FluentCart\App\Models\Customer $source Unlinked record being absorbed.
+         * @param \FluentCart\App\Models\Customer $target Account-linked record it is folded into.
+         * @return bool True when all checked resources have moved; the source is retained.
+         */
+        public static function absorb(\FluentCart\App\Models\Customer $source, \FluentCart\App\Models\Customer $target, ?bool &$needsAnotherBatch = null): bool
+        {
+        }
+        protected static function moveRows(\FluentCart\Framework\Database\Orm\Builder $query, string $column, int $targetId): void
+        {
+        }
+        /** Target primaries win; otherwise keep the earliest source primary. */
+        protected static function moveAddresses(int $sourceId, int $targetId): void
+        {
+        }
+        /** Target values win; batch duplicate detection and writes without loading values. */
+        protected static function moveMeta(int $sourceId, int $targetId): void
+        {
+        }
+        public static function hasCoreResources(int $customerId): bool
+        {
+        }
+        /** Empty retained source rows are not a reason to request inbox proof again. */
+        public static function hasRecoverableCustomers(\FluentCart\Framework\Database\Orm\Builder $customers): bool
+        {
+        }
+        /** A small foreground recovery has a fixed source and resource budget. */
+        public static function fitsForeground(array $sourceIds): bool
+        {
+        }
+        /** Re-read to detect resources left behind by an extension. */
+        protected static function isEmpty(int $customerId): bool
+        {
+        }
+    }
+    /** Resumes large, verified recoveries without retaining frontend transactions. */
+    class CustomerRecoveryService
+    {
+        const META_KEY = '_fct_customer_recovery';
+        const HOOK = 'fluent_cart/customer/recover_verified_history';
+        const FOREGROUND_SOURCES = 5;
+        const MAX_ATTEMPTS = 3;
+        public static function start(int $userId, \FluentCart\App\Models\Customer $target, string $email): void
+        {
+        }
+        public static function progress(int $userId): array
+        {
+        }
+        protected static function sources(string $email, int $targetId): \FluentCart\Framework\Database\Orm\Builder
+        {
+        }
+        /** One customer and at most BATCH_SIZE rows per resource table per invocation. */
+        public static function run(array $payload): void
+        {
+        }
+    }
+    /**
+     * The customer-portal face of EmailClaimService: a notice offering to confirm
+     * the account's address, the landing form a mailed link opens, and the
+     * post-redirect-get handling of both submissions.
+     *
+     * The matching signed-in browser submits valid links automatically with a nonce.
+     * A plain GET or a signed-out mail scanner cannot apply the claim.
+     */
+    class EmailClaimPortal
+    {
+        const ACTION_FIELD = 'fct_email_claim_action';
+        const NONCE_ACTION = 'fct_email_claim';
+        /**
+         * Handle a submitted send/confirm form. Returns where to redirect, or null
+         * when the request is not ours.
+         *
+         * @return string|null
+         */
+        public static function handleSubmission(): ?string
+        {
+        }
+        /**
+         * The notice/form HTML for the current request, or '' when there is nothing to show.
+         */
+        public static function render(): string
+        {
+        }
+    }
+    /**
+     * Verifies the signed-in account's inbox before updating contact details or
+     * recovering guest purchases. A mailed link and an authenticated POST are
+     * both required; authentication alone never proves ownership of an address.
+     */
+    class EmailClaimService
+    {
+        const TTL_SECONDS = DAY_IN_SECONDS;
+        /** Domain separator so a token minted here is never valid anywhere else signing with the same salt. */
+        const SIGNING_CONTEXT = 'fluent_cart_email_claim_v1';
+        /** User meta holding the pending claim's nonce hash: only the newest link works, and once. */
+        const META_KEY = \FluentCart\App\Services\CustomerIdentity\EmailVerificationService::PENDING_CLAIM_META_KEY;
+        const QUERY_TOKEN = 'fct_email_claim';
+        const QUERY_STATUS = 'fct_email_claim_status';
+        const RATE_LIMIT = 5;
+        public static function isEnabled(): bool
+        {
+        }
+        /**
+         * What the signed-in account could confirm right now, or null.
+         *
+         * 'unverified' — a new account has not proved its current address.
+         * 'diverged'  — the linked record carries a different address than the account.
+         * 'recovery'  — unlinked records hold the account's address (guest purchases).
+         *
+         * Null covers a lot: not signed in, feature off, nothing to reconcile, or the
+         * address is held by a record linked to another account — a conflict between
+         * two accounts that is left for staff rather than resolved by whoever asks first.
+         * Deliberately loads no guest data: the offer says nothing about what is there.
+         *
+         * @return array|null ['customer' => Customer|null, 'from' => string, 'to' => string, 'reason' => string]
+         */
+        public static function getOffer(): ?array
+        {
+        }
+        /**
+         * Mail a confirmation link to the address being claimed.
+         *
+         * @return string 'sent', or one of unavailable|throttled|no_portal|send_failed
+         */
+        public static function issue(): string
+        {
+        }
+        /**
+         * Check a confirmation token against the world as it is now, not as it was
+         * when the link was issued.
+         *
+         * @return array ['status' => 'ok'|slug, 'customer' => Customer|null, 'email' => string, 'user_id' => int]
+         */
+        public static function resolveClaim(string $token): array
+        {
+        }
+        /**
+         * Apply a confirmed claim: absorb unlinked records at the address, then move
+         * the contact address onto it. Consumes the link.
+         *
+         * @return string 'confirmed', 'recovering', 'incomplete', or a resolveClaim() slug
+         */
+        public static function confirm(string $token): string
+        {
+        }
+        /** Called only after a successful password reset with validated inbox proof. */
+        public static function confirmPasswordReset(int $userId, string $email): string
+        {
+        }
+        /** Shared finalization after proof; caller holds the account transaction lock. */
+        protected static function completeConfirmation(int $userId, string $email, ?\FluentCart\App\Models\Customer $customer): string
+        {
+        }
+        public static function buildToken(int $customerId, int $userId, string $from, string $to, int $expires, string $nonce): string
+        {
+        }
+        /**
+         * @return array|null Decoded only after the signature verifies, so what is checked is exactly what was signed.
+         */
+        protected static function parseToken(string $token): ?array
+        {
+        }
+        protected static function sign(string $payload): string
+        {
+        }
+        protected static function hashNonce(string $nonce): string
+        {
+        }
+        protected static function mail(string $to, array $offer, string $link): bool
+        {
+        }
+        /**
+         * @return \FluentCart\App\Models\Customer|null
+         */
+        protected static function createCustomerFor(int $userId, string $email): ?\FluentCart\App\Models\Customer
+        {
+        }
+        protected static function heldByLinkedCustomer(string $email, int $excludeId): bool
+        {
+        }
+        protected static function unclaimedRecordsHolding(string $email, int $excludeId)
+        {
+        }
+        public static function normalize($email): string
+        {
+        }
+        public static function isSame($first, $second): bool
+        {
+        }
+        /**
+         * Counted with the object cache when one is present. The transient fallback
+         * is read-modify-write and therefore not atomic: two simultaneous requests
+         * can both pass. It bounds abuse; it is not a hard limit.
+         */
+        protected static function hitRateLimit(string $bucket): bool
+        {
+        }
+    }
+    /** Tracks inbox proof independently from WordPress authentication. */
+    class EmailVerificationService
+    {
+        const META_KEY = '_fct_email_verification';
+        const PENDING_CLAIM_META_KEY = '_fct_email_claim';
+        /** Proof captured before WordPress consumes the reset key; never persisted. */
+        private static $passwordResetProof = [];
+        public static function capturePasswordResetProof($user): void
+        {
+        }
+        public static function verifyAfterPasswordReset($user): void
+        {
+        }
+        public static function markPending(int $userId, string $email): void
+        {
+        }
+        public static function markVerified(int $userId, string $email): void
+        {
+        }
+        public static function isRequired(int $userId): bool
+        {
+        }
+        public static function normalize($email): string
+        {
+        }
+        public static function isSame($first, $second): bool
+        {
+        }
+    }
+}
 namespace FluentCart\App\Services\DateTime {
     trait CanExtractTimeZone
     {
@@ -31905,6 +32367,184 @@ namespace FluentCart\App\Services\DateTime {
         {
         }
         public static function getTimezoneOffsetMinutes($timezoneName): int
+        {
+        }
+    }
+    /**
+     * Renders dates using the store's date/time format and timezone preference.
+     *
+     * Every user-facing date in FluentCart should go through this class rather than
+     * calling ->format() with a literal pattern. A literal pattern cannot be
+     * localized: DateTime::format() has no locale, so 'M' is always 'Aug', and the
+     * day/month order and the 12-hour clock are baked into the source.
+     *
+     * Two store settings steer the output:
+     *
+     *  - date_time_format_source: DEFAULTS TO 'wordpress', following Settings >
+     *    General. 'fluent_cart' keeps FALLBACK_DATE/FALLBACK_TIME instead.
+     *  - timezone_source: defaults to 'fluent_cart', rendering in the timezone
+     *    captured on the order at checkout (falling back to UTC); 'wordpress' uses
+     *    the site timezone.
+     *
+     * The format source deliberately does NOT default to reproducing the
+     * pre-settings strings, and the reason is worth keeping in view. The FluentCart
+     * patterns are literals, so on a localized store wp_date() translates the month
+     * name but cannot reorder the fields: German renders 'Juli 30, 2026' -- a German
+     * month in English order, which a German reader takes day-first and misreads.
+     * A fully English date would at least be recognized as English. There is no
+     * literal that is right in every locale, so the default follows the one source
+     * that is: the site's own WordPress format. English stores see a changed string
+     * on upgrade ('Aug 16, 2026' -> 'August 16, 2026'); a store that wants the old
+     * output back selects 'fluent_cart'.
+     */
+    class DateFormatter
+    {
+        /**
+         * FluentCart's own patterns — the literals the call sites carried before
+         * these settings existed.
+         *
+         * These were never uniform, and the difference is load-bearing: date-only
+         * sites (the shortcode parsers, the FluentCRM contact stats) used 'M j, Y'
+         * with an unpadded day, while date-and-time sites (every e-mail view) used
+         * 'M d, Y h:i A' with a padded one. Reproducing one from the other would
+         * silently renumber whichever side lost, so both are kept verbatim.
+         *
+         * The JS side has the same split for its own literals; see
+         * LEGACY_DATE_FORMATS in utils/dateFormats.js.
+         */
+        const FALLBACK_DATE = 'M j, Y';
+        const FALLBACK_TIME = 'h:i A';
+        const FALLBACK_DATE_TIME = 'M d, Y h:i A';
+        /**
+         * Whether the store follows the WordPress date/time format options.
+         */
+        public static function usesWordPressFormats(): bool
+        {
+        }
+        /**
+         * Whether the store renders dates in the WordPress site timezone.
+         */
+        public static function usesWordPressTimezone(): bool
+        {
+        }
+        /**
+         * The store's formats, before the date/time filter runs.
+         *
+         * Unfiltered on purpose: this is what TransStrings::dateTimeStrings()
+         * starts from before running the single `fluent_cart/date_time_strings`
+         * filter over the whole map. Read formats() instead of this.
+         *
+         * @return array<string, string>
+         */
+        public static function defaultFormats(): array
+        {
+        }
+        /**
+         * What goes between the date and the time in the combined format.
+         *
+         * WordPress has no combined date/time option -- core itself joins the two
+         * with a space, and that is the default here for the same reason. But the
+         * space is an English convention, not a universal one: German writes
+         * '16. August 2026, 15:30' with a comma, and a locale that wants no
+         * separator at all cannot express that by editing either option.
+         *
+         * The separator is a LITERAL in a PHP date() pattern, so a separator
+         * containing a date token would be rendered as one. Anything a filter
+         * returns is escaped before it reaches the pattern, which means a filter
+         * can safely return ', ' without knowing that 'a' is the meridiem token.
+         *
+         * Listeners receive the two store formats as one read-only context array
+         * and must register with `add_filter('fluent_cart/date_time_separator',
+         * $callback, 10, 2)`.
+         *
+         * @param string $date The store's date format, for context only
+         * @param string $time The store's time format, for context only
+         */
+        protected static function dateTimeSeparator(string $date, string $time): string
+        {
+        }
+        /**
+         * Backslash-escape every character PHP's date() would read as a token.
+         *
+         * Without this a filter returning ', ' would be fine but one returning
+         * ' at ' would render the 'a' as 'pm' and the 't' as the month length.
+         */
+        protected static function escapeDateLiteral(string $literal): string
+        {
+        }
+        /**
+         * The store's formats after the single date/time filter has run.
+         *
+         * @return array<string, string>
+         */
+        public static function formats(): array
+        {
+        }
+        /**
+         * The store's date format, e.g. 'F j, Y' or 'j. F Y'.
+         */
+        public static function dateFormat(): string
+        {
+        }
+        /**
+         * The store's time format, e.g. 'g:i a' or 'H:i'.
+         */
+        public static function timeFormat(): string
+        {
+        }
+        /**
+         * The store's month-and-year pattern, e.g. 'F Y' or 'Y年n月'.
+         *
+         * There is no WordPress setting for this, so derive it from the store's date
+         * format by dropping the day. That keeps a year-first or suffix-marked locale
+         * in its own field order instead of assuming the English 'month year', and it
+         * matches how DayjsFormatter derives `month_year` for the charts.
+         */
+        public static function monthYearFormat(): string
+        {
+        }
+        /**
+         * The store's hour-only pattern for an hour-of-day axis, 'H' or 'g A'.
+         *
+         * Derived from the store's time format: if it asks for a 24-hour clock
+         * (G or H), label the axis 0-23 rather than forcing 1 AM - 12 PM.
+         */
+        public static function hourFormat(): string
+        {
+        }
+        /**
+         * The timezone a date should be displayed in.
+         *
+         * On 'wordpress' this is always the site timezone. On 'fluent_cart' there is
+         * no browser to read here — PHP renders e-mails from cron and invoices from
+         * a queue — so we use the timezone captured on the order at checkout, which
+         * is the same source ReceiptRenderer and OrderParser already read. Records
+         * with no order behind them (customer-level dates, for instance) fall back
+         * to UTC, which is how they rendered before these settings existed.
+         *
+         * @param mixed $context Order model, order config array, timezone string, or null
+         */
+        public static function displayTimezone($context = null): \DateTimeZone
+        {
+        }
+        /**
+         * Pull a timezone name out of whatever the call site had to hand.
+         *
+         * @param mixed $context
+         */
+        protected static function contextTimezone($context): string
+        {
+        }
+        /**
+         * Format a GMT/UTC datetime for display.
+         *
+         * @param string|\DateTimeInterface|int|null $datetime GMT datetime, timestamp, or null for now
+         * @param bool $withTime Append the store's time format
+         * @param mixed $context Order model, order config array, or timezone string,
+         *                       used only when timezone_source is 'fluent_cart'
+         * @return string Empty string when $datetime is absent or unparseable
+         */
+        public static function format($datetime, bool $withTime = false, $context = null): string
         {
         }
     }
@@ -32851,6 +33491,158 @@ namespace FluentCart\App\Services\DateTime {
         {
         }
         public static function parse($datetimeString, $timezone = null)
+        {
+        }
+    }
+    /**
+     * Converts the store's PHP date formats into Day.js patterns for the admin SPA
+     * and the customer dashboard.
+     *
+     * The SPA already receives translated month and weekday names, but the pattern
+     * itself was a literal inside the bundle, so a localized store ended up with
+     * translated names in English order -- "August 16, 2026" on a German site.
+     * Shipping the store's own format alongside the names is what fixes that.
+     *
+     * DateFormatter owns the PHP side; this class is only the bridge to Day.js.
+     */
+    class DayjsFormatter
+    {
+        /**
+         * Every character PHP's date() treats as a format token.
+         *
+         * Used to tell tokens apart from literal separators when deriving one
+         * format from another, and to drop a token Day.js cannot express.
+         */
+        protected static $dateTokens = 'dDjlNSwzWFmMntLoXxYyaABgGhHisuveIOPpTZcrU';
+        /**
+         * PHP date() token => Day.js token.
+         *
+         * A PHP token absent from this map has no Day.js equivalent and is dropped.
+         * 'S' (ordinal suffix) is handled separately because Day.js folds it into
+         * the day token itself ('jS' => 'Do').
+         */
+        protected static $tokenMap = [
+            // Day
+            'd' => 'DD',
+            'j' => 'D',
+            'D' => 'ddd',
+            'l' => 'dddd',
+            'N' => 'd',
+            'w' => 'd',
+            'z' => 'DDD',
+            // Week
+            'W' => 'w',
+            // Month
+            'F' => 'MMMM',
+            'm' => 'MM',
+            'M' => 'MMM',
+            'n' => 'M',
+            // Year
+            'o' => 'YYYY',
+            'X' => 'YYYY',
+            'x' => 'YYYY',
+            'Y' => 'YYYY',
+            'y' => 'YY',
+            // Time
+            'a' => 'a',
+            'A' => 'A',
+            'g' => 'h',
+            'G' => 'H',
+            'h' => 'hh',
+            'H' => 'HH',
+            'i' => 'mm',
+            's' => 'ss',
+            'u' => 'SSS',
+            'v' => 'SSS',
+            // Timezone
+            'e' => 'z',
+            'O' => 'ZZ',
+            'P' => 'Z',
+            'p' => 'Z',
+            'T' => 'z',
+            // Full date/time
+            'c' => 'YYYY-MM-DDTHH:mm:ssZ',
+            'r' => 'ddd, DD MMM YYYY HH:mm:ss ZZ',
+            'U' => 'X',
+        ];
+        /**
+         * The date/time map for the SPA payload, with Day.js patterns.
+         *
+         * Same map PHP reads, except the formats are converted from PHP date()
+         * syntax to Day.js tokens. Localize this rather than the raw map, or the
+         * bundle would receive patterns it cannot parse.
+         *
+         * @return array<string, mixed>
+         */
+        public static function localizedStrings(): array
+        {
+        }
+        /**
+         * The store's formats as Day.js patterns, keyed for the JS helpers.
+         *
+         * date_short and month_year have no WordPress setting of their own; they
+         * are derived from the store's date format so that a compact table column
+         * or a chart label keeps the locale's own field order.
+         *
+         * @return array<string, string>
+         */
+        public static function formats(): array
+        {
+        }
+        /**
+         * Convert a PHP date() format string to its Day.js equivalent.
+         *
+         * Characters that are not PHP tokens are emitted as Day.js literals, so a
+         * stray letter in a translated format is not read back as a token.
+         */
+        public static function convert(string $format): string
+        {
+        }
+        /**
+         * Drop the year from a PHP date format, keeping the locale's day/month order.
+         *
+         * Used for compact table columns that omit the year for the current year.
+         *
+         * Public because this takes and returns a PHP date format, not a Day.js one
+         * -- DateFormatter derives its own month-year pattern from the same helper
+         * so the e-mail digest and the charts agree on the locale's field order.
+         */
+        public static function withoutYear(string $format): string
+        {
+        }
+        /**
+         * Drop the day from a PHP date format, leaving month and year.
+         */
+        public static function withoutDay(string $format): string
+        {
+        }
+        /**
+         * Replace the full month-name token with the abbreviated one.
+         *
+         * date_short is for compact table columns, where a German store's
+         * "16. August" is wider than the column needs. Swapping the PHP token
+         * BEFORE convert() keeps this generic across locales: 'F' becomes 'M',
+         * which convert()'s existing token map already renders as Day.js 'MMM'
+         * (the store's own translated monthsShort), the same way it always has
+         * for a store whose date format already spells the month short. A
+         * numeric month token ('n', 'm') is left untouched -- a store that
+         * writes the month as a digit should stay numeric, not gain a name.
+         */
+        public static function abbreviateMonth(string $format): string
+        {
+        }
+        /**
+         * Remove the given tokens, plus the separator their removal left stranded.
+         *
+         * The format is split into token and literal parts first. When a token is
+         * dropped, the separator that FOLLOWS it goes too -- or the one that
+         * precedes it, when the dropped token was last. That keeps suffix-style
+         * locales such as the Japanese 'Y\u5e74n\u6708j\u65e5' intact instead of
+         * shaving off their trailing marker.
+         *
+         * @param string[] $tokens
+         */
+        protected static function dropTokens(string $format, array $tokens): string
         {
         }
     }
@@ -41844,6 +42636,12 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
     class LicenseParser extends \FluentCart\App\Services\ShortCodeParser\Parsers\BaseParser
     {
         private $license;
+        /**
+         * Only used as the timezone context for DateFormatter — the order carries the
+         * user_tz captured at checkout. Null when the shortcode runs without one, in
+         * which case DateFormatter falls back to UTC.
+         */
+        private $order;
         public function __construct($data)
         {
         }
@@ -42087,6 +42885,12 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
     class SubscriptionParser extends \FluentCart\App\Services\ShortCodeParser\Parsers\BaseParser
     {
         private $subscription;
+        /**
+         * Only used as the timezone context for DateFormatter — the order carries the
+         * user_tz captured at checkout. Null when the shortcode runs without one, in
+         * which case DateFormatter falls back to UTC.
+         */
+        private $order;
         public function __construct($data)
         {
         }
@@ -42583,6 +43387,248 @@ namespace FluentCart\App\Services\Theme {
         {
         }
     }
+    /**
+     * Colour maths for the storefront palette.
+     *
+     * A block theme hands us a handful of palette colours. The storefront needs a
+     * coherent set of surfaces, borders, muted text and accent tints. Rather than
+     * invent those, we derive them from the colours the theme actually declares —
+     * a border is the body text mixed most of the way toward the surface, a muted
+     * text tone is the same mix stopped earlier, and button text is whichever of
+     * light/dark reads better on the button it sits on.
+     *
+     * All maths is sRGB. Luminance follows the WCAG 2.x relative-luminance
+     * definition so the contrast picks match what an accessibility checker sees.
+     */
+    class ColorMath
+    {
+        /**
+         * Parse a colour into an RGB triplet.
+         *
+         * Accepts #rgb, #rrggbb, #rrggbbaa and rgb()/rgba(). Returns null for
+         * anything unreadable so callers can fall back instead of guessing.
+         *
+         * @param string $color
+         * @return array|null [r, g, b] or null
+         */
+        public static function parse($color): ?array
+        {
+        }
+        /**
+         * Convert an RGB triplet to #rrggbb.
+         *
+         * @param array $rgb
+         * @return string
+         */
+        public static function toHex(array $rgb): string
+        {
+        }
+        /**
+         * Normalise any readable colour to #rrggbb.
+         *
+         * @param string $color
+         * @param string $fallback Returned when the colour cannot be parsed.
+         * @return string
+         */
+        public static function hex($color, string $fallback = ''): string
+        {
+        }
+        /**
+         * Mix two colours.
+         *
+         * @param string $first
+         * @param string $second
+         * @param int    $percent How much of $first to keep, 0-100.
+         * @return string Hex, or '' when neither colour is readable.
+         */
+        public static function mix($first, $second, int $percent = 50): string
+        {
+        }
+        /**
+         * WCAG relative luminance.
+         *
+         * @param string $color
+         * @return float 0-1, or -1 when the colour cannot be read.
+         */
+        public static function luminance($color): float
+        {
+        }
+        /**
+         * Whether a colour reads as dark.
+         *
+         * The 0.45 threshold sits above the midpoint on purpose: mid-tone brand
+         * colours read as "dark" to the eye well before their luminance halves.
+         *
+         * @param string $color
+         * @return bool
+         */
+        public static function isDark($color): bool
+        {
+        }
+        /**
+         * WCAG contrast ratio between two colours.
+         *
+         * @param string $first
+         * @param string $second
+         * @return float 1-21, or 0 when either colour cannot be read.
+         */
+        public static function contrast($first, $second): float
+        {
+        }
+        /**
+         * Pick whichever of two text colours reads better on a background.
+         *
+         * @param string $background
+         * @param string $light
+         * @param string $dark
+         * @return string
+         */
+        public static function readableOn($background, string $light = '#ffffff', string $dark = '#1f2937'): string
+        {
+        }
+        /**
+         * Nudge a colour toward white.
+         *
+         * @param string $color
+         * @param int    $percent
+         * @return string
+         */
+        public static function lighten($color, int $percent): string
+        {
+        }
+        /**
+         * Nudge a colour toward black.
+         *
+         * @param string $color
+         * @param int    $percent
+         * @return string
+         */
+        public static function darken($color, int $percent): string
+        {
+        }
+        /**
+         * Move a colour away from the surface it sits on, so it stays visible on
+         * a light or a dark background without the caller knowing which it has.
+         *
+         * @param string $color
+         * @param string $background
+         * @param int    $percent
+         * @return string
+         */
+        public static function awayFrom($color, $background, int $percent): string
+        {
+        }
+    }
+    /**
+     * The storefront colour registry.
+     *
+     * FluentCart's stylesheets declare roughly seventy scoped custom properties,
+     * but almost every one of them is written as `var(--fct-<global>, <fallback>)`.
+     * The globals listed here are the ones that are referenced but never declared —
+     * they are the intended knobs, and setting them cascades to everything
+     * downstream without touching a single scoped variable.
+     *
+     * This class is the single source of truth for three consumers: the CSS the
+     * storefront prints, the settings schema the admin renders, and the sanitizer
+     * that decides which submitted keys are real.
+     */
+    class ColorPalette
+    {
+        /**
+         * Defaults source: FluentCart's own colours, only overrides are written.
+         */
+        const SOURCE_DEFAULT = 'default';
+        /**
+         * Defaults source: rebuild the whole palette from the active theme.
+         */
+        const SOURCE_THEME = 'inherit_from_theme';
+        /**
+         * Defaults source: the store owner picks the global colours by hand.
+         */
+        const SOURCE_CUSTOM = 'customize';
+        /**
+         * Request-level cache for the built registry.
+         *
+         * @var array|null
+         */
+        protected static $cachedGlobals = null;
+        /**
+         * Every accepted value for the source setting.
+         *
+         * @return array
+         */
+        public static function sources(): array
+        {
+        }
+        /**
+         * Field groups, in the order the settings screen shows them.
+         *
+         * @return array
+         */
+        public static function groups(): array
+        {
+        }
+        /**
+         * The global custom properties a store owner can set.
+         *
+         * Keys are the settings keys (snake_case, safe as form state paths); `var`
+         * is the custom property written to the page. `aliases` covers properties
+         * that carry a second spelling in the stylesheets — the modal checkout
+         * reads `--fct-input-disabled-bg` where every other surface reads
+         * `--fct-input-disabled-bg-color`, and a single setting has to drive both
+         * or the modal drifts away from the rest of the store.
+         *
+         * `default` is the effective value FluentCart's own fallbacks resolve to;
+         * it is shown as a hint and is never written to the page on its own.
+         *
+         * @return array
+         */
+        public static function globals(): array
+        {
+        }
+        /**
+         * Drop the request-level registry cache.
+         *
+         * The registry runs its entries through a filter and wp_parse_args on the
+         * first read, so it is built once per request. A filter registered after
+         * that first read would otherwise never be seen.
+         *
+         * @return void
+         */
+        public static function clearCache(): void
+        {
+        }
+        /**
+         * The globals belonging to one group, in registry order.
+         *
+         * @param string $group
+         * @return array
+         */
+        public static function globalsFor(string $group): array
+        {
+        }
+        /**
+         * The semantic roles theme inheritance resolves.
+         *
+         * The first four are anchors read from the theme's palette; the rest are
+         * derived from those so that a theme offering two colours still produces a
+         * coherent store.
+         *
+         * @return array Role key => label.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * Every custom property one settings key writes, primary name first.
+         *
+         * @param array $definition
+         * @return array
+         */
+        public static function varsOf(array $definition): array
+        {
+        }
+    }
     class ColorPaletteGenerator
     {
         private function hexToRgb($hex)
@@ -42604,18 +43650,562 @@ namespace FluentCart\App\Services\Theme {
         {
         }
     }
+    /**
+     * Writes the storefront's global colour custom properties.
+     *
+     * FluentCart's stylesheets declare every scoped colour as
+     * `var(--fct-<global>, <fallback>)`, so the globals printed here cascade to the
+     * whole store — shop grid, product page, cart drawer, checkout and the customer
+     * dashboard — without any of those stylesheets being touched.
+     *
+     * Three sources are supported, and they are mutually exclusive:
+     *
+     *  - `default`            nothing is printed; FluentCart's own fallbacks apply.
+     *  - `inherit_from_theme` the palette is rebuilt from the active theme.
+     *  - `customize`          the store owner's own colours, and only the ones
+     *                         they actually set.
+     */
     class FrontendTheme
     {
-        public static function applyTheme()
+        /**
+         * The id on the printed style element, so it can be found in the source.
+         */
+        const STYLE_ID = 'fluent-cart-storefront-colors';
+        /**
+         * Marks a storefront still wearing FluentCart's own colours.
+         */
+        const CLASS_DEFAULT = 'fluent-cart-theme';
+        /**
+         * Marks a storefront whose colours have been changed from FluentCart's.
+         */
+        const CLASS_CUSTOM = 'fluent-cart-custom';
+        /**
+         * Marks a storefront the active theme styles itself.
+         *
+         * Only possible under `inherit_from_theme`, when nothing could be read from
+         * the active theme. The stylesheets key their colour declarations off this:
+         * a declaration carrying an unresolvable var() still wins the cascade and
+         * then computes to `unset` — it never falls back to the theme's own rule,
+         * because that rule was discarded at cascade time. Only the absence of the
+         * declaration lets the theme style the element, and absence cannot be
+         * expressed with a variable, so it is expressed with this class instead.
+         */
+        const CLASS_NO_COLORS = 'fluent-cart-no-colors';
+        /**
+         * Register the front-end hooks.
+         *
+         * Priority 100 puts the block after wp_print_styles() (which runs on
+         * wp_head at 8). Both this block and FluentCart's stylesheets target
+         * `:root`, so specificity is a tie and source order decides — printing
+         * late is what makes these values win.
+         *
+         * @return void
+         */
+        public static function applyTheme(): void
         {
         }
-        protected function apply()
+        /**
+         * Seed the `fluent_cart/stripe_appearance` filter with the palette's
+         * answer.
+         *
+         * A named callback on the public filter rather than a call inside the
+         * gateway: the payment module stays unaware of the theme service, and
+         * removing or replacing FluentCart's contribution is a *_filter() call.
+         *
+         * A default-filler, not an owner: the palette supplies its theme and its
+         * three colour variables, and everything else — a customised seed, or
+         * what an earlier listener added (labels, rules, extra variables) —
+         * survives. The theme is only taken over from the plain default, since
+         * an explicit theme choice is a choice. With no opinion (default source,
+         * nothing measurable), the incoming value passes through unchanged.
+         *
+         * @param mixed $appearance
+         * @return array
+         */
+        public static function filterStripeAppearance($appearance): array
         {
         }
-        protected function get(): array
+        /**
+         * The Stripe Elements appearance the storefront palette implies.
+         *
+         * Stripe renders inside its own iframe, where FluentCart's custom
+         * properties do not exist — a var() reference handed to Stripe resolves
+         * to nothing. So the palette speaks to Stripe only in measurable hexes
+         * (a reference's hex fallback counts, per the spec-59 doctrine), only as
+         * a pair — the input surface and its text from the same source — and
+         * stays silent otherwise: Stripe's default theme is a coherent light
+         * design, and half a dark palette printed onto it would read worse than
+         * none of it. A dark input surface picks Stripe's own night theme so the
+         * parts we never set (placeholders, dividers, the Link box) darken with
+         * it.
+         *
+         * Seeds the `fluent_cart/stripe_appearance` filter's default — a listener
+         * still overrides everything here.
+         *
+         * @return array Stripe appearance config: ['theme' => ..., 'variables' => ...].
+         */
+        public static function stripeAppearance(): array
         {
         }
-        protected function prepareInlineStyle(array $data): string
+        /**
+         * Say on the body which colour source is in force.
+         *
+         * The custom properties printed above only reach surfaces FluentCart
+         * already styles. A class reaches everything else — a theme that wants to
+         * stand down once the store owner has picked their own colours, a snippet
+         * in the customiser, a child theme adjusting one store. None of those can
+         * read the setting; all of them can write a selector.
+         *
+         * The two markers are alternatives, never both, so `body.fluent-cart-theme`
+         * and `body.fluent-cart-custom` partition every storefront page between
+         * them.
+         *
+         * The active theme is named only under `inherit_from_theme`, because that
+         * is the one source whose result depends on which theme is running. Naming
+         * it under `customize` would invite a selector that breaks on switching
+         * theme for no reason, since the owner's colours are the owner's colours
+         * either way.
+         *
+         * @param array $classes
+         * @return array
+         */
+        public static function bodyClasses($classes): array
+        {
+        }
+        /**
+         * The active theme as a class name.
+         *
+         * The template rather than the stylesheet: most real stores run a child
+         * theme, whose styling is the parent's plus a few overrides, so a rule
+         * written for `astra` is the one that is actually wanted. Naming
+         * `astra-child` would leave that rule matching nothing on exactly the sites
+         * most likely to need it.
+         *
+         * A theme directory name is not a class name, and this lands inside a class
+         * attribute on every storefront page, so it goes through
+         * sanitize_html_class() — which can legitimately return nothing, and an
+         * empty class is not worth adding.
+         *
+         * @return string
+         */
+        protected static function themeClass(): string
+        {
+        }
+        /**
+         * Print the custom-property block.
+         *
+         * The modal checkout renders in an iframe pointed at a normal WordPress
+         * URL, and that view calls wp_head() too, so this one hook covers both the
+         * storefront and the modal without a second injection point.
+         *
+         * @return void
+         */
+        public static function printColors(): void
+        {
+        }
+        /**
+         * Which source the store is configured to use.
+         *
+         * @return string One of the ColorPalette::SOURCE_* constants.
+         */
+        public static function getSource(): string
+        {
+        }
+        /**
+         * The colours the store owner set by hand, keyed by settings key.
+         *
+         * Anything not in the registry, and anything that is not a valid hex, is
+         * dropped — the option is sanitised on save, but a stale option written by
+         * an older version must not reach the page unchecked.
+         *
+         * @return array
+         */
+        public static function getCustomColors(): array
+        {
+        }
+        /**
+         * The colours the active theme supplies, keyed by settings key.
+         *
+         * @return array
+         */
+        public static function getThemeColors(): array
+        {
+        }
+        /**
+         * The only two shapes allowed on the right of one of our declarations.
+         *
+         * A hex colour, or a bare custom-property reference for the themes that
+         * publish their palette that way. Everything else is refused: this string
+         * is written into a style element on every storefront page, so the grammar
+         * stays narrow enough that nothing can ride along inside it.
+         *
+         * @param mixed $value
+         * @return string The safe value, or '' when it is neither.
+         */
+        protected static function sanitizeDeclarationValue($value): string
+        {
+        }
+        /**
+         * Every colour that will actually be written, keyed by settings key.
+         *
+         * @return array
+         */
+        public static function getEffectiveColors(): array
+        {
+        }
+        /**
+         * The effective colours as plain hexes, keyed like getEffectiveColors().
+         *
+         * A separate reader instead of extra keys in the effective colours: the
+         * registry is publicly extensible, so no key shape is safe to reserve
+         * there. A reference measures as its shipped hex fallback; anything
+         * unmeasurable is simply absent, so absence itself means "no real
+         * colour known".
+         *
+         * @return array Settings key => hex.
+         */
+        public static function getMeasurableColors(): array
+        {
+        }
+        /**
+         * Build the `:root` declaration block.
+         *
+         * @return string CSS, or '' when there is nothing to write.
+         */
+        public static function buildCss(): string
+        {
+        }
+    }
+    /**
+     * Reads the active theme's colour palette and resolves it into the semantic
+     * roles the storefront needs.
+     *
+     * A block theme publishes a handful of palette entries in theme.json. The
+     * storefront needs a surface, a body text tone, an accent and a button colour
+     * as anchors, plus the in-between tones — borders, dividers, muted text,
+     * placeholder text — that no theme bothers to declare. Those are derived from
+     * the anchors rather than invented, so the store follows the theme instead of
+     * merely sitting next to it, and keeps following when the palette changes.
+     */
+    class ThemePalette
+    {
+        /**
+         * Palette slugs tried for each anchor role, most specific first.
+         *
+         * These are the slugs themes agree on — `base`/`contrast` come from Twenty
+         * Twenty-Four and the themes that copied it, `primary`/`accent` from the
+         * classic-adjacent ones, and GeneratePress publishes the same names as
+         * references its own stylesheets resolve.
+         *
+         * Three vendors are supported by name — the ones popular enough to be worth
+         * carrying, each mapping written down from the theme's own sources rather
+         * than inferred from the numbering:
+         *
+         *  - Astra numbers 0 brand, 3 body text, 4 background.
+         *  - Kadence's theme.json names `theme-palette1` "Accent"; its defaults set
+         *    the body font to `palette4` and the content background to `palette9`.
+         *  - Blocksy paints its buttons with `palette-color-1`, defaults Base Text
+         *    to `palette-color-3`, and its surfaces inherit `palette-color-8`.
+         *
+         * All publish their palette as `var()` references the theme itself
+         * declares on every page, so the reference is written through and the
+         * browser resolves it there. Blocksy's references carry hex fallbacks,
+         * which makes them measurable as shipped; Astra's and Kadence's are bare,
+         * so their current values are read from the vendor's own settings and
+         * attached as the fallback (see vendorValues()) — the same measurable
+         * shape, arrived at from the source the vendor prints the property from.
+         * Either way derived tones and button contrast resolve for real. Should a
+         * reference still measure as nothing, the button is not owned at all (see
+         * resolve()) — never a guessed text colour on an unknown background.
+         *
+         * The vendor slugs sit last so the shared names always win first — a real
+         * colour can also be mixed and measured, a reference can only be written. Every other vendor still takes the stand-aside path
+         * (nothing written, the no-colors marker on the body, the theme's own rules
+         * styling the CTAs), or the `fluent_cart/theme/anchor_map` filter.
+         *
+         * @var array
+         */
+        protected static $anchorCandidates = ['surface' => ['base', 'background', 'white', 'base-2', 'light', 'ast-global-color-4', 'theme-palette9', 'palette-color-8'], 'text' => ['contrast', 'text', 'foreground', 'black', 'dark', 'contrast-2', 'ast-global-color-3', 'theme-palette4', 'palette-color-3'], 'accent' => ['primary', 'accent', 'brand', 'accent-1', 'theme-1', 'link', 'ast-global-color-0', 'theme-palette1', 'palette-color-1'], 'button_bg' => ['primary', 'accent', 'brand', 'contrast', 'accent-1', 'theme-1', 'ast-global-color-0', 'theme-palette1', 'palette-color-1']];
+        /**
+         * Request-level cache for the normalised palette.
+         *
+         * @var array|null
+         */
+        protected static $cachedPalette = null;
+        /**
+         * Request-level cache for the resolved roles.
+         *
+         * @var array|null
+         */
+        protected static $cachedRoles = null;
+        /**
+         * Request-level cache for the vendor-declared property values.
+         *
+         * @var array|null
+         */
+        protected static $cachedVendorValues = null;
+        /**
+         * Drop the request-level caches.
+         *
+         * Reading theme.json and resolving eleven roles is repeated work within a
+         * request, so both are cached. Anything that changes what those reads would
+         * return — switching theme, editing the palette, a filter registered after
+         * a first read — has to clear them or it keeps seeing the old palette.
+         *
+         * @return void
+         */
+        public static function clearCache(): void
+        {
+        }
+        /**
+         * The active theme's colour palette, normalised to hex.
+         *
+         * @return array List of ['slug' => ..., 'name' => ..., 'color' => ...].
+         */
+        public static function palette(): array
+        {
+        }
+        /**
+         * Flatten whatever shape wp_get_global_settings() returned.
+         *
+         * Depending on the WordPress version this is either a flat list or one
+         * list per origin. The `default` origin is WordPress's own twelve-colour
+         * palette — black, white and the vivid-* set — which every site has
+         * whether or not its theme declares anything. Inheriting from it would
+         * not be inheriting from the theme, and it would let a theme that
+         * publishes nothing report a palette it does not have, so only the
+         * theme's own colours and the user's customisations of them are read.
+         *
+         * @param array $raw
+         * @return array
+         */
+        protected static function normalizePalette(array $raw): array
+        {
+        }
+        /**
+         * Keep only the entries that name a slug and a colour we can actually read.
+         *
+         * theme.json is not restricted to hex, and several popular themes publish
+         * their palette as `var(--theme-colour-0)` references that cannot be
+         * resolved server-side. Those are dropped rather than guessed: an
+         * unresolvable value handed on as if it were a colour would be mixed into
+         * the derived tones, and a muted text colour mixed from nothing collapses
+         * to the surface it sits on — invisible text rather than an obvious error.
+         *
+         * Applied after the filter as well as before it, because a filter is just
+         * another source of values and gets no more trust than theme.json does.
+         *
+         * @param mixed $entries
+         * @return array
+         */
+        protected static function usableEntries($entries): array
+        {
+        }
+        /**
+         * The current values of the properties the active vendor declares, keyed
+         * by property name.
+         *
+         * Each mapping reads the same source the vendor prints the property from,
+         * so customisations are included — the customiser saves into the very
+         * option being read. Astra prints `--ast-global-color-N` from
+         * `astra_get_option('global-color-palette')` (its
+         * `generate_global_palette_style()`), and Kadence prints
+         * `--global-paletteN` from `kadence()->palette_option('paletteN')` (its
+         * styles component). Blocksy needs no entry: its palette already ships
+         * with hex fallbacks.
+         *
+         * The values are only ever used as the fallback half of `var(--x, #hex)`,
+         * so a wrong or stale answer cannot repaint anything — the browser keeps
+         * resolving the live property — it can only mis-measure, which is where
+         * resolve() refusing an unmeasurable button still protects the store.
+         *
+         * @return array Property => hex.
+         */
+        protected static function vendorValues(): array
+        {
+        }
+        /**
+         * Accept a bare custom-property reference, and nothing more.
+         *
+         * Themes built on the page-builder stack — Astra, Kadence, GeneratePress —
+         * publish their palette as `var(--ast-global-color-0)` rather than as a
+         * literal, because the real value lives in their own settings and is
+         * emitted as a custom property at runtime. Refusing those makes theme
+         * inheritance do nothing on a large share of real stores.
+         *
+         * Only the single-argument form is accepted: no fallback expression, no
+         * nesting, no parentheses beyond the one pair. This string is written into
+         * a declaration on every storefront page, so the grammar is kept narrow
+         * enough that nothing else can ride along inside it.
+         *
+         * @param string $value
+         * @return string The normalised reference, or '' when it is not one.
+         */
+        protected static function safeReference($value): string
+        {
+        }
+        /**
+         * The colour a value can actually be measured as.
+         *
+         * A hex is itself. A reference with a hex fallback is measured as the
+         * fallback — the theme shipped it as the value to use when the property is
+         * missing, which makes it the theme's own best answer for what the colour
+         * is. A bare reference measures as nothing.
+         *
+         * @param string $value
+         * @return string Hex, or ''.
+         */
+        public static function measurable($value): string
+        {
+        }
+        /**
+         * Whether the active theme gave us anything usable.
+         *
+         * @return bool
+         */
+        public static function available(): bool
+        {
+        }
+        /**
+         * Whether the theme told us anything at all to inherit from.
+         *
+         * A theme can publish a palette we cannot read — several popular ones
+         * declare theirs as `var(--theme-colour-0)` references — and it can set a
+         * global background and text colour without publishing a palette. A site
+         * can also state nothing but its button pair (Styles → Buttons in the
+         * site editor), and that is still an explicit configuration to wear.
+         * Only when all of them come back empty is there genuinely nothing to
+         * inherit, and in that case inheriting must stay out of the way rather
+         * than write FluentCart's own colours back to the page and call them the
+         * theme's.
+         *
+         * @return bool
+         */
+        public static function hasUsableSource(): bool
+        {
+        }
+        /**
+         * Look up one palette colour by slug.
+         *
+         * @param string $slug
+         * @return string Hex, or '' when the slug is unknown.
+         */
+        public static function color(string $slug): string
+        {
+        }
+        /**
+         * What one palette slug resolves to for writing into CSS.
+         *
+         * Unlike color(), this can be a custom-property reference — use it when
+         * emitting a declaration, and color() when the value has to be reasoned
+         * about.
+         *
+         * @param string $slug
+         * @return string Hex, a var() reference, or '' when the slug is unknown.
+         */
+        public static function value(string $slug): string
+        {
+        }
+        /**
+         * Read one field off a palette entry.
+         *
+         * @param string $slug
+         * @param string $field
+         * @return string
+         */
+        protected static function lookup(string $slug, string $field): string
+        {
+        }
+        /**
+         * The theme's global background and text colours, when it sets them.
+         *
+         * @return array ['background' => hex, 'text' => hex]; either may be ''.
+         */
+        public static function globalColors(): array
+        {
+        }
+        /**
+         * The button pair the theme declares and the site editor edits.
+         *
+         * Styles → Buttons in the site editor saves to
+         * `styles.elements.button.color`, and block themes ship their own pair
+         * there in theme.json — the most explicit statement either can make
+         * about the buttons. The two origins merge per property, the owner's
+         * edits over the theme's, which is exactly how WordPress itself paints
+         * the button. Core's origin is left out on purpose: WordPress ships a
+         * default button colour (#32373c) for every site, and counting that as
+         * "the theme said something" would mean no theme could ever stand aside.
+         * Backgrounds usually arrive as a preset reference
+         * (`var:preset|color|contrast`), which resolves through the palette the
+         * same way the page pair's do.
+         *
+         * @return array ['background' => hex, 'text' => hex]; either may be ''.
+         */
+        public static function buttonGlobals(): array
+        {
+        }
+        /**
+         * Resolve a theme.json colour, which may be a preset reference rather
+         * than a literal colour.
+         *
+         * @param string $value
+         * @return string Hex, or ''.
+         */
+        protected static function resolveReference($value): string
+        {
+        }
+        /**
+         * Which palette slug each anchor role resolves to.
+         *
+         * @return array Role => palette slug, '' when nothing matched.
+         */
+        public static function anchorMap(): array
+        {
+        }
+        /**
+         * The four anchors, exactly as far as the theme could be read.
+         *
+         * An anchor the theme did not supply comes back empty rather than standing
+         * in FluentCart's own colour for it. The stylesheet that uses the property
+         * already carries that colour as its `var(--fct-x, <fallback>)` fallback,
+         * so substituting it here would only mean writing the same value twice —
+         * and writing it under the active theme's name, which is how a store on a
+         * theme nothing could be read from came to report itself as inheriting
+         * while wearing FluentCart's palette.
+         *
+         * @return array Role => hex, a custom-property reference, or '' when the
+         *               theme said nothing about it.
+         */
+        public static function anchors(): array
+        {
+        }
+        /**
+         * Resolve every semantic role the theme can actually supply.
+         *
+         * The first block is what the theme said. The second is derived from it —
+         * no theme publishes a hairline border or a placeholder tone, so those are
+         * mixed out of the body text and the surface.
+         *
+         * Deriving needs two real colours to mix between. A reference cannot be
+         * read here (the browser resolves it on the page, where we are not), and an
+         * anchor the theme never supplied is not a colour at all, so in both cases
+         * the derived roles come back empty and nothing is written for them. The
+         * stylesheet's own fallback is then what applies, which is the same colour
+         * it would have been given — arrived at once instead of twice.
+         *
+         * @return array Role => hex, a reference, or '' when it could not be
+         *               resolved.
+         */
+        public static function resolve(): array
+        {
+        }
+        /**
+         * A one-line description of what the active theme offers, shown under the
+         * inherit option so the store owner knows whether it is worth picking.
+         *
+         * @return string
+         */
+        public static function sourceLabel(): string
         {
         }
     }
@@ -42647,7 +44237,60 @@ namespace FluentCart\App\Services\Translations {
         public static function elStrings(): array
         {
         }
-        public static function dateTimeStrings(): array
+        /**
+         * Names and formats for every date FluentCart renders, PHP and JS alike.
+         *
+         * One filter covers the whole map: the month/weekday names, and the
+         * formats derived from the store's WordPress date/time settings. Formats
+         * are PHP date() strings -- the dialect Settings > General shows and
+         * get_option() returns; the SPA payload converts them to Day.js tokens.
+         *
+         * The NAMES follow the same source setting as the formats. On 'wordpress'
+         * they come from $wp_locale -- the exact arrays wp_date() renders with --
+         * so the PHP side and the SPA cannot disagree about what August is called.
+         * They used to come from FluentCart's own text domain while PHP rendered
+         * through wp_date(), so one locale produced two answers:
+         *
+         *     PHP  wp_date('M')                       ->  'Aout'   (WP core pack)
+         *     JS   _x('Aug', 'monthsShort', ...)      ->  'Aug'    (untranslated)
+         *
+         * and fluent-cart ships only a .pot, so the JS side was English on any
+         * store that had not sourced its own catalogue. $wp_locale also gets the
+         * hard cases right for free: German abbreviations keep their trailing
+         * period ('Aug.') and the four months German never abbreviates come back
+         * in full ('Marz', 'Mai', 'Juni', 'Juli').
+         *
+         * On 'fluent_cart' the text-domain names stay, because that source exists
+         * to reproduce what each side rendered before these settings landed.
+         *
+         * Cached per request AND per locale: DateFormatter reads this for every
+         * date it renders, and rebuilding ~30 gettext lookups inside a table loop
+         * is wasted work -- but the names now vary with the locale, so a request
+         * that switches locale (switch_to_locale() in a per-recipient mailer, a
+         * multilingual plugin) must not be served the first locale's month names.
+         */
+        public static function dateTimeStrings(bool $refresh = false): array
+        {
+        }
+        /**
+         * Swap the text-domain month/weekday names for WordPress core's own.
+         *
+         * $wp_locale is what wp_date() renders with, so taking the names from the
+         * same object is what makes the PHP and JS sides agree by construction
+         * rather than by two catalogues happening to match.
+         *
+         * The KEYS are left exactly as built above. The SPA reads these maps by
+         * position (Object.values() against an English fallback list, see
+         * localeNames() in utils/dateFormats.js), and other consumers read them by
+         * key, so only the values may change here.
+         *
+         * Degrades to the text-domain names if $wp_locale is missing or shaped
+         * unexpectedly -- this runs on every rendered date and must never fatal.
+         *
+         * @param array<string, mixed> $strings
+         * @return array<string, mixed>
+         */
+        protected static function applyWordPressLocaleNames(array $strings): array
         {
         }
     }
