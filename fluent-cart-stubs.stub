@@ -43487,6 +43487,49 @@ namespace FluentCart\App\Services\Theme {
         {
         }
         /**
+         * A text colour that reads on a background (WCAG 4.5:1) wherever one can.
+         *
+         * readableOn()'s usual pair is kept whenever it reads, so every partner it
+         * already made readable is unchanged. On a mid-tone background neither
+         * half of that pair reaches 4.5:1 (#809400 peaks at 4.30:1 with #1f2937);
+         * pure black or white — whichever reads better — goes further, and is
+         * taken only when it does.
+         *
+         * @param string $background
+         * @return string
+         */
+        public static function readableText($background): string
+        {
+        }
+        /**
+         * Mix text into a surface, keeping as little of the text as still reads.
+         *
+         * Starts at $percent of the text and moves toward it in small steps until
+         * the mix reaches $minimum contrast on the surface — a mix that already
+         * reads is returned unchanged. Text that does not read on the surface
+         * itself comes back as the text: nothing between the two reads better.
+         *
+         * @param string $text
+         * @param string $surface
+         * @param int    $percent Starting share of the text, 0-100.
+         * @param float  $minimum
+         * @return string Hex, or '' when either colour is unreadable.
+         */
+        public static function readableMix($text, $surface, int $percent, float $minimum = 4.5): string
+        {
+        }
+        /**
+         * Move a colour away from itself — lighter when it is dark, darker when it
+         * is light. How a hover is derived from a button that states none.
+         *
+         * @param string $color
+         * @param int    $percent
+         * @return string
+         */
+        public static function shiftFromItself($color, int $percent = 12): string
+        {
+        }
+        /**
          * Nudge a colour toward white.
          *
          * @param string $color
@@ -43712,8 +43755,8 @@ namespace FluentCart\App\Services\Theme {
          * gateway: the payment module stays unaware of the theme service, and
          * removing or replacing FluentCart's contribution is a *_filter() call.
          *
-         * A default-filler, not an owner: the palette supplies its theme and its
-         * three colour variables, and everything else — a customised seed, or
+         * A default-filler, not an owner: the palette supplies its theme, its
+         * colour variables and its tab rules, and everything else — a customised seed, or
          * what an earlier listener added (labels, rules, extra variables) —
          * survives. The theme is only taken over from the plain default, since
          * an explicit theme choice is a choice. With no opinion (default source,
@@ -43742,7 +43785,10 @@ namespace FluentCart\App\Services\Theme {
          * Seeds the `fluent_cart/stripe_appearance` filter's default — a listener
          * still overrides everything here.
          *
-         * @return array Stripe appearance config: ['theme' => ..., 'variables' => ...].
+         * The button pair reaches Stripe on its own, without the input pair: it
+         * is the accent, and it fills the selected payment-method tab.
+         *
+         * @return array Stripe appearance config: ['theme' => ..., 'variables' => ..., 'rules' => ...].
          */
         public static function stripeAppearance(): array
         {
@@ -43846,6 +43892,28 @@ namespace FluentCart\App\Services\Theme {
         {
         }
         /**
+         * Give a customised button what theme inheritance would have given it.
+         *
+         * Customize lets the owner leave a button's text unset, and every
+         * stylesheet then falls back to its own literal text — not always one
+         * that reads on the background the owner did set (the product carousel's
+         * hovered arrow fell back to a dark icon). Theme inheritance already
+         * measures a missing partner; this does the same for the button pair and
+         * the hover pair.
+         *
+         * A button background with no hover background also gets the hover
+         * inheritance derives — the button moved 12% away from itself — with the
+         * resting text carried over while it reads; otherwise the button hovered
+         * in its resting colour, with no visible change. A colour the owner chose
+         * is worn as given.
+         *
+         * @param array $colors Settings key => hex, as the owner set them.
+         * @return array
+         */
+        protected static function withButtonPartners(array $colors): array
+        {
+        }
+        /**
          * Every colour that will actually be written, keyed by settings key.
          *
          * @return array
@@ -43876,6 +43944,866 @@ namespace FluentCart\App\Services\Theme {
         {
         }
     }
+}
+namespace FluentCart\App\Services\Theme\Readers {
+    /**
+     * Reads the colours a theme's owner set in the theme's own settings.
+     *
+     * Palette slots only say which colours a theme offers; settings say which of
+     * them the owner put where. A reader reports the second, so inheritance
+     * follows the owner's Accent, Body Text, Content Background and Button choices
+     * instead of guessing them from slot positions.
+     *
+     * One reader per vendor. Each states only what the theme actually states: a
+     * role the reader cannot read is omitted, never guessed, and ThemePalette
+     * derives it exactly as it would without a reader.
+     */
+    interface ThemeSettingsReader
+    {
+        /**
+         * Whether this reader applies to the running site.
+         *
+         * Detect by capability (the vendor's API), not by theme name, so child
+         * themes and renamed theme folders keep working.
+         *
+         * @return bool
+         */
+        public static function applies(): bool;
+        /**
+         * Role => value for the roles the theme states.
+         *
+         * Roles: surface, text, accent, border, button_bg, button_text,
+         * button_hover_bg, button_hover_text. A value is a hex, or a live
+         * reference with its measurable fallback (`var(--x, #hex)`) — normalise
+         * each through ThemePalette::settingValue().
+         *
+         * @return array
+         */
+        public static function roles(): array;
+    }
+    /**
+     * Astra's Customizer colours, read from its settings rather than its slots.
+     *
+     * Astra keeps its Theme Colors as settings that point at a palette swatch
+     * (`var(--ast-global-color-N)`) or hold a custom colour, and its primary
+     * button colours as four settings that are empty until the owner sets them.
+     * `astra_get_option()` merges what the owner saved over Astra's defaults, so
+     * an untouched install reads its defaults and a customised one reads the
+     * customisation — the same values Astra's own dynamic CSS prints from.
+     *
+     * Empty button settings follow Astra's own chain, not a FluentCart default:
+     * background → Accent (`theme-color`), hover background → Link Hover
+     * (`link-h-color`), and each text partner → the colour that reads on its
+     * background.
+     *
+     * Verified against Astra 4.13.11.
+     */
+    class AstraSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    {
+        /**
+         * Astra's outline button presets: a transparent background with a border.
+         *
+         * @var array
+         */
+        protected static $outlinePresets = ['button_04', 'button_05', 'button_06'];
+        /**
+         * @return bool
+         */
+        public static function applies(): bool
+        {
+        }
+        /**
+         * @return array Role => hex or `var(--ast-global-color-N, #hex)`.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * One background + text pair, following Astra's fallback chain.
+         *
+         * A stated background wins; an empty one follows `$fallbackBg`. A value
+         * that is set but unreadable is not replaced by the fallback — Astra is
+         * painting it, just not in a form FluentCart can write, so the pair is
+         * omitted rather than reported as a colour Astra is not showing.
+         *
+         * @param mixed  $rawBg      The background setting as saved.
+         * @param string $fallbackBg Already-normalised fallback background.
+         * @param mixed  $rawText    The text setting as saved.
+         * @param string $bgRole
+         * @param string $textRole
+         * @return array
+         */
+        protected static function buttonPair($rawBg, string $fallbackBg, $rawText, string $bgRole, string $textRole): array
+        {
+        }
+        /**
+         * @param string $key
+         * @return string
+         */
+        protected static function read(string $key): string
+        {
+        }
+        /**
+         * @param string $key
+         * @return string
+         */
+        protected static function readResponsive(string $key): string
+        {
+        }
+    }
+    /**
+     * Blocksy's Customizer colours, read from its theme mods rather than its slots.
+     *
+     * Blocksy keeps each semantic colour as a theme mod shaped
+     * `['default' => ['color' => …], 'hover' => ['color' => …]]`, whose colour
+     * points at a palette slot (`var(--theme-palette-color-N)`) or holds a custom
+     * colour. Links, Base Text, Borders, Site Background and Buttons are separate
+     * settings — the button is not tied to the link colour — so each role is read
+     * from its own mod.
+     *
+     * A mod the owner never saved, or a sub-key missing from one, takes Blocksy's
+     * own default for it, the same fill `blocksy_get_colors()` applies before
+     * printing (inc/dynamic-styles/global/all.php). A colour saved as Blocksy's
+     * "inherit" sentinel (`CT_CSS_SKIP_RULE…`) counts as unset the same way.
+     *
+     * Palette references are resolved through
+     * `blocksy_manager()->colors->get_color_palette()` (see paletteValues()), and
+     * always kept live: Blocksy Companion's dark mode redefines the palette
+     * properties under `:root[data-color-mode*="dark"]`, which a bare hex would
+     * never follow.
+     *
+     * Verified against Blocksy 2.1.57.
+     */
+    class BlocksySettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    {
+        /**
+         * Blocksy's defaults per mod and sub-key (inc/dynamic-styles/global/all.php
+         * and background.php).
+         *
+         * @var array
+         */
+        protected static $defaults = ['linkColor' => ['default' => 'var(--theme-palette-color-1)', 'hover' => 'var(--theme-palette-color-2)'], 'fontColor' => ['default' => 'var(--theme-palette-color-3)'], 'border_color' => ['default' => 'var(--theme-palette-color-5)'], 'buttonColor' => ['default' => 'var(--theme-palette-color-1)', 'hover' => 'var(--theme-palette-color-2)'], 'buttonTextColor' => ['default' => '#ffffff', 'hover' => '#ffffff'], 'site_background' => ['default' => 'var(--theme-palette-color-7)']];
+        /**
+         * Detected by Blocksy's own manager, not by theme name, so a child theme
+         * or renamed folder keeps working.
+         *
+         * @return bool
+         */
+        public static function applies(): bool
+        {
+        }
+        /**
+         * @return array Role => hex or `var(--theme-palette-color-N, #hex)`.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * Each palette slot's property and current colour: `--theme-palette-color-N`
+         * (or the slot's own `variable`) => hex. The same list Blocksy prints the
+         * properties from and publishes to the editor palette.
+         *
+         * @return array Property => colour, as Blocksy saved it.
+         */
+        public static function paletteValues(): array
+        {
+        }
+        /**
+         * One button half-pair: background from `buttonColor`, text from
+         * `buttonTextColor`, both at the same state.
+         *
+         * A background that is set but unwritable (an rgba(), say) is not
+         * replaced by a default — Blocksy is painting it, just not in a form
+         * FluentCart can write — so the pair is omitted. A text that cannot be
+         * written gets the colour that reads on the background.
+         *
+         * @param string $state  'default' or 'hover'.
+         * @param string $prefix Role prefix.
+         * @return array
+         */
+        protected static function buttonPair(string $state, string $prefix = 'button_'): array
+        {
+        }
+        /**
+         * The body background (Site Background). Blocksy saves it flat or per
+         * device; desktop speaks for all, as blocksy_expand_responsive_value()
+         * reads it. A gradient paints no colour (Blocksy writes
+         * `background-color: initial`), so it states no surface.
+         *
+         * @return string
+         */
+        protected static function surface(): string
+        {
+        }
+        /**
+         * One colour mod at one state, over Blocksy's default for it.
+         *
+         * @param string $mod
+         * @param string $state
+         * @return string
+         */
+        protected static function read(string $mod, string $state = 'default'): string
+        {
+        }
+        /**
+         * Unset — missing, empty, or Blocksy's inherit sentinel — takes the
+         * default; anything else is normalised as saved.
+         *
+         * @param mixed  $raw
+         * @param string $default
+         * @return string
+         */
+        protected static function normalise($raw, string $default): string
+        {
+        }
+    }
+    /**
+     * Bricks' colours, read from the theme style Bricks applies to the page.
+     *
+     * Bricks publishes neither its palette nor its theme styles to theme.json, so
+     * without a reader inheritance has nothing to follow. Its colours live in theme
+     * styles (`bricks_theme_styles`): several can exist, each applied by its own
+     * conditions, and Bricks itself picks the ones for the page on `wp` into
+     * `Theme_Styles::$settings_by_id` — the same array its stylesheet is printed
+     * from (Assets::generate_inline_css()). That choice is what is read here (see
+     * activeStyles()); a page no style applies to states nothing, and so does a
+     * fresh install, which has no theme style at all.
+     *
+     * The keys, from the theme-style controls:
+     *  - Primary color (`colors.colorPrimary`) is the accent — the Link colour
+     *    (`links.typography.color`) when it is unset — and also what Bricks fills
+     *    its default button with (`.bricks-background-primary`; a new Button
+     *    element's style is `primary`).
+     *  - Body typography colour (`typography.typographyBody.color`) is the text.
+     *  - Site background (`general.siteBackground`) paints `html`; on a boxed
+     *    layout the content background (`general.contentBackground`) paints the
+     *    `.brx-boxed` body over it. Unset, Bricks' stylesheet paints the body
+     *    white.
+     *  - The primary button (`button.primaryBackground`,
+     *    `button.primaryTypography.color`, and the every-button
+     *    `button.typography.color`), with its `:hover` keys — Bricks stores a
+     *    pseudo-class state as the setting key suffixed with it.
+     * Bricks has no border colour setting (`--bricks-border-color` is static), so
+     * no border is stated.
+     *
+     * A colour is an object `{hex, rgb, raw, id}` printed the way
+     * Assets::generate_css_color() prints it: a palette colour as its palette
+     * property (`var(--bricks-color-{id})`, or the property its raw value names),
+     * then raw, then rgb, then hex. A palette reference stays live, with the
+     * palette colour as its fallback (see paletteValues()). A value that cannot be
+     * measured — a translucent rgba(), dynamic data, a gradient, a var() nothing
+     * resolves — is not stated.
+     *
+     * Verified against Bricks 2.1.3.
+     */
+    class BricksSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    {
+        /**
+         * Bricks' stylesheet: `body{background-color:#fff}` (frontend.min.css).
+         *
+         * @var string
+         */
+        protected static $defaultSurface = '#ffffff';
+        /**
+         * Detected by the running Bricks theme — its `Theme` singleton holding the
+         * Theme_Styles object its constructor creates — not by theme name, so a
+         * child theme or renamed folder keeps working.
+         *
+         * @return bool
+         */
+        public static function applies(): bool
+        {
+        }
+        /**
+         * @return array Role => hex or `var(--bricks-color-{id}, #hex)`.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * Each palette colour's property and current colour, as Bricks prints them
+         * (Assets::generate_inline_css_color_vars()): `--bricks-color-{id}`, or
+         * the property a raw `var(--x)` names, => the colour — rgb before hex, a
+         * raw non-var value over both. Only an opaque colour is kept: a
+         * translucent one cannot be measured, and ColorMath would drop its alpha.
+         *
+         * @return array Property => hex.
+         */
+        public static function paletteValues(): array
+        {
+        }
+        /**
+         * The settings of the theme style(s) Bricks applies to this page, least
+         * specific first — the order its stylesheet prints them in.
+         *
+         * On a front-end page Bricks chose them on `wp` for the queried post (the
+         * id it scored every style's conditions against), and that choice is
+         * read as is; if nothing applied, nothing did. Before `wp` — the admin
+         * settings preview, a REST request — no page is being shown and Bricks
+         * has chosen nothing, so it is asked the way its own block-editor
+         * integration asks (`set_active_style()` with no post: the site-wide
+         * conditions), and its state is put back afterwards: `set_active_style()`
+         * only ever adds, and a leftover style would be painted on the page.
+         *
+         * ThemePalette caches the result per request, which is right here: one
+         * request shows one page, and the choice is made before FluentCart prints.
+         *
+         * @return array Style id => settings.
+         */
+        protected static function activeStyles(): array
+        {
+        }
+        /**
+         * Primary color, or the Link colour when Primary is unset. A Primary
+         * color that is set but unwritable is not replaced: Bricks is painting it.
+         *
+         * @param array $styles
+         * @return string
+         */
+        protected static function accent(array $styles): string
+        {
+        }
+        /**
+         * The filled button Bricks paints by default, and its hover.
+         *
+         * A Button element's default style is `primary`, which carries the class
+         * `bricks-background-primary`: Primary background
+         * (`:root .bricks-button[class*="primary"]:not(.outline)`) when set, else
+         * the Primary color. A background set but unwritable states no button —
+         * Bricks paints it, just not in a form FluentCart can write — and neither
+         * does no background at all.
+         *
+         * The text is the primary text, else the every-button text; unset, the
+         * button inherits the body text, which is kept while it reads (WCAG 4.5:1),
+         * otherwise the colour that does. The hover background is stated only
+         * when written; an unset hover text is not stated, so the resting text
+         * carries over as resolve() already does.
+         *
+         * @param array  $styles
+         * @param string $bodyText The stated body text, or ''.
+         * @return array
+         */
+        protected static function button(array $styles, string $bodyText): array
+        {
+        }
+        /**
+         * The surface Bricks paints under the content.
+         *
+         * `siteBackground` paints `html` (and clears the body); on a boxed layout
+         * the body is `.brx-boxed`, painted with `contentBackground`, and an unset
+         * one lets the site background through. `.brx-boxed` never exists on a
+         * wide layout, so a content background there paints nothing. An image
+         * paints no colour, so it states no surface and nothing is guessed under
+         * it. With no background set, Bricks' stylesheet paints the body white.
+         *
+         * @param array $styles
+         * @return string
+         */
+        protected static function surface(array $styles): string
+        {
+        }
+        /**
+         * The site layout, as Bricks decides the body class: the page's own
+         * setting over the theme style's (Setup::body_class()).
+         *
+         * @param array $styles
+         * @return string
+         */
+        protected static function layout(array $styles): string
+        {
+        }
+        /**
+         * @param mixed $image
+         * @return bool
+         */
+        protected static function hasImage($image): bool
+        {
+        }
+        /**
+         * The first colour of several settings that is set, normalised. A set but
+         * unwritable one ends the search rather than falling through.
+         *
+         * @param array $styles
+         * @param array $paths List of [group, key, sub-key].
+         * @return string
+         */
+        protected static function firstColor(array $styles, array $paths): string
+        {
+        }
+        /**
+         * Whether any applied style sets this value.
+         *
+         * @param array       $styles
+         * @param string      $group
+         * @param string      $key
+         * @param string|null $subKey
+         * @return bool
+         */
+        protected static function states(array $styles, string $group, string $key, $subKey = null): bool
+        {
+        }
+        /**
+         * One value from the applied styles, the most specific first — the last
+         * printed rule wins in Bricks' stylesheet, and a style that does not set
+         * a value prints nothing for it. Read per leaf, so a later style's body
+         * font size does not hide an earlier style's body colour.
+         *
+         * @param array       $styles
+         * @param string      $group
+         * @param string      $key
+         * @param string|null $subKey
+         * @return mixed|null
+         */
+        protected static function setting(array $styles, string $group, string $key, $subKey = null)
+        {
+        }
+        /**
+         * One colour setting, written as FluentCart can write it.
+         *
+         * @param array       $styles
+         * @param string      $group
+         * @param string      $key
+         * @param string|null $subKey
+         * @return string
+         */
+        protected static function color(array $styles, string $group, string $key, $subKey = null): string
+        {
+        }
+        /**
+         * A Bricks colour object as a value FluentCart can write, in the order
+         * Assets::generate_css_color() prints it: a palette colour as its live
+         * property (measured through ThemePalette::settingValue(), which attaches
+         * the palette colour as the fallback), then raw, then rgb, then hex.
+         *
+         * @param mixed $color
+         * @return string Hex, `var(--x, #hex)`, or '' when it cannot be measured.
+         */
+        protected static function normalise($color): string
+        {
+        }
+        /**
+         * A reference, kept only when it can be measured.
+         *
+         * @param string $reference
+         * @return string
+         */
+        protected static function measured(string $reference): string
+        {
+        }
+        /**
+         * An opaque hex, #rgb or rgb()/rgba() as a lowercase hex; '' for a
+         * translucent colour or anything else. ColorMath drops alpha, so it is
+         * checked here first.
+         *
+         * @param mixed $value
+         * @return string
+         */
+        protected static function opaque($value): string
+        {
+        }
+        /**
+         * The palette colours Bricks prints as custom properties, in its own
+         * precedence: rgb, then hex, then a raw value that is not a var(); a raw
+         * `var(--x)` with a colour renames the property to `--x`. A colour with
+         * neither is not printed, and a reference to it falls through to the
+         * colour object's own values, as in Bricks.
+         *
+         * The palette is the one Bricks prints on the page
+         * (`Database::$global_data['colorPalette']`, multisite-aware), else the
+         * `bricks_color_palette` option.
+         *
+         * @return array List of ['id', 'property', 'value'].
+         */
+        protected static function palette(): array
+        {
+        }
+    }
+    /**
+     * Divi's Customizer colours, read from its settings.
+     *
+     * Divi publishes no palette to theme.json, so without a reader inheritance has
+     * nothing to follow. Its Customizer keeps the colours as flat values in the
+     * `et_divi` option row, read through `et_get_option()` — the call Divi's own
+     * `et_divi_add_customizer_css()` prints them from: Theme Accent Color
+     * (`accent_color`), Body Text Color (`font_color`), and the Buttons section
+     * (`all_buttons_bg_color`, `all_buttons_text_color` and their `_hover` pair).
+     * The content area is painted from the core `background_color` theme mod
+     * (`et_divi_add_main_content_background_css()`).
+     *
+     * Accent and body text are Divi 5's Customizer global colours, printed as
+     * `--gcid-primary-color` and `--gcid-body-color` from these same options
+     * (GlobalData::get_customizer_colors()), so they are stated live with the
+     * option's hex as the fallback: `var(--gcid-primary-color, #hex)`. The button
+     * and background settings have no property, so they are stated as hex.
+     *
+     * Divi's default button is an outline: a transparent background
+     * (`rgba(0,0,0,0)`), the accent as its text and border. Only a background the
+     * owner set to a solid hex is a filled button; anything else states no button
+     * and FluentCart falls back as it did before.
+     *
+     * An empty value is what Divi's own CSS treats as unset — its static
+     * stylesheet paints the default — so it takes Divi's default here too. A
+     * value FluentCart cannot write (rgb(), rgba(), Divi 5's `hsl(from var(--gcid…))`
+     * or a `$variable(…)$` reference) is not stated.
+     *
+     * Verified against Divi 5.0.1.
+     */
+    class DiviSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    {
+        /**
+         * Divi's defaults (GlobalData::$customizer_colors, the Customizer settings
+         * and the static stylesheet).
+         *
+         * @var array
+         */
+        protected static $defaults = [
+            'accent_color' => '#2ea3f2',
+            'font_color' => '#666666',
+            // `#main-content { background-color: #fff }` in Divi's stylesheet.
+            'content' => '#ffffff',
+        ];
+        /**
+         * Detected by Divi's own option API and customizer printer, and by the
+         * `$shortname` Divi's `et_setup_theme()` sets: `et_get_option()` is shared
+         * by every Elegant Themes product and reads the row named after that
+         * global, so only 'divi' means the `et_divi` row these settings live in.
+         * Theme name is not used, so a child theme keeps working.
+         *
+         * @return bool
+         */
+        public static function applies(): bool
+        {
+        }
+        /**
+         * @return array Role => hex or `var(--gcid-…, #hex)`.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * The filled button and its hover, when Divi paints one.
+         *
+         * A background that is not a solid hex — Divi's transparent default, an
+         * rgba() — is an outline or a tint, not a fill, so no button is stated and
+         * its hover goes with it.
+         *
+         * An empty text keeps what Divi paints on a button, the accent, while that
+         * reads on the background (WCAG 4.5:1); otherwise the colour that does.
+         * Divi prints no hover text when it is empty, so the resting text carries
+         * over — which resolve() already does when no hover text is stated. A
+         * hover background that is not a solid hex (Divi's default white tint)
+         * states no hover, and FluentCart derives it from the button as before.
+         *
+         * @param string $accent The stated accent, or ''.
+         * @return array
+         */
+        protected static function button(string $accent): array
+        {
+        }
+        /**
+         * The content background.
+         *
+         * Outside the Divi Builder, Divi paints `#main-content` with the core
+         * Background Color and turns it transparent over a Background Image
+         * (`et_divi_add_main_content_background_css()`); with neither, its
+         * stylesheet paints it white. An image paints no colour, so it states no
+         * surface. The theme mod is saved without its `#`.
+         *
+         * @return string
+         */
+        protected static function surface(): string
+        {
+        }
+        /**
+         * A Divi colour value as a hex FluentCart can write.
+         *
+         * Empty or missing takes `$default` — what Divi's own stylesheet paints
+         * when the setting prints nothing. Anything but a hex is not stated.
+         *
+         * @param mixed  $raw
+         * @param string $default
+         * @return string Lowercase hex, or ''.
+         */
+        protected static function hex($raw, string $default = ''): string
+        {
+        }
+    }
+    /**
+     * GeneratePress's Customizer colours, read from its settings rather than its
+     * palette slots.
+     *
+     * GeneratePress keeps every colour in the `generate_settings` option row, each
+     * a Global Color reference (`var(--accent)`) or a custom colour. Its dynamic
+     * CSS reads that row over its own defaults (inc/css-output.php) — the body
+     * keys over `generate_get_defaults()` in generate_base_css(), the area keys
+     * over `generate_get_color_defaults()` in generate_advanced_css() — and so
+     * does this reader. `generate_get_option()` is not used: it only answers keys
+     * `generate_get_defaults()` knows, and the content and button colours are not
+     * among them.
+     *
+     * The roles, from the selectors GeneratePress prints:
+     *  - Content background (`content_background_color`) paints
+     *    `.separate-containers .inside-article` and `.one-container .container`
+     *    — the area the store is rendered in on both layouts. Saved empty, the
+     *    content area is transparent and the Body background (`background_color`)
+     *    shows through.
+     *  - Content text / link (`content_text_color`, `content_link_color`) repaint
+     *    that area when set; otherwise the Body text (`text_color`) and Link
+     *    (`link_color`) colours reach it. The link colour is the accent: it is
+     *    what GeneratePress paints its brand colour through (its default is
+     *    `var(--accent)`), and it moves with the owner when they repoint it.
+     *  - Buttons (`form_button_background_color`, `form_button_text_color` and
+     *    their `_hover` pair) paint `button`, `a.button` and core button blocks.
+     *    GeneratePress's default button is a grey `#55555e`, not its accent.
+     * GeneratePress has no general border colour (`form_border_color` is only its
+     * inputs' border), so no border is stated.
+     *
+     * A saved '' prints nothing (GeneratePress_CSS::add_property() skips it). For
+     * the button that leaves GeneratePress's stylesheet painting it — main.css
+     * `button{background:#55555e;color:#fff}` — so that is what an empty button
+     * states; its stylesheet has no button hover, so an empty hover states none
+     * and FluentCart derives it. An empty body colour leaves the browser's, which
+     * is no theme choice, so it states nothing.
+     *
+     * `var(--slug)` stays live, measured through the Global Colors GeneratePress
+     * prints on :root (see paletteValues()). A value that cannot be measured — an
+     * rgba(), a named colour, a reference to a Global Color that does not exist —
+     * is not stated, and a set-but-unwritable value is not replaced by the next
+     * setting in its chain: GeneratePress is painting it, just not in a form
+     * FluentCart can write.
+     *
+     * Verified against GeneratePress 3.6.1.
+     */
+    class GeneratePressSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    {
+        /**
+         * What GeneratePress's stylesheet paints a button with when its colour is
+         * saved empty (assets/css/main.min.css).
+         *
+         * @var array
+         */
+        protected static $stylesheetButton = ['background' => '#55555e', 'text' => '#ffffff'];
+        /**
+         * Detected by GeneratePress's own API — its version constant, its option
+         * defaults, its Global Colors, and its dynamic-CSS printer hooked on
+         * `wp_enqueue_scripts` (inc/css-output.php) — not by theme name, so a
+         * child theme or renamed folder keeps working. The hook is what makes the
+         * settings real: it is the printer that paints every colour read here.
+         *
+         * @return bool
+         */
+        public static function applies(): bool
+        {
+        }
+        /**
+         * @return array Role => hex or `var(--slug, #hex)`.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * Each Global Color's property and current colour: `--{slug}` => colour,
+         * from `generate_get_global_colors()` — the list GeneratePress prints the
+         * properties on :root from (generate_base_css()), and publishes to the
+         * editor palette as bare `var(--{slug})`.
+         *
+         * @return array Property => colour, as GeneratePress saved it
+         *               (ThemePalette drops non-hex).
+         */
+        public static function paletteValues(): array
+        {
+        }
+        /**
+         * The button and its hover.
+         *
+         * A background saved empty is GeneratePress's stylesheet grey; one that is
+         * set but unwritable states no button, and its hover goes with it. A text
+         * saved empty is the stylesheet's white; one that cannot be written gets
+         * the colour that reads on the background. A hover background is stated
+         * only when written, and a hover text only when written — otherwise the
+         * resting text carries over, as resolve() already does.
+         *
+         * @param array $settings
+         * @return array
+         */
+        protected static function button(array $settings): array
+        {
+        }
+        /**
+         * The first setting in a chain that GeneratePress prints — one saved
+         * non-empty — as FluentCart writes it. A set value that cannot be written
+         * ends the chain: it is what GeneratePress paints there.
+         *
+         * @param array $settings
+         * @param array $keys
+         * @return string
+         */
+        protected static function first(array $settings, array $keys): string
+        {
+        }
+        /**
+         * One setting as FluentCart writes it; empty takes `$default`.
+         *
+         * @param array  $settings
+         * @param string $key
+         * @param string $default
+         * @return string Hex, `var(--slug, #hex)`, or ''.
+         */
+        protected static function read(array $settings, string $key, string $default = ''): string
+        {
+        }
+        /**
+         * Whether GeneratePress prints this setting: a non-empty string.
+         *
+         * @param array  $settings
+         * @param string $key
+         * @return bool
+         */
+        protected static function isSet(array $settings, string $key): bool
+        {
+        }
+        /**
+         * The saved `generate_settings` row over GeneratePress's defaults — both
+         * sets, merged the way its dynamic CSS merges each.
+         *
+         * @return array
+         */
+        protected static function settings(): array
+        {
+        }
+    }
+    /**
+     * Kadence's Customizer colours, read from its theme mods rather than its slots.
+     *
+     * Kadence keeps each semantic colour in its own setting — Links
+     * (`link_color`), Base Font (`base_font`), Content and Site Background
+     * (`content_background`, `site_background`) and Buttons (`buttons_background`,
+     * `buttons_color`) — each holding a palette slug (`palette3`) or a custom
+     * colour. The button is not tied to the link colour, so each role is read
+     * from its own setting through `\Kadence\kadence()->sub_option()`, the same
+     * call Kadence's own styles component prints from.
+     *
+     * A slug is written the way Kadence writes it (`Kadence_CSS::render_color()`):
+     * `paletteN` becomes `var(--global-paletteN)`, which ThemePalette resolves to
+     * `var(--global-paletteN, #hex)` from `palette_option()` (the active palette
+     * of three; see paletteValues()). A sub-key `sub_option()` answers null for —
+     * cleared, or missing from a saved setting — takes Kadence's own default.
+     *
+     * Kadence has no border setting (its borders use the static
+     * `--global-gray-400`), so no border is stated and FluentCart keeps deriving it.
+     *
+     * Verified against Kadence 1.5.0.
+     */
+    class KadenceSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    {
+        /**
+         * Kadence's defaults per setting and sub-key
+         * (inc/components/options/component.php, defaults()).
+         *
+         * @var array
+         */
+        protected static $defaults = ['link_color' => ['highlight' => 'palette1'], 'base_font' => ['color' => 'palette4'], 'buttons_background' => ['color' => 'palette1', 'hover' => 'palette2'], 'buttons_color' => ['color' => 'palette9', 'hover' => 'palette9']];
+        /**
+         * Detected by Kadence's own template-tags API, not by theme name, so a
+         * child theme or renamed folder keeps working.
+         *
+         * @return bool
+         */
+        public static function applies(): bool
+        {
+        }
+        /**
+         * @return array Role => hex or `var(--global-paletteN, #hex)`.
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * Each palette slot's property and current colour:
+         * `--global-paletteN` => colour, from the palette Kadence has active — the
+         * same `palette_option()` Kadence prints the properties from.
+         *
+         * @return array Property => colour, as Kadence answers it (palette10 can
+         *               be an oklch() expression; ThemePalette drops non-hex).
+         */
+        public static function paletteValues(): array
+        {
+        }
+        /**
+         * One button half-pair: background from `buttons_background`, text from
+         * `buttons_color`, both at the same state.
+         *
+         * A background that is set but unwritable (a gradient, an rgba()) is not
+         * replaced by a default — Kadence is painting it, just not in a form
+         * FluentCart can write — so the pair is omitted. A text that cannot be
+         * written gets the colour that reads on the background.
+         *
+         * @param string $state  'color' (resting) or 'hover'.
+         * @param string $prefix Role prefix.
+         * @return array
+         */
+        protected static function buttonPair(string $state, string $prefix = 'button_'): array
+        {
+        }
+        /**
+         * The content background, falling back to the site background.
+         *
+         * Kadence paints `.content-bg` (and the unboxed `.site`) with the content
+         * background and the body with the site background; both are saved per
+         * device, and desktop is the unprefixed rule that speaks for all. A
+         * gradient paints no colour, so it states no surface — and the site
+         * background is not under the content either, so it is not used instead.
+         *
+         * @return string
+         */
+        protected static function surface(): string
+        {
+        }
+        /**
+         * One colour setting at one sub-key, over Kadence's default for it.
+         *
+         * @param string $setting
+         * @param string $subKey
+         * @return string
+         */
+        protected static function read(string $setting, string $subKey): string
+        {
+        }
+        /**
+         * A Kadence colour value as FluentCart writes it.
+         *
+         * `paletteN` is written as Kadence writes it, `var(--global-paletteN)`,
+         * and resolved through ThemePalette::settingValue() like every other
+         * reader's value. A value that cannot be measured — a gradient, rgba(),
+         * or palette10's oklch() complement — is not stated.
+         *
+         * @param string $raw
+         * @return string
+         */
+        protected static function normalise(string $raw): string
+        {
+        }
+        /**
+         * `sub_option()`, shielded from Kadence's API throwing.
+         *
+         * @param string $setting
+         * @param string $subKey
+         * @return mixed
+         */
+        protected static function subOption(string $setting, string $subKey)
+        {
+        }
+        /**
+         * Kadence's template-tags object, or null when Kadence is not loaded.
+         *
+         * @return object|null
+         */
+        protected static function api()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Services\Theme {
     /**
      * Reads the active theme's colour palette and resolves it into the semantic
      * roles the storefront needs.
@@ -43895,7 +44823,8 @@ namespace FluentCart\App\Services\Theme {
          * These are the slugs themes agree on — `base`/`contrast` come from Twenty
          * Twenty-Four and the themes that copied it, `primary`/`accent` from the
          * classic-adjacent ones, and GeneratePress publishes the same names as
-         * references its own stylesheets resolve.
+         * references its own stylesheets resolve (measured through its Global
+         * Colors; see vendorValues()).
          *
          * Three vendors are supported by name — the ones popular enough to be worth
          * carrying, each mapping written down from the theme's own sources rather
@@ -43944,6 +44873,35 @@ namespace FluentCart\App\Services\Theme {
          * @var array|null
          */
         protected static $cachedVendorValues = null;
+        /**
+         * Request-level cache for the roles the theme's own settings state.
+         *
+         * @var array|null
+         */
+        protected static $cachedSettingsRoles = null;
+        /**
+         * Theme settings readers, keyed by the theme name passed to the
+         * `fluent_cart/theme/settings_roles` filter. The first that applies wins.
+         *
+         * Only one theme runs on a site, so the order only matters when several
+         * vendors' functions are loaded at once (the test stubs). The stricter
+         * checks go first: Blocksy's and Kadence's each need a live instance from
+         * the vendor's API, Divi's needs the `$shortname` global to name Divi, and
+         * Bricks' needs its running `Bricks\Theme` singleton, and GeneratePress's
+         * needs its dynamic-CSS printer hooked on `wp_enqueue_scripts`, none of
+         * which a loaded-but-idle stub provides, while Astra's is a bare
+         * `function_exists()` that stays true once its stub is loaded — so Astra
+         * is asked last. Among the strict ones the order is arbitrary.
+         *
+         * @var array
+         */
+        protected static $settingsReaders = ['blocksy' => \FluentCart\App\Services\Theme\Readers\BlocksySettingsReader::class, 'kadence' => \FluentCart\App\Services\Theme\Readers\KadenceSettingsReader::class, 'divi' => \FluentCart\App\Services\Theme\Readers\DiviSettingsReader::class, 'bricks' => \FluentCart\App\Services\Theme\Readers\BricksSettingsReader::class, 'generatepress' => \FluentCart\App\Services\Theme\Readers\GeneratePressSettingsReader::class, 'astra' => \FluentCart\App\Services\Theme\Readers\AstraSettingsReader::class];
+        /**
+         * The roles a theme settings reader may state.
+         *
+         * @var array
+         */
+        protected static $settingsRoleKeys = ['surface', 'text', 'accent', 'border', 'button_bg', 'button_text', 'button_hover_bg', 'button_hover_text'];
         /**
          * Drop the request-level caches.
          *
@@ -44011,8 +44969,17 @@ namespace FluentCart\App\Services\Theme {
          * `astra_get_option('global-color-palette')` (its
          * `generate_global_palette_style()`), and Kadence prints
          * `--global-paletteN` from `kadence()->palette_option('paletteN')` (its
-         * styles component). Blocksy needs no entry: its palette already ships
-         * with hex fallbacks.
+         * styles component; see KadenceSettingsReader::paletteValues()).
+         * Blocksy's editor palette already ships with hex fallbacks, but its Customizer settings point at the bare
+         * `--theme-palette-color-N`, so its palette is read too, from
+         * `blocksy_manager()->colors->get_color_palette()` (the list it prints
+         * the properties from; see BlocksySettingsReader::paletteValues()).
+         * Bricks prints `--bricks-color-{id}` from its colour palette (or the
+         * property a palette colour's raw value names; see
+         * BricksSettingsReader::paletteValues()). GeneratePress prints `--{slug}`
+         * on :root from its Global Colors and publishes them to the editor
+         * palette as bare `var(--{slug})` (see
+         * GeneratePressSettingsReader::paletteValues()).
          *
          * The values are only ever used as the fallback half of `var(--x, #hex)`,
          * so a wrong or stale answer cannot repaint anything — the browser keeps
@@ -44056,6 +45023,42 @@ namespace FluentCart\App\Services\Theme {
          * @return string Hex, or ''.
          */
         public static function measurable($value): string
+        {
+        }
+        /**
+         * Normalise a colour a theme setting states into a value we can write.
+         *
+         * A hex is itself, lowercased. A custom-property reference stays a live
+         * reference; a bare one gains the vendor's current value as its hex
+         * fallback (see vendorValues()), so the browser still follows the
+         * property while PHP measures the fallback. Anything else — rgba(),
+         * named colours, expressions — is refused: the result is written into a
+         * declaration on every storefront page and must pass
+         * FrontendTheme::sanitizeDeclarationValue().
+         *
+         * @param mixed $raw
+         * @return string Hex, `var(--x)`, `var(--x, #hex)`, or ''.
+         */
+        public static function settingValue($raw): string
+        {
+        }
+        /**
+         * The colours the active theme's own settings state, by role.
+         *
+         * Palette slots say which colours a theme offers; its settings say which
+         * one the owner put where. A reader for the active theme (see
+         * Readers\ThemeSettingsReader) reports what the owner set — Astra's,
+         * Blocksy's, Kadence's, Divi's, Bricks' or GeneratePress's Accent, Body Text, Content Background, Borders
+         * and Button colours — and those outrank the palette-slot guesses in anchors() and resolve().
+         * Only the site editor's own button (buttonGlobals()) outranks them.
+         *
+         * Roles: surface, text, accent, border, button_bg, button_text,
+         * button_hover_bg, button_hover_text. A role the theme does not state is
+         * absent, and is derived exactly as it would be without a reader.
+         *
+         * @return array Role => hex or reference.
+         */
+        public static function settingsRoles(): array
         {
         }
         /**
@@ -44139,7 +45142,11 @@ namespace FluentCart\App\Services\Theme {
          * (`var:preset|color|contrast`), which resolves through the palette the
          * same way the page pair's do.
          *
-         * @return array ['background' => hex, 'text' => hex]; either may be ''.
+         * The `:hover` pair (`styles.elements.button.:hover.color`) is read the
+         * same way, into `hover_background` / `hover_text`.
+         *
+         * @return array ['background' => hex, 'text' => hex, 'hover_background' => hex,
+         *               'hover_text' => hex]; any may be ''.
          */
         public static function buttonGlobals(): array
         {
@@ -44197,6 +45204,35 @@ namespace FluentCart\App\Services\Theme {
          *               resolved.
          */
         public static function resolve(): array
+        {
+        }
+        /**
+         * A text colour a theme or owner stated for a background, if it can be worn.
+         *
+         * Stated text is a choice and is worn as given — including brand pairs
+         * just under AA (white on #ff5500 is 3.21:1). Only one that cannot be read
+         * on its background (below 3:1, the large-text floor) is refused, so a
+         * measured partner takes its place. Twenty Twenty-Five's site-editor pair
+         * #111111 on #503aa8 (2.26:1) is the case this catches. A text or a
+         * background that cannot be measured here is not second-guessed.
+         *
+         * @param string $text         The stated text, or ''.
+         * @param string $backgroundHex The measured background, or ''.
+         * @return string The text, or '' when it must be replaced.
+         */
+        public static function statedTextOn(string $text, string $backgroundHex): string
+        {
+        }
+        /**
+         * The text for a hover background nobody gave a text: the button's
+         * resting text carries over while it still reads (WCAG 4.5:1), and a
+         * partner is measured when it does not.
+         *
+         * @param string $hoverBgHex
+         * @param string $restingText
+         * @return string
+         */
+        public static function hoverTextFor(string $hoverBgHex, string $restingText): string
         {
         }
         /**
