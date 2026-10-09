@@ -1167,6 +1167,18 @@ namespace FluentCart\Api\Resource {
         {
         }
         /**
+         * Re-run the coupon rules on an admin order payload before it is saved.
+         * The payload's coupon discounts come from the client, so they are replaced with calculated ones.
+         *
+         * @param array $items Order line items.
+         * @param array $appliedCoupons Applied-coupon map keyed by coupon code.
+         * @param string $customerEmail
+         * @return array|\WP_Error ['applied_coupons' => array, 'items' => array]
+         */
+        public static function validateOrderCoupons(array $items, array $appliedCoupons, $customerEmail = '')
+        {
+        }
+        /**
          * Report whether a product may be bought while the given coupons are applied.
          *
          * A product is eligible only when every applied coupon accepts it, so the first
@@ -2806,6 +2818,17 @@ namespace FluentCart\Api\Resource {
         private static function patchSubscriptionTax($order, array $lineItemsFromTax, $taxBehavior)
         {
         }
+        /**
+         * Whether the submitted coupon and item discounts match the calculated ones, within a cent of rounding.
+         *
+         * @param array $submittedItems
+         * @param array $submittedCoupons Applied-coupon map keyed by coupon code.
+         * @param array $couponCheck Result of CouponResource::validateOrderCoupons().
+         * @return bool
+         */
+        private static function couponDiscountsMatch(array $submittedItems, array $submittedCoupons, array $couponCheck): bool
+        {
+        }
         private static function distributeManualDiscount(&$items, $manualDiscountTotal)
         {
         }
@@ -4046,6 +4069,18 @@ namespace FluentCart\Api {
         public function get($key = null, $default = null)
         {
         }
+        /**
+         * All store settings, as the settings form should edit them.
+         *
+         * A stored radius the grammar refuses (hand-edited, or written by an older
+         * build) never printed on the storefront; dropped here too, so the form
+         * never holds a value it would refuse to save.
+         *
+         * @return array
+         */
+        public function getForEditing(): array
+        {
+        }
         public function moduleSettings(): array
         {
         }
@@ -4264,12 +4299,36 @@ namespace FluentCart\Api {
         {
         }
         /**
+         * The theme's border radii for the preview, role => length.
+         *
+         * Exactly what inheriting would print, storefront filter included, so the
+         * preview never promises a radius the storefront won't write.
+         *
+         * @return array Role key => length (`8px`, `0.5rem`).
+         */
+        protected function getAppearanceThemeRadii(): array
+        {
+        }
+        /**
          * The colour knobs, grouped the way the registry groups them, as data the
          * appearance component renders its pickers from.
          *
          * @return array
          */
         protected function getAppearanceColorGroups(): array
+        {
+        }
+        /**
+         * The border-radius controls, as data the appearance component renders
+         * its number inputs from.
+         *
+         * Driven off RadiusPalette::roles(), the same registry the sanitiser and
+         * the storefront CSS read, so a control can never write a role the page
+         * would not print.
+         *
+         * @return array
+         */
+        protected function getAppearanceRadiusSection(): array
         {
         }
         /**
@@ -4315,6 +4374,21 @@ namespace FluentCart\Api {
         {
         }
         public static function getTermIdsBySlugs($slugs, $taxonomy = 'product-categories'): array
+        {
+        }
+        /**
+         * Parse a shortcode taxonomy attribute: "product-tags:1,2|product-brands:67".
+         *
+         * Returns [taxonomy => term ids]. A taxonomy is accepted only when it is
+         * registered on products (the same list the AJAX pager re-parses), and a
+         * term only when it belongs to that taxonomy, because the product query
+         * matches term ids without checking their taxonomy. A segment that resolves
+         * to no term is kept as an empty list so the caller can refuse to widen it.
+         */
+        public static function parseShortcodeTaxonomies(string $raw): array
+        {
+        }
+        private static function resolveTermIds(string $values, string $taxonomy): array
         {
         }
         public static function addTaxonomyTerms(string $taxonomy, array $terms, array $args = [])
@@ -4499,6 +4573,15 @@ namespace FluentCart\App\CPT {
         const CPT_NAME = 'fluent-products';
         protected $showStandaloneMenu = false;
         public function register()
+        {
+        }
+        /**
+         * When Gutenberg is disabled (e.g. "Disable Gutenberg" plugin) the modal iframe
+         * shows the classic edit screen, whose Update button is a full form POST to
+         * post.php followed by a redirect. Carry `custom-editor` through both so the
+         * iframe stays chrome-less, then tell the parent modal the save finished.
+         */
+        private function handleClassicEditorModalSave()
         {
         }
         public function registerElementorScript()
@@ -5971,6 +6054,22 @@ namespace FluentCart\App\Helpers {
     }
     class CartHelper
     {
+        const MAX_QUANTITY = 100000;
+        const QUANTITY_HARD_LIMIT = 10000000;
+        /**
+         * The ceiling is what keeps `unit_price * quantity` inside PHP's integer range —
+         * without one the product overflows to a float and casts back to a wrapped total.
+         * Cart updates send a signed delta, so those allow the negative side too.
+         */
+        public static function validateQuantity($quantity, $isDelta = false)
+        {
+        }
+        public static function maxQuantity()
+        {
+        }
+        private static function invalidQuantityError()
+        {
+        }
         public static function getCart($hash = null, $create = false)
         {
         }
@@ -6062,6 +6161,7 @@ namespace FluentCart\App\Helpers {
         // Raw Data
         private $cartItems = [];
         private $args = [];
+        private $validationError;
         // Order Related Data
         private $formattedIOrderItems = [];
         private $orderData = [];
@@ -6082,6 +6182,16 @@ namespace FluentCart\App\Helpers {
         {
         }
         private function prepareData()
+        {
+        }
+        /**
+         * (int) on an out-of-range float wraps, and the max(0, ...) clamps downstream turn a
+         * wrapped amount into a free but payable order. Refuse the checkout instead.
+         */
+        private function isSafeAmount($value)
+        {
+        }
+        private function unsafeAmountError()
         {
         }
         public function createDraftOrder($prevOrder = null)
@@ -7842,7 +7952,7 @@ namespace FluentCart\App\Hooks\Handlers {
          * Default addon gateways to register
          * @var array
          */
-        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class, 'square' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SquareAddon::class, 'sslcommerz' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SslcommerzAddon::class];
+        protected $defaultGateways = ['paystack' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\PaystackAddon::class, 'razorpay' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\RazorpayAddon::class, 'mercado_pago' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\MercadoPagoAddon::class, 'flutterwave' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\FlutterwaveAddon::class, 'square' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SquareAddon::class, 'airwallex' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\AirwallexAddon::class, 'sslcommerz' => \FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons\SslcommerzAddon::class];
         public function register()
         {
         }
@@ -9667,11 +9777,13 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ProductReviewList {
          * is already there — and reading it from the store rather than the query
          * string is what keeps it the editor's setting: a floor sent by the caller
          * could be lowered by the caller.
+         * Other builders can resolve authenticated tokens through the service's
+         * list_min_rating filter without replacing the standard row renderer.
          *
          * @param string $token the composition token the page printed
          * @return int 1-5, or 0 for no floor
          */
-        public static function minRatingOfComposition($token): int
+        public static function minRatingOfComposition($token, int $postId = 0, string $ratingToken = ''): int
         {
         }
         protected static function paginationSettingsOf(array $childBlocks): array
@@ -9805,20 +9917,15 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         /**
-         * Container pattern (same as ProductInfoBlockEditor): without this,
-         * WordPress renders the inner blocks once before the render callback
-         * runs — outside the custom-product context and with all their query
-         * and hook side effects — and renderContainer() then renders them
-         * again.
+         * Render children only inside renderContainer(), after setting product context.
+         * WordPress's initial pass would otherwise render them twice.
          */
         protected function skipInnerBlocks(): bool
         {
         }
         /**
-         * Children detect nesting server-side by this key's presence (the
-         * related_product_ids pattern) and follow the container's product,
-         * so a stale custom pick saved on a child can never win — saved
-         * content renders without the editor's query pinning ever running.
+         * This context key makes children inherit the container's product,
+         * overriding any saved child product selection without editor-side pinning.
          */
         public function provideContext()
         {
@@ -19093,6 +19200,14 @@ namespace FluentCart\App\Models {
         public function term()
         {
         }
+        public function variation()
+        {
+        }
+        /**
+         * The ProductDetail of the product this link's variation belongs to.
+         * object_id holds a ProductVariation id, never a ProductDetail id, so the
+         * detail is resolved through the variation's post_id.
+         */
         public function productDetails()
         {
         }
@@ -19197,6 +19312,38 @@ namespace FluentCart\App\Models\BatchQuery {
          * @return string
          */
         private function getFullTableName(\FluentCart\Framework\Database\Orm\Model $model): string
+        {
+        }
+        /**
+         * Guard a value that is about to be used as a raw SQL column/index identifier.
+         *
+         * Identifiers cannot be bound as parameters, so any key that is interpolated
+         * between backticks must be a plain column name. A value carrying a backtick
+         * (or anything outside [A-Za-z0-9_]) would break out of the identifier and
+         * inject SQL, so we fail closed rather than escape — a legitimate column name
+         * always matches.
+         *
+         * @param string $identifier
+         * @return void
+         * @throws \InvalidArgumentException
+         */
+        private function assertIdentifier($identifier): void
+        {
+        }
+        /**
+         * Normalize a non-null scalar value, then bind it via prepare().
+         *
+         * prepare('%s', ...) only accepts scalars: a DateTime or a stringable object
+         * would become an empty string. Callers legitimately pass DateTime objects
+         * (e.g. updated_at, refunded_at) and boolean flags, which the previous
+         * string-concatenation path rendered via __toString()/(int) cast. Reproduce
+         * that normalization before binding so stored values are unchanged.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Model $table
+         * @param mixed $input non-null value
+         * @return string prepared, quoted SQL literal
+         */
+        private function prepareScalar(\FluentCart\Framework\Database\Orm\Model $table, $input): string
         {
         }
     }
@@ -20973,12 +21120,6 @@ namespace FluentCart\App\Models {
         public function variants(): \FluentCart\Framework\Database\Orm\Relations\HasMany
         {
         }
-        public function attrMap(): \FluentCart\Framework\Database\Orm\Relations\HasMany
-        {
-        }
-        public static function boot()
-        {
-        }
         public function setDefaultMediaAttribute($value)
         {
         }
@@ -21188,6 +21329,13 @@ namespace FluentCart\App\Models {
         public function scopeOfProduct($query, $postId)
         {
         }
+        /**
+         * Reviews with exactly this star rating, or any of a list of them (the
+         * storefront's star chips can be combined).
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @param int|int[]|null $rating
+         */
         public function scopeOfRating($query, $rating)
         {
         }
@@ -26161,133 +26309,6 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         }
     }
 }
-namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
-    class Airwallex extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
-    {
-        public array $supportedFeatures = ['payment', 'refund', 'webhook'];
-        public function __construct()
-        {
-        }
-        public function meta(): array
-        {
-        }
-        public function boot()
-        {
-        }
-        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
-        {
-        }
-        public function refund($refundInfo, $order, $transaction)
-        {
-        }
-        public function handleIPN(): void
-        {
-        }
-        public function getOrderInfo(array $data)
-        {
-        }
-        public function fields()
-        {
-        }
-        public static function validateSettings($data): array
-        {
-        }
-        public function getEnqueueScriptSrc($hasSubscription = 'no'): array
-        {
-        }
-        public function getEnqueueStyleSrc(): array
-        {
-        }
-        private function getAccessToken()
-        {
-        }
-        private function createAirwallexPaymentIntent($data, $accessToken)
-        {
-        }
-        private function processAirwallexRefund($refundData, $accessToken)
-        {
-        }
-        private static function testApiConnection($clientId, $apiKey, $mode)
-        {
-        }
-        private function verifyWebhookSignature($payload)
-        {
-        }
-        private function getApiBaseUrl()
-        {
-        }
-        private function getWebhookUrl()
-        {
-        }
-        public function webHookPaymentMethodName()
-        {
-        }
-        private function generateRequestId($order, $type = 'payment')
-        {
-        }
-        private function handlePaymentSucceeded($payload)
-        {
-        }
-        private function handlePaymentFailed($payload)
-        {
-        }
-        private function handleRefundReceived($payload)
-        {
-        }
-        private function handlePaymentSuccess($paymentIntent, $order)
-        {
-        }
-        private function handlePaymentFailure($paymentIntent, $order)
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\Core {
-    abstract class BaseGatewaySettings
-    {
-        public static array $allSettings = [];
-        private static bool $settingsLoaded = false;
-        public $settings;
-        public $methodHandler;
-        public function __construct()
-        {
-        }
-        abstract public function get($key = '');
-        abstract public function getMode();
-        abstract public function isActive();
-        public function getCachedSettings()
-        {
-        }
-    }
-}
-namespace FluentCart\App\Modules\PaymentMethods\AirwallexGateway {
-    class AirwallexSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
-    {
-        public $settings;
-        public $methodHandler = 'fluent_cart_payment_settings_airwallex';
-        public static function getDefaults()
-        {
-        }
-        public function isActive(): bool
-        {
-        }
-        public function get($key = '')
-        {
-        }
-        public function getMode()
-        {
-        }
-        public function getClientId()
-        {
-        }
-        public function getApiKey()
-        {
-        }
-        public function getWebhookSecret()
-        {
-        }
-    }
-}
 namespace FluentCart\App\Modules\PaymentMethods\Cod {
     class Cod extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
@@ -26355,6 +26376,26 @@ namespace FluentCart\App\Modules\PaymentMethods\Cod {
         {
         }
     }
+}
+namespace FluentCart\App\Modules\PaymentMethods\Core {
+    abstract class BaseGatewaySettings
+    {
+        public static array $allSettings = [];
+        private static bool $settingsLoaded = false;
+        public $settings;
+        public $methodHandler;
+        public function __construct()
+        {
+        }
+        abstract public function get($key = '');
+        abstract public function getMode();
+        abstract public function isActive();
+        public function getCachedSettings()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\PaymentMethods\Cod {
     class CodSettingsBase extends \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings
     {
         public $settings;
@@ -27370,6 +27411,9 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public function getPublicKey($mode = '')
         {
         }
+        public function getBrandName(array $context = []): string
+        {
+        }
         public function getMerchantId()
         {
         }
@@ -27822,6 +27866,33 @@ namespace FluentCart\App\Modules\PaymentMethods\PromoGateways\Addons {
          * @return string HTML for the addon notice
          */
         public function generateAddonNotice($config)
+        {
+        }
+    }
+    class AirwallexAddon extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
+    {
+        public array $supportedFeatures = [];
+        private $addonSlug = 'airwallex-for-fluent-cart';
+        private $addonFile = 'airwallex-for-fluent-cart/airwallex-for-fluent-cart.php';
+        public function __construct()
+        {
+        }
+        public function meta(): array
+        {
+        }
+        public function makePaymentFromPaymentInstance(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance)
+        {
+        }
+        public function handleIPN()
+        {
+        }
+        public function getOrderInfo(array $data)
+        {
+        }
+        public function addonNoticeMessage()
+        {
+        }
+        public function fields()
         {
         }
     }
@@ -29466,9 +29537,8 @@ namespace FluentCart\App\Modules\Reviews {
         }
         /**
          * Show Reviews as a "↳" child under Products in the WP admin left
-         * sidebar, mirroring the Attributes and Inventory children. Hidden by
-         * default via inline CSS; useNavigationMenuUpdateService toggles it
-         * visible whenever the active route's active_menu is 'products'.
+         * sidebar, mirroring the Attributes and Inventory children. Always
+         * visible, so the sidebar keeps the same shape on every page.
          */
         protected function registerSidebarMenu()
         {
@@ -35895,6 +35965,8 @@ namespace FluentCart\App\Services\Email {
     {
         const EMAIL_RECIPIENT_MAP = ['customer' => '{{order.customer.email}}', 'user' => '{{user.user_email}}', 'subscriber' => '{{order.customer.email}}'];
         const META_KEY = 'email_notifications_config';
+        /** The events the reviews module raises. */
+        const REVIEW_EVENTS = ['review_created', 'review_approved_done', 'review_replied_done'];
         public static function getNotifications(): array
         {
         }
@@ -38030,6 +38102,24 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function advanceFilterOptions(): array
+        {
+        }
+        private static function reviewFilterOptions(): array
+        {
+        }
+        /**
+         * Products that have (or have no) top-level reviews in the chosen status.
+         * Replies are never reviews. "Not approved" is every other status.
+         */
+        private static function filterByReviews($query, $item, bool $writtenOnly)
+        {
+        }
+        /**
+         * Same average as ProductReviewResource::recalculateProductRatings():
+         * approved top-level reviews rated 1-5, rounded to two places. A product
+         * with no rated review has no average and never matches.
+         */
+        private static function filterByAverageRating($query, $item)
         {
         }
         /**
@@ -41877,6 +41967,17 @@ namespace FluentCart\App\Services {
         {
         }
         /**
+         * The star ratings a review list is filtered to, from "5,4" or [5, 4].
+         *
+         * Only whole stars 1-5 survive, each once, so the list is never longer than five.
+         *
+         * @param string|array $value
+         * @return int[]
+         */
+        public static function ratingList($value): array
+        {
+        }
+        /**
          * Whether the store collects star ratings at all.
          *
          * Defaults to on, so a store that has never touched the setting shows the
@@ -41990,6 +42091,26 @@ namespace FluentCart\App\Services {
          * @return array ['reviews' => paginator array, ...filter additions]
          */
         public static function getPublicReviewsPayload(array $params, $postId): array
+        {
+        }
+        /**
+         * Resolve an editorial floor before rendering, or for legacy refreshes.
+         * A client id is context only; integrations authenticating their own tokens
+         * must verify them before overriding the trusted default.
+         */
+        public static function resolveListMinRating(string $clientId, int $default = 0, int $postId = 0): int
+        {
+        }
+        /** Product-bound, cache-safe list setting; does not grant access to reviews. */
+        public static function listRatingToken(int $postId, int $minimum): string
+        {
+        }
+        /** Null means absent, modified, or issued for a different product. */
+        public static function minRatingFromToken(int $postId, string $token): ?int
+        {
+        }
+        /** Shared rating visibility for blocks, shortcodes and addon renderers. */
+        public static function ratingMeetsThresholds($product, array $attributes = [], $block = null): bool
         {
         }
         /**
@@ -43262,6 +43383,21 @@ namespace FluentCart\App\Services\Renderer {
         public function renderCheckoutReviews()
         {
         }
+        /**
+         * First/Last name inputs for the modal. Enabling either in Checkout Fields
+         * replaces the single Full name input. The field definitions come from
+         * CheckoutFieldsSchema, shared with the regular checkout; the modal only
+         * moves the label out of the placeholder.
+         *
+         * First name is always rendered and required, because checkout validation
+         * always asks for it in this mode. That keeps an older saved configuration
+         * with only Last name enabled working.
+         *
+         * @return array[] field configs for FormFieldRenderer::renderField()
+         */
+        private function getFirstLastNameFields(): array
+        {
+        }
         public function renderCheckoutBilling()
         {
         }
@@ -43581,7 +43717,7 @@ namespace FluentCart\App\Services\Renderer {
         public function renderStarRating()
         {
         }
-        public function renderStarRatingBlock($wrapperAttributes = '')
+        public function renderStarRatingBlock($wrapperAttributes = '', array $attributes = [], $block = null)
         {
         }
         public function renderExcerpt($atts = '')
@@ -45288,6 +45424,17 @@ namespace FluentCart\App\Services\Renderer {
         public static function replyIconSvg(): string
         {
         }
+        /**
+         * The star every rating on the storefront is drawn with.
+         *
+         * The shape lives in app/Views/icons/review-star.svg, which the admin,
+         * block editor and customer portal import too, so there is one star to
+         * change. A replacement passed through the filter should keep the
+         * fct-star-svg class, fill="currentColor" and the 1em size: the star
+         * colours, half-star clipping and sizing all hang off those.
+         *
+         * @return string
+         */
         public static function starSvg(): string
         {
         }
@@ -46685,6 +46832,7 @@ namespace FluentCart\App\Services\Schema {
         public const MAX_REVIEWS = 20;
         /** Ceiling on the variations read for offers. */
         public const MAX_OFFERS = 100;
+        /** Legacy hook name retained for existing integrations. */
         public const FILTER_HOOK = 'fluent_cart/review/json_ld';
         /**
          * The Product node for a product, or [] when there is nothing worth
@@ -46697,6 +46845,10 @@ namespace FluentCart\App\Services\Schema {
          * @return array
          */
         public static function get($postId): array
+        {
+        }
+        /** Only brands assigned to this product, never the store name as a fallback. */
+        protected static function brandNodes(int $postId): array
         {
         }
         /**
@@ -46750,6 +46902,15 @@ namespace FluentCart\App\Services\Schema {
          * @return array
          */
         protected static function offersNode(array $variations, string $url, array $bounds): array
+        {
+        }
+        /**
+         * Describe the stored offer price without applying visitor-specific taxes.
+         * Variation tax overrides follow the same precedence as TaxCalculator.
+         * Recurring prices use referenceQuantity for the period they purchase;
+         * billingDuration is reserved for a known, finite payment term.
+         */
+        protected static function priceSpecification(\FluentCart\App\Models\ProductVariation $variation, array $offer, array $taxSettings): array
         {
         }
         /**
@@ -48154,7 +48315,7 @@ namespace FluentCart\App\Services\Theme {
         }
     }
     /**
-     * Writes the storefront's global colour custom properties.
+     * Writes the storefront's global colour and border-radius custom properties.
      *
      * FluentCart's stylesheets declare every scoped colour as
      * `var(--fct-<global>, <fallback>)`, so the globals printed here cascade to the
@@ -48396,11 +48557,156 @@ namespace FluentCart\App\Services\Theme {
         {
         }
         /**
-         * Build the `:root` declaration block.
+         * The radii the store owner set by hand, role => length.
+         *
+         * Stored as typed lengths (a bare number is pixels); re-checked here the
+         * same way the sanitiser checks them on save, so a stale or hand-edited
+         * option never reaches the page.
+         *
+         * @return array Role key => length (`12px`, `0.5rem`, `1em`).
+         */
+        public static function getCustomRadii(): array
+        {
+        }
+        /**
+         * The radii the active theme states, role => length.
+         *
+         * @return array
+         */
+        protected static function getThemeRadii(): array
+        {
+        }
+        /**
+         * Every radius that will actually be written, role => normalised length.
+         *
+         * Same three sources as the colours: the owner's own radii under
+         * `customize`, the theme's under `inherit_from_theme`, and none under
+         * `default` — FluentCart's look must not move.
+         *
+         * @return array
+         */
+        public static function getEffectiveRadii(): array
+        {
+        }
+        /**
+         * The radii a given source would write, after the storefront filter.
+         *
+         * The settings preview asks for the inherited radii while another source
+         * is saved, so it shows exactly what choosing that source would print.
+         *
+         * @param string $source One of the ColorPalette::SOURCE_* constants.
+         * @return array Role key => normalised length.
+         */
+        public static function radiiFor(string $source): array
+        {
+        }
+        /**
+         * Build the `:root` declaration block: colours first, then radii.
+         *
+         * Either half prints without the other — a store can set radii and keep
+         * FluentCart's colours, or the reverse.
          *
          * @return string CSS, or '' when there is nothing to write.
          */
         public static function buildCss(): string
+        {
+        }
+        /**
+         * The radius declarations, without the surrounding block.
+         *
+         * @return string
+         */
+        protected static function buildRadiusDeclarations(): string
+        {
+        }
+        /**
+         * The colour declarations, without the surrounding block.
+         *
+         * @return string
+         */
+        protected static function buildColorDeclarations(): string
+        {
+        }
+    }
+    /**
+     * The storefront border-radius registry.
+     *
+     * FluentCart's stylesheets already read three radius tokens with their own
+     * fallbacks — `border-radius: var(--fct-btn-radius, <fallback>)` — and nothing
+     * declared them. This registry names those tokens once, for every consumer:
+     * the setting's sanitiser, the admin's controls, the theme readers and the CSS
+     * FrontendTheme prints.
+     */
+    class RadiusPalette
+    {
+        /**
+         * The radius roles, keyed by the settings key.
+         *
+         * Not filterable: each `var` is a token the shipped stylesheets read, and
+         * a role added from outside would print a property nothing consumes.
+         *
+         * @return array Role key => ['var' => custom property, 'label' => label, 'note' => hint].
+         */
+        public static function roles(): array
+        {
+        }
+        /**
+         * Normalise one radius length, or refuse it.
+         *
+         * The grammar is a single length: `0`, or a non-negative number followed
+         * by `px`, `rem` or `em`. No percentages, no negatives, no var() or calc():
+         * the value is written into a style element on every storefront page, so
+         * anything wider would be a way to smuggle CSS in, and a value the grammar
+         * cannot read is better left unstated than guessed at.
+         *
+         * @param mixed $value
+         * @return string The normalised length (`0`, `8px`, `0.5rem`), or '' when refused.
+         */
+        public static function sanitizeLength($value): string
+        {
+        }
+        /**
+         * An owner-typed radius, normalised, or '' when it is not one.
+         *
+         * A bare number means pixels (`12` → `12px`), the way an owner reads a
+         * plain number; a number with a unit is kept with it (`1.5em`, `0.5rem`).
+         * Everything else goes through sanitizeLength()'s grammar, so the units
+         * are px, rem and em, and nothing negative survives.
+         *
+         * @param mixed $value
+         * @return string
+         */
+        public static function sanitizeOwnerLength($value): string
+        {
+        }
+        /**
+         * Keep only the known roles with a valid owner-typed radius.
+         *
+         * @param mixed $value Role key => typed radius.
+         * @return array Role key => normalised length.
+         */
+        public static function sanitizeOwnerMap($value): array
+        {
+        }
+        /**
+         * Save-time validation for the owner's typed radii, one rule per role.
+         *
+         * Each rule runs sanitizeOwnerLength() itself, so a value the sanitiser
+         * would drop is refused with a message naming the field, instead of being
+         * saved without it. Empty means "not set" and passes.
+         *
+         * @return array Field path => [rule].
+         */
+        public static function validationRules(): array
+        {
+        }
+        /**
+         * A float without trailing zeros, never in exponent form.
+         *
+         * @param float $number
+         * @return string
+         */
+        protected static function formatNumber(float $number): string
         {
         }
     }
@@ -48442,6 +48748,31 @@ namespace FluentCart\App\Services\Theme\Readers {
         public static function roles(): array;
     }
     /**
+     * Reads the border radii a theme's owner set in the theme's own settings.
+     *
+     * A separate contract from ThemeSettingsReader on purpose: adding a method to
+     * that interface would break every third-party class implementing it. A
+     * reader that can read a radius implements both.
+     *
+     * Like the colours, a reader states only what the theme states: a role the
+     * theme has no setting for is omitted, never guessed, and FluentCart prints
+     * nothing for it.
+     */
+    interface ThemeRadiusReader
+    {
+        /**
+         * Role => the length the theme states, as the theme prints it.
+         *
+         * Roles: card, btn, input (RadiusPalette::roles()). ThemePalette::radii()
+         * normalises each value through RadiusPalette::sanitizeLength(), so a
+         * value outside that grammar (a percentage, calc(), several corners) is
+         * dropped there; return '' or omit the role rather than guess.
+         *
+         * @return array
+         */
+        public static function radii(): array;
+    }
+    /**
      * Astra's Customizer colours, read from its settings rather than its slots.
      *
      * Astra keeps its Theme Colors as settings that point at a palette swatch
@@ -48456,9 +48787,12 @@ namespace FluentCart\App\Services\Theme\Readers {
      * (`link-h-color`), and each text partner → the colour that reads on its
      * background.
      *
+     * Its Buttons → Border Radius (`button-radius-fields`) is the button radius
+     * (see radii()). Astra has no form-field or product-card radius setting.
+     *
      * Verified against Astra 4.13.11.
      */
-    class AstraSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    class AstraSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader, \FluentCart\App\Services\Theme\Readers\ThemeRadiusReader
     {
         /**
          * Astra's outline button presets: a transparent background with a border.
@@ -48510,6 +48844,21 @@ namespace FluentCart\App\Services\Theme\Readers {
         protected static function readResponsive(string $key): string
         {
         }
+        /**
+         * The primary button's Border Radius.
+         *
+         * `button-radius-fields` is a responsive four-corner control; Astra prints
+         * each desktop corner as `<value><desktop-unit>` (astra_responsive_spacing()
+         * in inc/class-astra-dynamic-css.php) and tablet/mobile only override it,
+         * so desktop speaks for all. Only four equal corners are one length. An
+         * empty corner prints nothing — Astra's stylesheet then paints `button`
+         * 2px but `.button` 0, no single answer — so an empty radius states none.
+         *
+         * @return array Role => length, as Astra prints it.
+         */
+        public static function radii(): array
+        {
+        }
     }
     /**
      * Blocksy's Customizer colours, read from its theme mods rather than its slots.
@@ -48532,9 +48881,14 @@ namespace FluentCart\App\Services\Theme\Readers {
      * properties under `:root[data-color-mode*="dark"]`, which a bare hex would
      * never follow.
      *
+     * Radii (see radii()): Buttons → Border Radius (`buttonRadius`) and Form
+     * Elements → Border Radius (`formFieldBorderRadius`). The product card radius
+     * (`cardProductRadius`) is a WooCommerce setting Blocksy only prints with
+     * WooCommerce, so it is not read.
+     *
      * Verified against Blocksy 2.1.57.
      */
-    class BlocksySettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    class BlocksySettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader, \FluentCart\App\Services\Theme\Readers\ThemeRadiusReader
     {
         /**
          * Blocksy's defaults per mod and sub-key (inc/dynamic-styles/global/all.php
@@ -48616,6 +48970,63 @@ namespace FluentCart\App\Services\Theme\Readers {
         protected static function normalise($raw, string $default): string
         {
         }
+        /**
+         * Blocksy's stylesheet fallback for both radii
+         * (`var(--theme-button-border-radius, 3px)`,
+         * `var(--theme-form-field-border-radius, 3px)`, static/bundle/main.min.css),
+         * and the `empty_value` its dynamic CSS skips printing at.
+         *
+         * @var int
+         */
+        protected static $defaultRadius = 3;
+        /**
+         * The button and form-field radii.
+         *
+         * Button: `buttonRadius`, a ct-spacing value printed as
+         * `--theme-button-border-radius` (inc/dynamic-styles/global/all.php). Its
+         * desktop value speaks for all; an empty one is Blocksy's 3px.
+         *
+         * Form field: `formFieldBorderRadius`, a number of px (default 3) printed
+         * as `--theme-form-field-border-radius` (global/forms.php). It is only
+         * worn by classic forms: modern forms paint
+         * `var(--has-classic-forms, …)` with `--false`, which leaves the field
+         * square, so they state 0.
+         *
+         * @return array Role => length, as Blocksy prints it.
+         */
+        public static function radii(): array
+        {
+        }
+        /**
+         * A ct-spacing value as the one length Blocksy prints, the way
+         * blocksy_spacing_prepare_for_device() writes it (inc/css/spacing.php):
+         *
+         *  - unset, or every side empty: Blocksy prints nothing and its
+         *    stylesheet's 3px applies;
+         *  - custom (state 3): the custom string as typed;
+         *  - otherwise each side's value and unit, an empty side taking 3 when
+         *    the sides are linked (0 when not), a side without a unit taking the
+         *    others'. Only four equal sides are one length.
+         *
+         * The pre-`values` format (`top`/`right`/`bottom`/`left` strings) is read
+         * the same way.
+         *
+         * @param mixed $value
+         * @return string
+         */
+        protected static function spacingLength($value): string
+        {
+        }
+        /**
+         * The pre-`values` spacing format: four strings carrying their unit.
+         * Blocksy writes an empty, `auto` or `0` side as its empty value.
+         *
+         * @param array $value
+         * @return string
+         */
+        protected static function legacySpacingLength(array $value): string
+        {
+        }
     }
     /**
      * Bricks' colours, read from the theme style Bricks applies to the page.
@@ -48654,9 +49065,13 @@ namespace FluentCart\App\Services\Theme\Readers {
      * measured — a translucent rgba(), dynamic data, a gradient, a var() nothing
      * resolves — is not stated.
      *
+     * Radii (see radii()) come from the same theme style: the button's border
+     * radius (`button.primaryBorder`, else `button.border`) and the Form element's
+     * field border radius (`form.fieldBorder`). Bricks has no product-card style.
+     *
      * Verified against Bricks 2.1.3.
      */
-    class BricksSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    class BricksSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader, \FluentCart\App\Services\Theme\Readers\ThemeRadiusReader
     {
         /**
          * Bricks' stylesheet: `body{background-color:#fff}` (frontend.min.css).
@@ -48877,6 +49292,34 @@ namespace FluentCart\App\Services\Theme\Readers {
         protected static function palette(): array
         {
         }
+        /**
+         * The button and form-field radii of the theme style Bricks applies.
+         *
+         * Button: the primary button's border (`:root .bricks-button[class*="primary"]`,
+         * the style a new Button element gets) over every button's
+         * (`.bricks-button`). Input: the Form element's field border
+         * (`.brxe-form` inputs, selects and textareas) — the only field radius a
+         * theme style holds. A style that sets neither states none; Bricks'
+         * stylesheet is not read for one.
+         *
+         * @return array Role => length, as Bricks prints it.
+         */
+        public static function radii(): array
+        {
+        }
+        /**
+         * A border control's radius as one length, built the way
+         * Assets::generate_css_rules_from_setting() builds it: per corner, a
+         * non-zero bare number takes px, otherwise the corner's unit is appended
+         * unless the value already carries it. Only four set, equal corners are
+         * one length.
+         *
+         * @param mixed $radius
+         * @return string
+         */
+        protected static function radiusLength($radius): string
+        {
+        }
     }
     /**
      * Divi's Customizer colours, read from its settings.
@@ -48906,9 +49349,12 @@ namespace FluentCart\App\Services\Theme\Readers {
      * value FluentCart cannot write (rgb(), rgba(), Divi 5's `hsl(from var(--gcid…))`
      * or a `$variable(…)$` reference) is not stated.
      *
+     * Its Buttons → Border Radius (`all_buttons_border_radius`) is the button
+     * radius (see radii()). Divi has no form-field or product-card radius setting.
+     *
      * Verified against Divi 5.0.1.
      */
-    class DiviSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    class DiviSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader, \FluentCart\App\Services\Theme\Readers\ThemeRadiusReader
     {
         /**
          * Divi's defaults (GlobalData::$customizer_colors, the Customizer settings
@@ -48985,6 +49431,20 @@ namespace FluentCart\App\Services\Theme\Readers {
          * @return string Lowercase hex, or ''.
          */
         protected static function hex($raw, string $default = ''): string
+        {
+        }
+        /**
+         * The button radius.
+         *
+         * `all_buttons_border_radius` is a whole number of px (sanitised with
+         * `absint`, range 0–100), read exactly as Divi's customizer CSS reads it:
+         * `absint( et_get_option( 'all_buttons_border_radius', '3' ) )`
+         * (functions.php). Divi prints it when it is not 3; at 3 its stylesheet
+         * paints the same 3px.
+         *
+         * @return array Role => length.
+         */
+        public static function radii(): array
         {
         }
     }
@@ -49152,9 +49612,14 @@ namespace FluentCart\App\Services\Theme\Readers {
      * Kadence has no border setting (its borders use the static
      * `--global-gray-400`), so no border is stated and FluentCart keeps deriving it.
      *
+     * Its Buttons → Border Radius (`buttons_border_radius`) is the button radius
+     * (see radii()). Kadence has no form-field radius setting (its stylesheet's
+     * inputs are a fixed 3px) and its product-archive radii are WooCommerce
+     * settings, so neither is read.
+     *
      * Verified against Kadence 1.5.0.
      */
-    class KadenceSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader
+    class KadenceSettingsReader implements \FluentCart\App\Services\Theme\Readers\ThemeSettingsReader, \FluentCart\App\Services\Theme\Readers\ThemeRadiusReader
     {
         /**
          * Kadence's defaults per setting and sub-key
@@ -49261,6 +49726,21 @@ namespace FluentCart\App\Services\Theme\Readers {
         protected static function api()
         {
         }
+        /**
+         * The button radius.
+         *
+         * `buttons_border_radius` is a responsive range (`size` / `unit` per
+         * device) Kadence prints through `render_range()` on its button selector
+         * (inc/components/styles/component.php); the desktop rule is the
+         * unprefixed one that speaks for all. A desktop size that is not a number
+         * prints nothing, and Kadence's stylesheet paints its buttons 3px
+         * (assets/css/global.min.css), which is what is stated then.
+         *
+         * @return array Role => length, as Kadence prints it.
+         */
+        public static function radii(): array
+        {
+        }
     }
 }
 namespace FluentCart\App\Services\Theme {
@@ -49339,6 +49819,18 @@ namespace FluentCart\App\Services\Theme {
          * @var array|null
          */
         protected static $cachedSettingsRoles = null;
+        /**
+         * @var array|null
+         */
+        protected static $cachedRadii = null;
+        /**
+         * Whether the site switched the theme's settings reader off: a reader
+         * stated colours and `fluent_cart/theme/settings_roles` returned none.
+         * Set by settingsRoles().
+         *
+         * @var bool
+         */
+        protected static $settingsReaderOff = false;
         /**
          * Theme settings readers, keyed by the theme name passed to the
          * `fluent_cart/theme/settings_roles` filter. The first that applies wins.
@@ -49519,6 +50011,104 @@ namespace FluentCart\App\Services\Theme {
          * @return array Role => hex or reference.
          */
         public static function settingsRoles(): array
+        {
+        }
+        /**
+         * The border radii the active theme states, by role.
+         *
+         * theme.json speaks first, as it does for the button colours
+         * (buttonGlobals()): the button element, else the Button block, and the
+         * text-input element, else select, else the Search block — the owner's
+         * site editor and picked style variation over the theme's own, see
+         * radiusGlobals(). Then the first applying settings reader that
+         * implements Readers\ThemeRadiusReader fills the roles the site editor
+         * left unstated — unless the site switched that reader off by returning
+         * [] from `fluent_cart/theme/settings_roles`, which turns off its radii
+         * too. A role nothing states is absent, and FluentCart prints nothing
+         * for it.
+         *
+         * Roles: card, btn, input (RadiusPalette::roles()). Every value is one
+         * length in RadiusPalette::sanitizeLength()'s grammar; anything else is
+         * dropped rather than guessed.
+         *
+         * @return array Role => length (`0`, `8px`, `0.5rem`, `1em`).
+         */
+        public static function radii(): array
+        {
+        }
+        /**
+         * The radii theme.json states, from the `theme` and `user` origins — the
+         * owner's (the site editor, or a style variation they picked, both saved
+         * in the user origin) over the theme's. Core's origin is left out, as in
+         * buttonGlobals().
+         *
+         * Within one origin each role reads a chain, the closest match first:
+         *  - btn:   the button element (`styles.elements.button`, what a plain
+         *           `<button class="wp-element-button">` wears — FluentCart's
+         *           buttons are plain buttons), then the Button block
+         *           (`styles.blocks.core/button`);
+         *  - input: the text-input element, the select element, then the Search
+         *           block (`styles.blocks.core/search`, whose border styles its
+         *           input).
+         * No path is read as the product-card radius: no theme.json path names a
+         * product card, and a featured-image or group radius is not one.
+         *
+         * @return array Role => length, normalised; only stated roles.
+         */
+        protected static function radiusGlobals(): array
+        {
+        }
+        /**
+         * One theme.json radius as a single length.
+         *
+         *  - `{"ref": "styles.…"}` points at another value in the merged
+         *    theme.json data and is followed (at most three hops);
+         *  - a four-corner object is one length only when every corner is;
+         *  - preset references resolve to the preset's size:
+         *    `var:preset|border-radius|slug` / `var(--wp--preset--border-radius--slug)`
+         *    through `settings.border.radiusSizes`, and
+         *    `var:preset|spacing|slug` / `var(--wp--preset--spacing--slug)`
+         *    through `settings.spacing.spacingSizes` (a fluid `min()`/`clamp()`
+         *    size fails the grammar and is dropped);
+         *  - `var(--wp--custom--…)` resolves to the custom value it names.
+         *
+         * @param mixed $value
+         * @param int   $hops  Ref hops left.
+         * @return string Normalised length, or ''.
+         */
+        protected static function radiusValue($value, int $hops = 3): string
+        {
+        }
+        /**
+         * The merged theme.json data (core, theme, user) a `ref` resolves
+         * against — the same data WordPress resolves refs against when it prints.
+         *
+         * @return array
+         */
+        protected static function mergedThemeJson(): array
+        {
+        }
+        /**
+         * The size of a preset (`settings.border.radiusSizes` or
+         * `settings.spacing.spacingSizes`), the owner's over the theme's over
+         * core's.
+         *
+         * @param array  $setting Settings path, e.g. ['spacing', 'spacingSizes'].
+         * @param string $slug
+         * @return string
+         */
+        protected static function presetSize(array $setting, string $slug): string
+        {
+        }
+        /**
+         * The `settings.custom` value a `--wp--custom--a--b` property is printed
+         * from. WordPress names each level by its key in kebab case, joined by
+         * `--`, so the property is walked one level at a time.
+         *
+         * @param string $property The part after `--wp--custom--`.
+         * @return string
+         */
+        protected static function customSetting(string $property): string
         {
         }
         /**
