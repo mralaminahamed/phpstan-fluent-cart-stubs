@@ -14,6 +14,51 @@ namespace FluentCart\Api\Checkout {
         public static function placeOrder(array $data, $fromCheckout = false)
         {
         }
+        /**
+         * Set the postage the cart advertises.
+         *
+         * The tax pipeline reads the charge from here rather than from any local
+         * amount, so this is how a shipping discount is made visible to it. Does not
+         * persist — the caller decides, because during a tax recalculation the
+         * recalculation saves the cart itself.
+         *
+         * @param \FluentCart\App\Models\Cart $cart
+         * @param int $charge In cents.
+         * @return void
+         */
+        private static function setCartShippingCharge(\FluentCart\App\Models\Cart $cart, $charge)
+        {
+        }
+        /**
+         * Record the method this order is paid with as both the cart's payment
+         * method and the form's choice, so nothing that prices the order reads an
+         * earlier click instead — the page saves the radio separately, and that
+         * save can lag, name a method no longer offered, or be sent on its own.
+         *
+         * @param \FluentCart\App\Models\Cart $cart
+         * @param string $paymentMethod
+         * @return void
+         */
+        private static function setPaymentMethod(\FluentCart\App\Models\Cart $cart, $paymentMethod)
+        {
+        }
+        /**
+         * Record the submitted checkout fields as the cart's form, so nothing that
+         * prices the order reads an earlier save instead. A field the form did not
+         * send keeps its saved value.
+         *
+         * Country, state, city, postcode, the ship-elsewhere and business toggles
+         * are left as saved: tax is worked out from them, and the page refreshes
+         * the summary each time one of them is saved, so the saved values are the
+         * ones the shopper saw the order priced for.
+         *
+         * @param \FluentCart\App\Models\Cart $cart
+         * @param array $data
+         * @return void
+         */
+        private static function setFormFields(\FluentCart\App\Models\Cart $cart, array $data)
+        {
+        }
         private static function getOrCreateCustomer(\FluentCart\App\Helpers\CartCheckoutHelper $cartCheckoutHelper, $orderData)
         {
         }
@@ -3519,6 +3564,17 @@ namespace FluentCart\Api\Resource {
         public static function get(array $params = [])
         {
         }
+        /**
+         * A store-wide list: reviews of published products that take reviews, narrowed
+         * to the products and categories the caller named. Callers cap the id lists.
+         *
+         * @param \FluentCart\Framework\Database\Orm\Builder $query
+         * @param array $params product_ids, category_ids
+         * @return void
+         */
+        protected static function scopeToReviewableProducts($query, array $params)
+        {
+        }
         public static function find($id, $params = [])
         {
         }
@@ -6219,6 +6275,22 @@ namespace FluentCart\App\Helpers {
         {
         }
         private function prepareSubscriptionData()
+        {
+        }
+        /**
+         * Raise the per-cycle price to the full postage while keeping the first payment.
+         *
+         * A gateway takes the signup fee alone during a trial, otherwise one cycle plus the
+         * signup fee. So without a trial the fee absorbs the difference, or the first cycle
+         * becomes a simulated trial, the same way a first-cycle coupon is expressed.
+         *
+         * @param array $pricing From convertToSubscriptionFormat(), built on the discounted postage.
+         * @param int $firstCycleTotal Recurring total on the discounted postage, in cents.
+         * @param int $renewalTotal Recurring total on the full postage, in cents.
+         * @param int $shippingDiscount In cents.
+         * @return array
+         */
+        private function billRenewalsFullShipping(array $pricing, $firstCycleTotal, $renewalTotal, $shippingDiscount)
         {
         }
         private function determineCollectionMethod(): string
@@ -9867,6 +9939,12 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         public function render(array $shortCodeAttribute, $block = null)
         {
         }
+        /**
+         * All products or Selected products (two or more): one card added up across them.
+         */
+        protected function renderCombinedSummary(array $shortCodeAttribute, string $queryType, $productIds)
+        {
+        }
     }
     class ProductReviewSummaryGroupBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
@@ -9909,6 +9987,15 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         public function render(array $shortCodeAttribute, $block = null)
         {
         }
+        /**
+         * All products or Selected products: the Rating Summary inside combines the
+         * products and Write a Review hides. Inside a container the group's own query
+         * context would hide the container's, so the children are rebuilt with the
+         * context the group read from it.
+         */
+        protected function renderForSeveralProducts($block, bool $useContainerContext)
+        {
+        }
     }
     class ProductReviewsBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
@@ -9943,6 +10030,13 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+        /**
+         * All products or Multiple products: no current product is set up, and the
+         * single-product children skip themselves based on the provided context.
+         */
+        protected function renderMultiProduct(array $shortCodeAttribute, $block, string $queryType)
         {
         }
         protected function renderContainer(array $shortCodeAttribute, \WP_Block $block, $product)
@@ -10903,6 +10997,10 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
      *
      * On a product page it needs no attributes at all. Anywhere else it wants an
      * id, because there is no current product to read.
+     *
+     * scope="all" lists approved reviews from every product instead, optionally only
+     * product_ids="10,22" or categories="shoes,8". There is no summary or Write a
+     * Review button: there is no single product.
      */
     class ProductReviewsShortCode extends \FluentCart\App\Hooks\Handlers\ShortCodes\ShortCode
     {
@@ -10917,6 +11015,19 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         const MIN_COLUMNS = 2;
         const MAX_COLUMNS = 4;
         public function render(?array $viewData = null)
+        {
+        }
+        protected function isAllProductsScope(array $data): bool
+        {
+        }
+        protected function renderAllProductsReviews(array $data)
+        {
+        }
+        /**
+         * @return int[] Term ids of the named product categories (slugs or ids); unknown
+         *               names are dropped. One query for the ids and one for the slugs.
+         */
+        protected function resolveCategoryTermIds(string $categoriesAttribute): array
         {
         }
         /**
@@ -11180,6 +11291,20 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
         public function handleWpUserProfileUpdated($userId, $oldData, $newData = [])
+        {
+        }
+        /**
+         * True when somebody who can edit this account, and is not the account holder,
+         * made the change. A self-service edit still has to prove the new inbox.
+         */
+        private function isStaffEmailChange(int $userId): bool
+        {
+        }
+        /**
+         * True while profile.php applies the account holder's clicked newuseremail
+         * link, which WordPress only sends to the new inbox.
+         */
+        private function isWpConfirmedEmailChange(int $userId, string $email): bool
         {
         }
         public function maybeCreateUser($data)
@@ -12140,7 +12265,26 @@ namespace FluentCart\App\Http\Controllers\FrontendControllers {
          * a trim: a review that long was going to print in full anyway.
          */
         const MAX_REVIEW_WORDS = 500;
+        const MAX_ALL_PRODUCTS_REVIEWS_PER_PAGE = \FluentCart\App\Services\ProductReviewService::MAX_ALL_PRODUCTS_REVIEWS_PER_PAGE;
         public function getReviews(\FluentCart\App\Http\Requests\FrontendRequests\ReviewRequest $request, $postId)
+        {
+        }
+        /**
+         * Rows and pager for a list request. Display flags are block attributes the server
+         * cannot otherwise know, so they travel with the request and are bounded here.
+         *
+         * @param \FluentCart\Framework\Http\Request\Request $request
+         * @param array $extraOptions Options the caller adds or overrides.
+         * @return \FluentCart\App\Services\Renderer\ReviewListRenderer
+         */
+        protected function buildListRendererFromRequest($request, array $extraOptions = []): \FluentCart\App\Services\Renderer\ReviewListRenderer
+        {
+        }
+        /**
+         * Approved reviews across the store, for [fluent_cart_product_reviews scope="all"].
+         * Same list contract as getReviews(), narrowed by product and category ids.
+         */
+        public function getAllProductsReviews(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
         public function getRatingSummary(\FluentCart\Framework\Http\Request\Request $request, $postId)
@@ -21096,6 +21240,15 @@ namespace FluentCart\App\Models {
         {
         }
         protected function getFormattedMaxPriceAttribute()
+        {
+        }
+        /**
+         * Products whose own reviews switch is off; a missing key counts as on.
+         * Raw because the connection turns the double quotes of JSON selectors
+         * (other_info->reviews_enabled) into backticks. Table-qualified so it holds
+         * inside correlated subqueries on this table.
+         */
+        public function scopeReviewsDisabled($query)
         {
         }
         /**
@@ -30894,6 +31047,38 @@ namespace FluentCart\App\Modules\StoreManagedRenewal\Services {
         public static function createRenewalOrders(\FluentCart\App\Models\Subscription $subscription)
         {
         }
+        /**
+         * The renewal order's pricing, as the before_create_order listeners leave
+         * it. Starts from the order's own figures with no discount, and falls back
+         * to them when a listener returns something that is not an array.
+         *
+         * @param int          $subtotal
+         * @param int          $taxTotal
+         * @param int          $total
+         * @param \FluentCart\App\Models\Subscription $subscription
+         * @param \FluentCart\App\Models\Order        $parentOrder
+         * @param \FluentCart\App\Models\OrderItem    $parentOrderItem
+         * @return array
+         */
+        private static function requestedPricing(int $subtotal, int $taxTotal, int $total, \FluentCart\App\Models\Subscription $subscription, \FluentCart\App\Models\Order $parentOrder, \FluentCart\App\Models\OrderItem $parentOrderItem): array
+        {
+        }
+        /**
+         * The pricing as it was written to the renewal order, for
+         * before_commit_order to report: the clamped figures, and the applied rules filled in order up
+         * to the discount actually taken. A rule without an amount is passed
+         * through as the listener sent it.
+         *
+         * @param array $pricing       What the before_create_order listener returned.
+         * @param int   $subtotal
+         * @param int   $taxTotal
+         * @param int   $total
+         * @param int   $discountTotal
+         * @return array
+         */
+        private static function persistedPricing(array $pricing, int $subtotal, int $taxTotal, int $total, int $discountTotal): array
+        {
+        }
         private static function copyParentOrderSnapshot(\FluentCart\App\Models\Order $parentOrder, \FluentCart\App\Models\Order $childOrder): void
         {
         }
@@ -31917,7 +32102,38 @@ namespace FluentCart\App\Modules\Tax {
         public function isEnabled()
         {
         }
-        public function calculateCartTax($fillData)
+        /**
+         * @param array $fillData ['cart_data' => array, 'checkout_data' => array]
+         * @param \FluentCart\App\Models\Cart|null $cart Pass it while cart_data holds no rule discounts yet, so tax
+         *                        is worked out on the price after dynamic pricing rules.
+         * @return array
+         */
+        public function calculateCartTax($fillData, $cart = null)
+        {
+        }
+        /**
+         * The lines as the checkout prices them: rule discounts on the items and on each
+         * line's shipping share. Uses the same hooks as the summary and placeOrder(), so
+         * tax is charged on the amount the customer pays.
+         *
+         * @param array $lineItems
+         * @param array $checkoutData
+         * @param \FluentCart\App\Models\Cart $cart
+         * @return array
+         */
+        private function applyPricingRules(array $lineItems, array $checkoutData, \FluentCart\App\Models\Cart $cart): array
+        {
+        }
+        /**
+         * Put back what applyPricingRules() changed, keeping the tax worked out on it.
+         * cart_data must stay free of rule discounts: the summary applies them on every
+         * render, and the order writes them in at before_order_processing.
+         *
+         * @param array $productLines Taxed lines, in the order of $unpricedLineItems.
+         * @param array $unpricedLineItems
+         * @return array
+         */
+        private function restoreUnpricedValues(array $productLines, array $unpricedLineItems): array
         {
         }
         protected function shouldApplyReverseCharge($checkoutData, $taxApplicableCountry, $lineItems = [])
@@ -34396,6 +34612,22 @@ namespace FluentCart\App\Services\CustomerIdentity {
         }
         /** Called only after a successful password reset with validated inbox proof. */
         public static function confirmPasswordReset(int $userId, string $email): string
+        {
+        }
+        /**
+         * Apply an email change made by staff with authority over the account.
+         *
+         * Staff authority stands in for inbox proof here: whoever set the address
+         * can read the portal anyway, so a confirmation link would only lock the
+         * customer out of their own records until they answered it.
+         *
+         * @return string 'confirmed', 'recovering', 'incomplete', or unavailable|stale|conflict|failed
+         */
+        public static function confirmAdminChange(int $userId, string $email): string
+        {
+        }
+        /** Shared body for the paths that carry their own proof instead of a mailed link. */
+        protected static function applyWithoutLink(int $userId, string $email): string
         {
         }
         /** Shared finalization after proof; caller holds the account transaction lock. */
@@ -41527,6 +41759,12 @@ namespace FluentCart\App\Services {
          * mid-send leaves a lease nobody settles.
          */
         const NOTICE_LEASE_SECONDS = 15 * MINUTE_IN_SECONDS;
+        /** Most ids a store-wide list (scope="all") accepts per narrowing list. */
+        const MAX_PRODUCT_FILTER_IDS = 100;
+        /** A store-wide list's page ceiling, for the first render and the endpoint alike. */
+        const MAX_ALL_PRODUCTS_REVIEWS_PER_PAGE = 50;
+        /** Most product caches one combined-summary request repairs; later requests do the rest. */
+        const MAX_SUMMARY_CACHE_REPAIRS = 50;
         /**
          * Drop the per-request memos: the grant cache above and the settings
          * cache getReviewSettings() keeps.
@@ -42091,6 +42329,62 @@ namespace FluentCart\App\Services {
          * @return array ['reviews' => paginator array, ...filter additions]
          */
         public static function getPublicReviewsPayload(array $params, $postId): array
+        {
+        }
+        /**
+         * The product and category filters of an all-products list, as unique positive
+         * ints capped at MAX_PRODUCT_FILTER_IDS.
+         *
+         * @param array $filters product_ids and category_ids, as arrays or comma-separated strings
+         * @return array{product_ids: int[], category_ids: int[]}
+         */
+        public static function sanitizeProductFilters(array $filters): array
+        {
+        }
+        /**
+         * One rating summary across several products, added up from each product's
+         * cached figures (see getProductRatingSummary()). Same products as the
+         * all-products list: published, reviews not switched off, optionally only
+         * product_ids and category_ids. The average is weighted by review, from the
+         * summed breakdown.
+         *
+         * @param array $productFilters product_ids, category_ids; empty means every product
+         * @return array{breakdown: array<int, int>, total: int, average: float}
+         */
+        public static function getProductsRatingSummary(array $productFilters): array
+        {
+        }
+        /**
+         * Whether a review block's query_type lists more than one product.
+         *
+         * @param mixed $queryType
+         * @return bool
+         */
+        public static function isMultiProductQuery($queryType): bool
+        {
+        }
+        /**
+         * Product filters for a review block in All products or Multiple products mode.
+         *
+         * Null means render nothing: Multiple products with no valid selection must not
+         * fall through to the unfiltered list of every review.
+         *
+         * @param mixed $queryType
+         * @param mixed $productIds the block's product_ids, ignored in All products mode
+         * @return array{product_ids: int[], category_ids: int[]}|null
+         */
+        public static function blockProductFilters($queryType, $productIds): ?array
+        {
+        }
+        /**
+         * One page of approved reviews across the store. Extensions see post id 0 on the
+         * public_response filter.
+         *
+         * @param array $params ProductReviewResource::get() params plus the narrowing id lists,
+         *                      which are cleaned and capped here.
+         * @return array
+         */
+        public static function getAllProductsReviewsPayload(array $params): array
         {
         }
         /**
@@ -44183,6 +44477,17 @@ namespace FluentCart\App\Services\Renderer {
         protected function shouldRenderReviews(): bool
         {
         }
+        protected function isAllProductsScope(): bool
+        {
+        }
+        /**
+         * The store-wide narrowing, capped, in the shape the endpoint reads back.
+         *
+         * @return array<string, int[]>
+         */
+        protected function sanitizedProductFilters(): array
+        {
+        }
         /**
          * Whether the current page shows a product's reviews at all. The one
          * policy for everything that speaks about reviews on a page — the list
@@ -44757,6 +45062,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function renderShipping()
+        {
+        }
+        public function renderShippingDiscountRows($shippingDiscount, $displayShipping)
         {
         }
         public function renderFees()
@@ -47544,6 +47852,9 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         protected array $methodMap = ['admin_email' => 'getAdminEmail', 'site_url' => 'getSiteUrl', 'site_name' => 'getSiteName'];
+        // Anything unlisted would fall through to Arr::get() on the whole parser data
+        // and could walk into the order, its customer and their WP user.
+        protected array $allowedAccessors = ['ID', 'id', 'first_name', 'last_name', 'display_name', 'email', 'user_email', 'user_login'];
         protected function setUser()
         {
         }
@@ -47566,6 +47877,10 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function getUserEmail()
+        {
+        }
+        // Half of the login credentials: admin previews only, never customer-facing renders.
+        public function getUserLogin()
         {
         }
         private function getDataFromUser(string $key)
@@ -47594,60 +47909,6 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
     }
 }
 namespace FluentCart\App\Services\ShortCodeParser {
-    class ShortcodeParser
-    {
-        /*
-         *
-         *  @param $content string|array
-         *  @param $order object with customer FluentCart\Api\Orders; getOrderWithCustomer;
-         *  @return string|array
-         */
-        public static function parse($content, $parsable)
-        {
-        }
-        public static function arrayIterator($contentArray, $order)
-        {
-        }
-        public static function parseUserFields($userShortCodes, $user = null): array
-        {
-        }
-        public static function parseCustomerFields($customerShortCodes, $customer): array
-        {
-        }
-        public static function parseOthers($otherShortCodes, $order): array
-        {
-        }
-        public static function parseTransaction($transactionShortCodes, $transaction): array
-        {
-        }
-        public static function getSummary($order)
-        {
-        }
-        public static function getReceipt($order)
-        {
-        }
-        public static function replaceValue($parsedItems, $shortcodeValues)
-        {
-        }
-        public static function parseInputFields($placeholders, $order): array
-        {
-        }
-        public static function parseShortcode($parsableItems): array
-        {
-        }
-        public static function nestedArrayItems($parsableItems): array
-        {
-        }
-        public static function parseAddressFields($parsable, $data): array
-        {
-        }
-        public static function splitName($data, $key = 'first_name')
-        {
-        }
-        public static function parseWPFields($placeHolders, $order): array
-        {
-        }
-    }
     class ShortcodeTemplateBuilder
     {
         protected ?\FluentCart\App\Services\ShortCodeParser\SmartCodeParser $parser;
