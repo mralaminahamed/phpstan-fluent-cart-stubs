@@ -23801,10 +23801,10 @@ namespace FluentCart\App\Modules\Integrations\FluentPlugins {
          * mode -- so both branches defer to Helper::formatDateTime() and neither
          * falls through to DateFormatter for a reachable Helper.
          *
-         * DateFormatter::format($datetime, false, wp_timezone()) remains only as
-         * the defensive fallback for when FluentCrm\App\Services\Helper can't be
-         * resolved at all (this plugin's own test suite doesn't load the
-         * FluentCRM plugin; see FluentCRMDeepIntegrationTest). Pinned to
+         * DateFormatter::format($datetime, false, wp_timezone()) is the fallback
+         * when FluentCRM's Helper has no formatDateTime(): FluentCRM older than
+         * 3.2.0, or this plugin's own test suite, which doesn't load FluentCRM
+         * (see FluentCRMDeepIntegrationTest). Pinned to
          * wp_timezone() so a store on FluentCart's 'fluent_cart' timezone source
          * (no order context here) doesn't fall back to UTC.
          *
@@ -32239,6 +32239,15 @@ namespace FluentCart\App\Modules\Templating {
     {
         static $loadedAssets = [];
         protected static bool $frontendAssetsRequired = false;
+        protected static bool $checkoutAssetsLoaded = false;
+        /** @var \FluentCart\App\Models\Cart|null The cart fluentcart_checkout_vars was last localized from. */
+        protected static $localizedCheckoutCart = null;
+        /**
+         * Test seam: forget which checkout assets and cart were already handled.
+         */
+        public static function resetCheckoutAssetsRuntimeCache(): void
+        {
+        }
         public static function markFrontendAssetsRequired(): void
         {
         }
@@ -43315,7 +43324,31 @@ namespace FluentCart\App\Services\Renderer {
         public function render($withWrapper = true)
         {
         }
-        public function renderOrderSummarySectionHeading()
+        /**
+         * @param string $label Heading text; defaults to "Order summary".
+         *                      An add-on that replaces the summary but keeps this
+         *                      chrome — the toggle, its aria-controls wiring, the
+         *                      collapsed total — needs to name the section for what
+         *                      it is actually showing. Without it a "choose your
+         *                      plan" list is headed "Order summary".
+         */
+        public function renderOrderSummarySectionHeading($label = '')
+        {
+        }
+        /**
+         * Ask an add-on whether it wants to draw this summary instead.
+         *
+         * Returns MARKUP rather than a renderer object on purpose. A replacement
+         * that wants core's heading or footer composes a CartSummaryRender of its
+         * own, so handing back an object would recurse; a string cannot. The
+         * listener owns escaping what it returns — it is generating markup, and
+         * core has no way to escape arbitrary HTML without destroying it.
+         *
+         * @param bool $withWrapper
+         * @param string $context 'summary' (the whole box) | 'items' (the line-item list alone)
+         * @return string|null
+         */
+        protected function replacementHtml($withWrapper, $context)
         {
         }
         public function renderItemsLists()
@@ -43446,6 +43479,74 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public static function hasAnyBusinessFields(): bool
+        {
+        }
+    }
+    /**
+     * The cart the checkout currently being drawn resolved, and what it was drawn
+     * from.
+     *
+     * A checkout is one parent (the `fluent-cart/checkout` block, or the
+     * `[fluent_cart_checkout]` shortcode) wrapping up to nineteen inner blocks.
+     * Until now every one of those inner blocks re-resolved the cart for itself
+     * through CartHelper::getCart(), which is both wasteful and wrong the moment
+     * the parent is rendering from a cart that is not the device's own — an add-on
+     * serving an offer page its own cart, say. The parent already knows the answer;
+     * this is how it says so.
+     *
+     * Scoped to one render pass, never memoized by the consumer: the same
+     * InnerBlocks instance can be reused across passes, and a stale cart is worse
+     * than an extra lookup.
+     *
+     *     CheckoutRenderContext::rendering($cart, ['surface' => 'checkout-block'], function () {
+     *         // inner blocks here see $cart
+     *     });
+     */
+    class CheckoutRenderContext
+    {
+        /**
+         * @var \FluentCart\App\Models\Cart|null
+         */
+        protected static $cart = null;
+        /**
+         * @var array
+         */
+        protected static $meta = [];
+        /**
+         * Run $callback with $cart in force, restoring whatever was in force before
+         * — including when the callback throws. A leaked cart would follow every
+         * later checkout render in the request.
+         *
+         * @param \FluentCart\App\Models\Cart|null $cart
+         * @param array $meta ['surface' => string, 'attributes' => array]
+         * @param callable $callback
+         * @return mixed
+         */
+        public static function rendering($cart, array $meta, callable $callback)
+        {
+        }
+        /**
+         * The cart the enclosing checkout resolved, or null outside a render pass.
+         *
+         * @return \FluentCart\App\Models\Cart|null
+         */
+        public static function cart()
+        {
+        }
+        /**
+         * What the enclosing checkout was drawn from: at least `surface`
+         * ('checkout-block' | 'checkout-shortcode') and the `attributes` it was
+         * given.
+         *
+         * @return array
+         */
+        public static function meta()
+        {
+        }
+        /**
+         * @return void
+         */
+        public static function reset()
         {
         }
     }
