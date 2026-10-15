@@ -11,6 +11,14 @@ namespace FluentCart\Api\Checkout {
         /**
          * @throws \Exception
          */
+        /**
+         * The checkout page was priced at another rate or currency: re-price the
+         * cart and reload, so the total and payment form match what is charged.
+         * The notice explains why once the page has reloaded.
+         */
+        private static function refuseForCurrency(\FluentCart\App\Models\Cart $cart, \WP_Error $error)
+        {
+        }
         public static function placeOrder(array $data, $fromCheckout = false)
         {
         }
@@ -1218,9 +1226,10 @@ namespace FluentCart\Api\Resource {
          * @param array $items Order line items.
          * @param array $appliedCoupons Applied-coupon map keyed by coupon code.
          * @param string $customerEmail
+         * @param array|null $currencyQuote The order's frozen rate (CouponCurrency::orderQuote()); null prices coupons in base.
          * @return array|\WP_Error ['applied_coupons' => array, 'items' => array]
          */
-        public static function validateOrderCoupons(array $items, array $appliedCoupons, $customerEmail = '')
+        public static function validateOrderCoupons(array $items, array $appliedCoupons, $customerEmail = '', ?array $currencyQuote = null)
         {
         }
         /**
@@ -2487,6 +2496,16 @@ namespace FluentCart\Api\Resource {
         {
         }
         /**
+         * The order's frozen currency snapshot as a pricing quote, when the order
+         * is in a currency other than the base with a known rate; null otherwise
+         * (base-currency orders, and legacy orders whose rate was never known).
+         *
+         * @param \FluentCart\App\Models\Order|mixed $order
+         */
+        private static function orderCurrencyQuote($order): ?array
+        {
+        }
+        /**
          * Create or Update order items with the provided data.
          *
          * This function creates or updates order items based on the provided data.
@@ -2874,7 +2893,87 @@ namespace FluentCart\Api\Resource {
         private static function couponDiscountsMatch(array $submittedItems, array $submittedCoupons, array $couponCheck): bool
         {
         }
-        private static function distributeManualDiscount(&$items, $manualDiscountTotal)
+        /**
+         * The quote an admin-created order is priced at: the base currency, or
+         * an enabled currency that has a rate.
+         *
+         * @param mixed $currency requested currency code
+         * @return array|\WP_Error
+         */
+        private static function adminOrderCurrencyQuote($currency)
+        {
+        }
+        /**
+         * Convert admin-entered base-currency item amounts to the order's currency.
+         *
+         * @param bool $percentageCoupons the line discounts come from percentage
+         *                                coupons only (areOnlyPercentageCoupons())
+         */
+        private static function convertAdminOrderItems(array $items, array $quote, bool $percentageCoupons = false): array
+        {
+        }
+        /**
+         * The Create Order screen applies coupons to the base-currency prices the
+         * admin entered; the applied-coupon amounts are converted with the items
+         * so the order's coupon records are in the order's currency.
+         *
+         * The order's coupon total is the sum of the converted line discounts,
+         * each rounded on its own, so it can drift from the separately converted
+         * coupons by more than a cent per coupon. When the base line discounts
+         * describe these coupons (equal base sums), the converted records are
+         * reconciled to the converted line total exactly: a shortfall goes on
+         * the largest coupon; a surplus is taken from the largest coupons first,
+         * none below 0 (ties: the first). When they don't, each coupon keeps its
+         * own converted amount.
+         *
+         * Percentage coupons (areOnlyPercentageCoupons()) follow their lines:
+         * each record is scaled by the lines' converted/base coupon ratio, then
+         * reconciled the same way.
+         *
+         * Every record is in the currency's smallest unit, as the lines are, so
+         * the difference reconciled is whole units too (whole yen for JPY).
+         *
+         * @param mixed $appliedCoupons code => ['id' => int, 'discount' => int cents, ...]
+         * @param float $baseLineCouponTotal line coupon discounts before conversion, unrounded
+         * @param int $convertedLineCouponTotal the same lines after conversion (the order's coupon total)
+         */
+        private static function convertAdminAppliedCoupons($appliedCoupons, array $quote, float $baseLineCouponTotal, int $convertedLineCouponTotal, bool $percentageCoupons = false): array
+        {
+        }
+        /**
+         * Whether every coupon applied on the Create Order screen is a plain
+         * percentage coupon — read from the coupons themselves, not the request.
+         * Their line discounts are then proportional to the line prices. A
+         * fixed coupon, or a percentage one with a maximum discount (a fixed
+         * cap), converts plainly instead.
+         *
+         * @param mixed $appliedCoupons code => ['id' => int, 'discount' => int cents, ...]
+         */
+        private static function areOnlyPercentageCoupons($appliedCoupons): bool
+        {
+        }
+        /**
+         * Sum of the lines' coupon discounts — the discount_total that
+         * AdminOrderProcessor adds up as coupon_discount_total (the manual
+         * discount is the separate manual_discount key). $asProcessed false:
+         * the unrounded sum, as the coupon service sent it.
+         *
+         * @return int|float
+         */
+        private static function lineCouponDiscountTotal(array $items, bool $asProcessed = true)
+        {
+        }
+        /**
+         * Spread the manual discount over the lines by their share of the
+         * subtotal, in whole units of the order's currency. Each line takes at
+         * most what it has left after its coupon discount (AdminOrderProcessor
+         * subtracts both from the line), so no line total goes negative; a
+         * discount larger than the lines can take is recorded only up to that.
+         *
+         * @param int $unit the order currency's smallest unit in cents (100 for
+         *                  a zero-decimal currency): each line's share is whole units
+         */
+        private static function distributeManualDiscount(&$items, $manualDiscountTotal, int $unit = 1)
         {
         }
         private static function getCustomer($data)
@@ -6977,7 +7076,7 @@ namespace FluentCart\App\Helpers {
         private static function getScheduleAnchorText(string $period, $anchor): string
         {
         }
-        public static function generateSetupFeeInfo($otherInfo, $asArray = false)
+        public static function generateSetupFeeInfo($otherInfo, $asArray = false, $currencyCode = null)
         {
         }
         public static function generateTrialInfo($otherInfo)
@@ -8608,6 +8707,46 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout\InnerBlocks {
     }
 }
 namespace FluentCart\App\Hooks\Handlers\BlockEditors {
+    /**
+     * Currency switcher block — the block form of [fluent_cart_currency_switcher]
+     * (dev-docs/multi-currency/plan.md §8.2). Server-rendered; renders nothing
+     * unless more than one currency can be offered.
+     */
+    class CurrencySwitcherBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'currency-switcher';
+        public function getScripts(): array
+        {
+        }
+        // Components/Pro's styles, for the Pro notice and crowned icon
+        public function getStyles(): array
+        {
+        }
+        /**
+         * The shortcode's own options, so the block can show what the shortcode shows.
+         */
+        public function blockAttributes(): array
+        {
+        }
+        public function localizeData(): array
+        {
+        }
+        /**
+         * The same form as the shortcode (query fields kept, unique id), inside
+         * the block wrapper the editor shows, so the class the editor gave the
+         * block reaches the page. No wrapper when nothing renders.
+         */
+        public function render(array $shortCodeAttribute, $block = null): string
+        {
+        }
+        /**
+         * What the editor draws in place of the frontend switcher: core's select,
+         * unless a plugin that replaces the frontend markup says otherwise.
+         */
+        private function editorPreview(): array
+        {
+        }
+    }
     class CustomerDashboardButtonBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'customer-dashboard-button';
@@ -19540,6 +19679,11 @@ namespace FluentCart\App\Models {
         protected $table = 'fct_carts';
         protected $hidden = ['order_id', 'customer_id', 'user_id'];
         /**
+         * Fee sources always added through the fees filter, for fees saved
+         * before core marked filter-added fees as dynamic.
+         */
+        const LEGACY_DYNAMIC_FEE_SOURCES = ['dynamic-pricing'];
+        /**
          * Static cache for loaded cart data with bundle children
          * Keyed by cart_hash (primary key)
          *
@@ -19697,6 +19841,25 @@ namespace FluentCart\App\Models {
         {
         }
         /**
+         * Recalculate the cart when it still stores a filter-added fee that no
+         * filter adds any more (the add-on is off, or its rule no longer applies),
+         * so the tax worked out with that fee is recomputed.
+         *
+         * @return bool Whether a recalculation was triggered.
+         */
+        public function refreshStaleDynamicFees(): bool
+        {
+        }
+        private function keepsStoredFees(): bool
+        {
+        }
+        private function withoutDynamicFees(array $fees): array
+        {
+        }
+        private function feeIdentity($fee): string
+        {
+        }
+        /**
          * Get only the persistent (stored) fees from checkout_data.
          *
          * @return array
@@ -19713,7 +19876,7 @@ namespace FluentCart\App\Models {
          *       'key'     => 'processing_fee',
          *       'label'   => 'Processing Fee',
          *       'amount'  => 450,           // cents, must be positive
-         *       'source'  => 'dynamic-pricing',
+         *       'source'  => 'my-addon',
          *       'taxable' => false,
          *       'meta'    => ['rule_id' => 42],
          *   ]);
@@ -19864,6 +20027,9 @@ namespace FluentCart\App\Models {
     class Coupon extends \FluentCart\App\Models\Model
     {
         use \FluentCart\App\Models\Concerns\CanSearch, \FluentCart\App\Models\Concerns\HasActivity;
+        public static function boot()
+        {
+        }
         protected $table = 'fct_coupons';
         protected $primaryKey = 'id';
         protected $guarded = ['id'];
@@ -20773,6 +20939,9 @@ namespace FluentCart\App\Models {
         {
         }
         protected function getFormattedTotalAttribute()
+        {
+        }
+        private function orderCurrency()
         {
         }
         public function getCouponDiscountAttribute()
@@ -22468,7 +22637,7 @@ namespace FluentCart\App\Models {
         protected $primaryKey = 'id';
         protected $appends = ['url', 'payment_info', 'billingInfo', 'overridden_status', 'currency', 'reactivate_url', 'permissions', 'display_item_name', 'system_charge_state', 'payment_method_title'];
         protected $guarded = ['id'];
-        protected $fillable = ['customer_id', 'parent_order_id', 'product_id', 'item_name', 'variation_id', 'billing_interval', 'signup_fee', 'quantity', 'recurring_amount', 'recurring_tax_total', 'recurring_total', 'bill_times', 'bill_count', 'expire_at', 'trial_ends_at', 'canceled_at', 'restored_at', 'collection_method', 'trial_days', 'vendor_customer_id', 'vendor_plan_id', 'vendor_subscription_id', 'next_billing_date', 'status', 'original_plan', 'vendor_response', 'current_payment_method', 'config'];
+        protected $fillable = ['customer_id', 'parent_order_id', 'product_id', 'item_name', 'currency', 'variation_id', 'billing_interval', 'signup_fee', 'quantity', 'recurring_amount', 'recurring_tax_total', 'recurring_total', 'bill_times', 'bill_count', 'expire_at', 'trial_ends_at', 'canceled_at', 'restored_at', 'collection_method', 'trial_days', 'vendor_customer_id', 'vendor_plan_id', 'vendor_subscription_id', 'next_billing_date', 'status', 'original_plan', 'vendor_response', 'current_payment_method', 'config'];
         public static function boot()
         {
         }
@@ -26270,6 +26439,1299 @@ namespace FluentCart\App\Modules\MCP\Tools {
         }
     }
 }
+namespace FluentCart\App\Modules\MultiCurrency {
+    /**
+     * Storefront side of multi-currency (dev-docs/multi-currency/plan.md §5
+     * Phase 3). Everything here is inert until multi-currency is enabled with at
+     * least one currency.
+     */
+    class MultiCurrencyModule
+    {
+        public static function register()
+        {
+        }
+        public function init($app)
+        {
+        }
+        public function initEnabledFeatures()
+        {
+        }
+        /**
+         * Re-price the shopper's cart before the page renders. A named method,
+         * not a closure, so the hook can be removed.
+         */
+        public function syncRequestCart(): void
+        {
+        }
+        /**
+         * @param array $settings
+         * @return array
+         */
+        public function presentCurrency($settings)
+        {
+        }
+        /**
+         * A cart priced in a currency other than the store's is offered, and may
+         * be paid with, only gateways that declare the multi_currency feature.
+         *
+         * @param array $methods gateway instances or slugs
+         * @param array $data ['cart' => Cart|null]
+         * @return array
+         */
+        public function filterPaymentMethods($methods, $data = [])
+        {
+        }
+        /**
+         * ?currency=GBP on any storefront URL switches the visitor's currency and
+         * re-prices their cart immediately.
+         */
+        public function handleSwitch()
+        {
+        }
+        /**
+         * Pages rendered in a non-base currency must not be served from a page
+         * cache to a visitor in another currency (plan §12.7). Base-currency
+         * visitors keep full caching.
+         */
+        public function preventCaching()
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\MultiCurrency\Services {
+    /**
+     * SQL fragments for deriving base-currency figures from an order's frozen
+     * rate. Base values are never stored; they are ROUND(amount / rate), rounded
+     * once per order so per-row values and aggregate totals agree exactly.
+     * dev-docs/multi-currency/plan.md §2.5.5.
+     *
+     * One definition of "this order has a rate we may divide by" for every
+     * consumer — customer LTV, converted reports — so they cannot disagree.
+     */
+    class BaseAmountSql
+    {
+        /**
+         * 1 when the order's rate can be trusted for base-currency figures, else 0.
+         *
+         * Untrusted: snapshots marked unknown / legacy_unknown, and — for a row the
+         * snapshot backfill has not reached yet — any currency other than the base.
+         *
+         * @param string $alias table alias with trailing dot, e.g. 'o.' or ''
+         * @return array{0: string, 1: array} [sql, bindings]
+         */
+        public static function trustedRate(string $alias = ''): array
+        {
+        }
+        /**
+         * An amount column converted to base-currency cents for one order row,
+         * or 0 when the row's rate cannot be trusted.
+         *
+         * @param string $amountSql e.g. 'o.total_paid' or an expression
+         * @param string $alias table alias with trailing dot
+         * @return array{0: string, 1: array} [sql, bindings]
+         */
+        public static function toBase(string $amountSql, string $alias = ''): array
+        {
+        }
+    }
+    /**
+     * The store's base (accounting) currency — the one currency the books are kept
+     * in and product prices are authored in.
+     *
+     * Deliberately NOT read through CurrencySettings::get(): that path carries the
+     * fluent_cart/global_currency_setting filter, which a storefront may use to
+     * present a different currency per request. The base currency must never vary
+     * by visitor. dev-docs/multi-currency/plan.md §12.1.
+     */
+    class BaseCurrency
+    {
+        public static function get(): string
+        {
+        }
+        public static function is($currency): bool
+        {
+        }
+    }
+    /**
+     * A cart is priced in exactly one currency at one locked rate
+     * (dev-docs/multi-currency/plan.md §2.3 invariant #6, §11.6).
+     *
+     * - Every cart item carries its base-currency price in other_info.fx_base;
+     *   the price shown and charged is derived from it at the cart's quote.
+     * - The quote lives in checkout_data.fx with the time it was locked. It is
+     *   honoured for the rate-lock window; after that the cart is re-priced at
+     *   the active rate, and checkout refuses once so the customer sees it.
+     * - A cart rebuilt from an existing order is pinned to that order's
+     *   currency and rate and is never re-priced.
+     */
+    class CartCurrency
+    {
+        /** @var array|null quote for the current request's cart */
+        private static $currentQuote = null;
+        /** @var string|null presentment currency $currentQuote was computed for */
+        private static $currentQuoteCurrency = null;
+        /** @var bool */
+        private static $reconciling = false;
+        /** @var bool */
+        private static $computingQuote = false;
+        /** @var array<string, bool> cart hashes re-priced by the save in progress */
+        private static $repriced = [];
+        /** @var bool the after-save follow-up is running; its own saves skip it */
+        private static $followingUp = false;
+        /** @var array<string, array> cart hash => the lock a checkout accepted */
+        private static $checkoutHolds = [];
+        /** @var array<string, \FluentCart\App\Models\Cart|null> */
+        private static $requestCarts = [];
+        /**
+         * The shopper's cart for this request, found the way core finds it —
+         * the instant-checkout parameter, else the cart cookie, else a logged-in
+         * shopper's latest cart (CartResource::getOrSetCartForThisDevice()).
+         *
+         * Deliberately not CartHelper::getCart(): that resolves the framework
+         * request and can create a cart, and currency resolution runs inside
+         * unrelated requests (any code that formats a price). A plain lookup has
+         * no side effects.
+         */
+        public static function requestCart(bool $userFallback = true): ?\FluentCart\App\Models\Cart
+        {
+        }
+        /**
+         * The quote stored on the cart, if any.
+         */
+        public static function lock(?\FluentCart\App\Models\Cart $cart): ?array
+        {
+        }
+        public static function pinnedCurrency(?\FluentCart\App\Models\Cart $cart): ?string
+        {
+        }
+        /**
+         * The currency a cart is held to regardless of what the visitor browses
+         * in: pinned (an existing order's items) or forced (a plan upgrade priced
+         * in the subscription's currency).
+         */
+        public static function heldCurrency(?\FluentCart\App\Models\Cart $cart): ?string
+        {
+        }
+        /**
+         * The quote a plan upgrade of $order is priced at. An upgrade is a new
+         * order and a new subscription, so it is in the currency the shopper has
+         * chosen (switcher / cookie), else the subscription's currency, at
+         * today's rate (plan §15.6). An order whose rate was never known stays
+         * in its own currency — its credit cannot be converted.
+         *
+         * Null when the order's own currency cannot be quoted (no rate today and
+         * no trusted snapshot): the prorate credit is in that currency, so the
+         * upgrade is refused rather than priced in the base currency beside it.
+         *
+         * @param \FluentCart\App\Models\Order $order the latest order of the subscription
+         */
+        public static function upgradeQuote($order): ?array
+        {
+        }
+        /**
+         * A quote for $currency at today's rate; else the rate on $snapshot when
+         * it is a trusted rate for the same currency; else the base quote.
+         */
+        public static function quoteFor(string $currency, ?array $snapshot = null): array
+        {
+        }
+        /**
+         * Hold a new cart to $currency — e.g. a plan upgrade, which must be
+         * priced in the subscription's currency whatever the visitor browses
+         * in. Unlike pin(), items are still converted from their base price at
+         * the current rate (plan decision #10). Call after checkout_data is set.
+         *
+         * @return array the quote the cart is priced at
+         */
+        public static function force(\FluentCart\App\Models\Cart $cart, string $currency, ?array $snapshot = null): array
+        {
+        }
+        /**
+         * Hold a cart that pays toward an existing subscription (early
+         * installment, reactivation) to the subscription's currency, else its
+         * parent order's. Amounts taken from the subscription are already in that
+         * currency and are pinned at its rate; a base catalogue price
+         * ($basePriced) is converted at today's rate. Call after checkout_data is set.
+         *
+         * Returns the quote the cart is held at, so the caller can convert any
+         * other base amount (e.g. the new recurring amount) exactly as the line
+         * is. Null when that currency cannot be quoted (no rate today and no
+         * trusted snapshot): the cart is left untouched and the caller refuses,
+         * as for upgrades — never a base-currency cart for the subscription.
+         */
+        public static function holdToSubscription(\FluentCart\App\Models\Cart $cart, \FluentCart\App\Models\Subscription $subscription, bool $basePriced = false): ?array
+        {
+        }
+        /**
+         * Pin a cart to an existing order's currency and rate (re-paying an
+         * order, paying a renewal invoice). Its items are already in that
+         * currency and are never re-priced.
+         */
+        public static function pin(\FluentCart\App\Models\Cart $cart, array $snapshot): void
+        {
+        }
+        public static function isExpired(array $lock): bool
+        {
+        }
+        /**
+         * With no hold, a lock stands only while it is still the rate and pricing
+         * rules in force; its age alone must not make checkout refuse.
+         */
+        private static function isActiveQuote(array $lock): bool
+        {
+        }
+        /**
+         * A fresh quote for $currency at the rate active now, or null when the
+         * currency has no rate (and so cannot be offered).
+         */
+        public static function freshQuote(string $currency): ?array
+        {
+        }
+        /**
+         * The quote this cart should be priced at now.
+         */
+        public static function targetQuote(\FluentCart\App\Models\Cart $cart): array
+        {
+        }
+        /**
+         * The quote for the current request's cart — what catalogue prices are
+         * displayed at, so a price shown equals the price added to the cart.
+         */
+        public static function currentQuote(): array
+        {
+        }
+        /**
+         * Record the base-currency price on a freshly generated cart item.
+         */
+        public static function stampBase(array $item): array
+        {
+        }
+        /**
+         * other_info for a line rebuilt from its base price: the base snapshot is
+         * kept, and the marker says base-priced, so the cart converts the line
+         * again on save instead of taking the base numbers as already converted.
+         */
+        public static function asBasePriced(array $otherInfo): array
+        {
+        }
+        /**
+         * The base-currency unit price of an item already in a cart (for code
+         * that re-feeds a cart item's price into a new line).
+         */
+        public static function baseUnitPrice(array $item): int
+        {
+        }
+        /**
+         * Price one item at $quote from its base-currency values.
+         */
+        public static function priceItem(array $item, array $quote): array
+        {
+        }
+        /**
+         * Bring every item to the cart's target quote. Runs from Cart::saving.
+         */
+        public static function reconcile(\FluentCart\App\Models\Cart $cart): void
+        {
+        }
+        /**
+         * Stored fees are amounts in the cart's currency with no base price, so a
+         * re-priced cart carries them from the old quote to the new one. Without
+         * this, the tax pass and the total take them as the new currency.
+         */
+        private static function convertFees(array $fees, array $from, array $to): array
+        {
+        }
+        /**
+         * Re-price the shopper's cart before a storefront page renders it, when
+         * its prices no longer match the visitor's currency or rate: a currency
+         * chosen by cookie, a rate set for the chosen currency, an expired lock.
+         * Otherwise the page shows one currency and the cart drawer, until the
+         * cart's next save, another.
+         *
+         * @return bool whether the cart was re-priced
+         */
+        public static function syncRequestCart(): bool
+        {
+        }
+        /**
+         * Whether the cart's lock and every item are already at $quote.
+         */
+        private static function isPricedAt(\FluentCart\App\Models\Cart $cart, array $quote): bool
+        {
+        }
+        /**
+         * Whether an item is already priced at $quote: same currency, rate and
+         * pricing rules. An item priced before rules existed counts as priced
+         * under the defaults, so existing carts are not churned.
+         */
+        private static function isItemPricedAt(array $item, array $quote): bool
+        {
+        }
+        /**
+         * After a re-price, run what any item change runs: coupons are re-applied
+         * in the new currency, and tax and shipping — computed from the item
+         * prices — are recalculated through fluent_cart/cart/cart_data_items_updated,
+         * with or without coupons. Runs from Cart::saved; the listeners' own saves
+         * reconcile to the same quote and skip this follow-up.
+         */
+        public static function afterSave(\FluentCart\App\Models\Cart $cart): void
+        {
+        }
+        /**
+         * Pin the lock checkout accepted for the rest of this request. Coupon
+         * revalidation, tax, shipping and fee hooks save the cart; without the
+         * hold, a lock that runs out mid-checkout would be re-priced by one of
+         * those saves and the stages would see different prices.
+         */
+        public static function holdForCheckout(\FluentCart\App\Models\Cart $cart): void
+        {
+        }
+        public static function releaseCheckout(\FluentCart\App\Models\Cart $cart): void
+        {
+        }
+        /**
+         * Refusal when the cart's lock is no longer the one checkout accepted —
+         * the order is never built at a rate the shopper was not shown.
+         */
+        public static function heldLockChanged(\FluentCart\App\Models\Cart $cart): ?\WP_Error
+        {
+        }
+        /**
+         * The snapshot an order placed from this cart is stamped with, or an
+         * error when the locked rate expired or the currency changed since the
+         * checkout page was rendered (another tab) — the cart is re-priced and
+         * the customer is asked to review the new total before paying.
+         *
+         * @param string|null $shownCurrency the currency the checkout page showed
+         * @return array|\WP_Error
+         */
+        public static function checkoutSnapshot(\FluentCart\App\Models\Cart $cart, $shownCurrency = null, $shownQuote = null)
+        {
+        }
+        /**
+         * Without multi-currency (no Pro) checkout places new orders in the base
+         * currency only. A cart pinned to an existing order (re-pay, renewal
+         * invoice) still pays it in its own currency: relabelling it would corrupt it.
+         */
+        private static function mayCheckoutIn(\FluentCart\App\Models\Cart $cart, string $currency): bool
+        {
+        }
+        /**
+         * A short fingerprint of the quote a cart is priced at — its currency,
+         * rate and pricing rules. The checkout page sends back the one it was
+         * rendered with. A lock refreshed at the same rate and rules keeps it,
+         * so it forces no reload. Default rules add nothing, so a page rendered
+         * before rules existed keeps its fingerprint.
+         */
+        public static function quoteRevision(?\FluentCart\App\Models\Cart $cart): string
+        {
+        }
+        /**
+         * @return array|\WP_Error
+         */
+        private static function lockedSnapshot(\FluentCart\App\Models\Cart $cart)
+        {
+        }
+        public static function reset(): void
+        {
+        }
+        private static function pricesUpdatedError(): \WP_Error
+        {
+        }
+    }
+    /**
+     * Coupons are authored in the base currency. For a cart priced in another
+     * currency, fixed amounts and spend thresholds are converted at the cart's
+     * rate — on in-memory copies that can never be saved (plan §2.5.2).
+     */
+    class CouponCurrency
+    {
+        /**
+         * The converted copies themselves. Holding the objects, not their ids,
+         * means a released copy's id can never be reused by a fresh coupon and
+         * mistaken for a copy. Request-scoped.
+         *
+         * @var \SplObjectStorage|null
+         */
+        private static $converted = null;
+        private static function converted(): \SplObjectStorage
+        {
+        }
+        /**
+         * fluent_cart/coupon/resolve_coupons listener.
+         *
+         * @param \FluentCart\Framework\Support\Collection $coupons
+         * @param array $codes
+         * @param array $context ['cart' => Cart|null] or ['quote' => array] (an order's frozen rate)
+         * @return \FluentCart\Framework\Support\Collection
+         */
+        public static function convert($coupons, $codes = [], $context = [])
+        {
+        }
+        /**
+         * The quote to convert coupons at when an admin edits $order: its frozen
+         * rate. Null for a base-currency order, or one whose rate was never known
+         * (nothing to convert at).
+         *
+         * @param \FluentCart\App\Models\Order|null $order
+         */
+        public static function orderQuote($order): ?array
+        {
+        }
+        /**
+         * Coupon::saving guard — a converted copy must never be written back.
+         */
+        public static function isConvertedCopy(\FluentCart\App\Models\Coupon $coupon): bool
+        {
+        }
+    }
+    /**
+     * The presentment currency for the current storefront request.
+     *
+     * Distinct from the base currency on purpose (plan §12.1): admin screens,
+     * cron, renewals and webhooks always work in the base currency; only a
+     * storefront visitor ever sees another one. Resolution order: a cart pinned
+     * to an existing order's currency, the ?currency= switch / cookie, a
+     * geo-hint via fluent_cart/currency/resolve_for_request, then the base.
+     */
+    class CurrencyContext
+    {
+        const COOKIE = 'fct_currency';
+        const QUERY_PARAM = 'currency';
+        /** @var string|null */
+        private static $current = null;
+        /** @var string|null the base currency $current was resolved against */
+        private static $resolvedForBase = null;
+        /** @var bool */
+        private static $resolving = false;
+        /** @var string[] stack of currencies an order is being rendered in */
+        private static $rendering = [];
+        /**
+         * Render $callback in $currency — an order's emails, receipt and
+         * invoice show its own currency, whatever the visitor's (or, in a
+         * background email, the store's) currency is. Every formatter that falls
+         * back to the store currency sees it through
+         * fluent_cart/global_currency_setting.
+         *
+         * @param string|null $currency no-op when empty
+         * @return mixed the callback's return value
+         */
+        public static function withCurrency($currency, callable $callback)
+        {
+        }
+        /**
+         * withCurrency() for a render's data: its order's currency, else its
+         * subscription's (a subscription event may carry no order).
+         *
+         * @param array $data ['order' => Order|array|null, 'subscription' => Subscription|array|null]
+         * @return mixed the callback's return value
+         */
+        public static function withCurrencyOf(array $data, callable $callback)
+        {
+        }
+        public static function current(): string
+        {
+        }
+        public static function isPresentment(): bool
+        {
+        }
+        /**
+         * Whether $currency can be offered right now: the base, or an enabled
+         * currency that has a rate. A currency without a rate is never offered.
+         */
+        public static function isSelectable($currency): bool
+        {
+        }
+        /**
+         * Remember the visitor's choice for later requests.
+         */
+        public static function choose($currency): bool
+        {
+        }
+        /**
+         * Currencies a switcher may list: base first, then enabled ones with a rate.
+         *
+         * @return string[]
+         */
+        public static function selectableCurrencies(): array
+        {
+        }
+        public static function reset(): void
+        {
+        }
+        /**
+         * The currency the shopper explicitly picked — ?currency= or the switcher
+         * cookie — when it can be offered; null when they have not chosen one
+         * (a geo hint or the base currency is not a choice).
+         */
+        public static function chosen(): ?string
+        {
+        }
+        private static function resolve(): string
+        {
+        }
+        /**
+         * Admin screens, cron and CLI never price in a visitor's currency.
+         * Storefront AJAX (checkout, cart) does.
+         */
+        public static function isBackOffice(): bool
+        {
+        }
+        /**
+         * The admin app works over REST, where is_admin() is false. Its routes
+         * must not follow a currency cookie the admin picked up on the
+         * storefront; FluentCart's storefront routes do. Routes of other
+         * plugins are left alone.
+         */
+        private static function isAdminRestRequest(): bool
+        {
+        }
+        /**
+         * The REST route of this request, from the URL — resolution can run
+         * before WordPress has parsed the request.
+         */
+        private static function restRoute(): string
+        {
+        }
+        private static function visitorCountry(): string
+        {
+        }
+    }
+    /**
+     * The currency snapshot every order and subscription carries in config.fx.
+     *
+     * Money is converted from the base currency once, when an amount is first
+     * authored onto an order; everything downstream (transactions, renewals,
+     * refunds, reports) copies the stored rate instead of looking one up.
+     * dev-docs/multi-currency/plan.md §9.
+     *
+     * `rate` = units of the order's currency per 1 unit of the base currency,
+     * kept as a 12-decimal string so it round-trips DECIMAL(24,12) exactly.
+     */
+    class CurrencySnapshot
+    {
+        /** currency == base currency, rate 1 */
+        const SOURCE_BASE = 'base';
+        /** a rate the merchant entered */
+        const SOURCE_MANUAL = 'manual';
+        /** a rate supplied by third-party code (e.g. the fluent_cart/checkout/order_data filter) */
+        const SOURCE_EXTERNAL = 'external';
+        /** a non-base currency with no trustworthy rate */
+        const SOURCE_UNKNOWN = 'unknown';
+        /** backfilled onto an order that predates snapshots and is in the base currency */
+        const SOURCE_LEGACY_BASE = 'legacy_base';
+        /** backfilled onto an order that predates snapshots and is NOT in the base currency */
+        const SOURCE_LEGACY_UNKNOWN = 'legacy_unknown';
+        const RATE_SCALE = 12;
+        /**
+         * Build a snapshot for an amount authored in $currency.
+         *
+         * @param string $currency ISO code of the order's (presentment) currency
+         * @param string|float|int|null $rate base -> presentment rate
+         * @param array $args source, rate_id, margin, rounding, captured_at
+         */
+        public static function make($currency, $rate = null, array $args = []): array
+        {
+        }
+        /**
+         * The snapshot recorded on an order, or — for an order that predates
+         * snapshots — the legacy classification derived from its currency.
+         */
+        public static function fromOrder(\FluentCart\App\Models\Order $order): array
+        {
+        }
+        /**
+         * The snapshot a subscription renews with: its own, else its parent order's.
+         */
+        public static function fromSubscription(\FluentCart\App\Models\Subscription $subscription): array
+        {
+        }
+        /**
+         * The parent order's snapshot when it describes the subscription's
+         * currency. A rate only holds for amounts in its own currency, so a
+         * subscription in another currency gets none rather than a wrong one.
+         *
+         * @param \FluentCart\App\Models\Order|null $parentOrder
+         * @param string $currency the subscription's currency
+         * @return array|null
+         */
+        public static function parentSnapshot($parentOrder, $currency)
+        {
+        }
+        /**
+         * Classify a row that predates snapshots. Never guesses a rate: a
+         * non-base-currency row without one is `legacy_unknown` (plan §10).
+         */
+        public static function legacy($currency, $rate = 1, $capturedAt = null): array
+        {
+        }
+        /**
+         * Stamp config.fx and the rate column on an order that is being created.
+         *
+         * An explicit snapshot already on the order wins — that is how a renewal
+         * carries its subscription's rate and how checkout carries the cart's
+         * locked rate. Otherwise one is built from the order's currency and rate.
+         * Runs from Order::creating, so every creation path is covered: checkout,
+         * admin, renewals, WP-CLI.
+         */
+        public static function applyToNewOrder(\FluentCart\App\Models\Order $order): void
+        {
+        }
+        /**
+         * Whether a supplied snapshot describes this order in this store: same
+         * currency, same base currency, and rate 1 when that is the base.
+         */
+        private static function fitsOrder(array $snapshot, string $rate, \FluentCart\App\Models\Order $order): bool
+        {
+        }
+        /**
+         * A transaction always carries its order's rate (plan §2.3 invariant #2).
+         *
+         * A currency that differs from the order's is detected and logged, never
+         * rejected: refusing the insert after a gateway has taken the money would
+         * lose the only record of a real payment (plan §12.8). The comparison is
+         * case-insensitive — some gateways report lowercase codes.
+         */
+        public static function applyToNewTransaction(\FluentCart\App\Models\OrderTransaction $transaction): void
+        {
+        }
+        /**
+         * Give a new subscription its currency column and its parent order's
+         * snapshot — renewals carry that rate for the subscription's life
+         * (plan §9.2, decision #8).
+         */
+        public static function applyToNewSubscription(\FluentCart\App\Models\Subscription $subscription): void
+        {
+        }
+        /**
+         * Whether base-currency figures can be derived from this snapshot's rate.
+         */
+        public static function hasTrustedRate(array $snapshot): bool
+        {
+        }
+        public static function isSnapshot($value): bool
+        {
+        }
+        public static function isValidRate($rate): bool
+        {
+        }
+        /**
+         * A rate as a fixed 12-decimal string. Numeric strings are rescaled
+         * without a float round-trip so a rate read back from DECIMAL(24,12)
+         * compares equal to the one written.
+         *
+         * @param string|float|int $rate
+         */
+        /**
+         * The rate exactly as DECIMAL(24,12) will store it, or null when it
+         * cannot be stored as a real rate: zero once rounded to 12 decimals,
+         * negative, or more than 12 integer digits. Checked on the normalized
+         * decimal string, so no float rounding decides it.
+         *
+         * @param mixed $rate
+         */
+        public static function storableRate($rate): ?string
+        {
+        }
+        public static function normalizeRate($rate): string
+        {
+        }
+    }
+    /**
+     * [fluent_cart_currency_switcher] — a plain <select> that reloads the page
+     * with ?currency=XXX. Renders nothing unless more than one currency can be
+     * offered.
+     */
+    class CurrencySwitcher
+    {
+        const MENU_TRIGGER_CLASS = 'fct-currency-switcher-toggle';
+        public static function hasChoice(): bool
+        {
+        }
+        /**
+         * A menu item classed as the dropdown trigger is a dead "#" link while
+         * there is nothing to switch to (Pro inactive, or only the base has a
+         * rate). Its submenu goes too, or WordPress would lift it to the top level.
+         *
+         * @param array $items
+         * @return array
+         */
+        public static function removeIdleMenuTriggers($items)
+        {
+        }
+        /**
+         * @param array|string $atts
+         */
+        public static function render($atts = []): string
+        {
+        }
+        /**
+         * A GET form replaces the whole query string; carry the page's own
+         * (an instant-checkout or re-pay cart hash, ?page_id=, shop filters) so
+         * switching currency stays on the same page.
+         */
+        private static function keptQueryFields(): string
+        {
+        }
+        /**
+         * filters[price_range_from]=10 style keys, one field per leaf value.
+         */
+        private static function flattenQuery(array $query, string $prefix = ''): array
+        {
+        }
+    }
+    /**
+     * Resolves the exchange rate base -> quote. Core stores no rates: FluentCart
+     * Pro keeps them and answers fluent_cart/currency/exchange_rate.
+     *
+     * `rate` = units of the quote (presentment) currency per 1 unit of base.
+     */
+    class ExchangeRateService
+    {
+        /**
+         * The rate to price in $quote right now, margin applied, or null when
+         * there is none — callers must refuse the currency, never fall back to 1.
+         *
+         * @param string $quote presentment currency
+         * @param array $context free-form (e.g. ['context' => 'cart'])
+         * @return array|null {rate: string, rate_id: int|null, source: string, margin: string, effective_at: string|null}
+         */
+        public static function current($quote, array $context = []): ?array
+        {
+        }
+        /**
+         * Ask the rate store to load many quotes at once, so the current() calls
+         * that follow read its cache instead of one query each.
+         *
+         * @param string[] $quotes
+         */
+        public static function primeRates(array $quotes): void
+        {
+        }
+        /**
+         * Drop every cached rate, e.g. after a new rate is recorded.
+         */
+        public static function flushCache(): void
+        {
+        }
+    }
+    /**
+     * Data the admin app needs for multi-currency outside the settings screen.
+     */
+    class MultiCurrencyAdmin
+    {
+        /**
+         * Currencies an admin-created order can be priced in: the base, then each
+         * enabled currency with its current rate. Empty when multi-currency is off.
+         *
+         * @return array<int, array{code: string, sign: string, rate: string, is_base: bool}>
+         */
+        public static function orderCurrencies(): array
+        {
+        }
+    }
+    /**
+     * Multi-currency configuration: which presentment currencies are enabled and
+     * how each one's converted prices are rounded. Configuration only — rates
+     * are stored by FluentCart Pro and read through ExchangeRateService::current().
+     */
+    class MultiCurrencySettings
+    {
+        const OPTION_KEY = 'multi_currency_settings';
+        const DEFAULT_RATE_LOCK_MINUTES = 0;
+        /** @var array|null */
+        private static $cache = null;
+        public static function defaults(): array
+        {
+        }
+        /**
+         * Markup (percent) added to automated rates — feeds publish mid-market
+         * rates with no spread, while the merchant settles at their gateway's
+         * rate. Manual rates are the merchant's own number and get no markup.
+         */
+        public static function rateMargin(): float
+        {
+        }
+        /**
+         * Notes shown beside a provider (source credit, terms of use), keyed
+         * by provider slug. Plain text.
+         *
+         * @return array<string, string>
+         */
+        public static function rateProviderNotes(): array
+        {
+        }
+        /**
+         * Where exchange rates come from. Core ships manual entry; a provider
+         * (e.g. a daily ECB feed in Pro) registers itself here and writes rates
+         * to Pro's rate store with its own source slug.
+         * Opt-in: a feed never replaces manual rates unless it is chosen.
+         *
+         * @return array<string, string> slug => label
+         */
+        public static function rateProviders(): array
+        {
+        }
+        public static function rateProvider(): string
+        {
+        }
+        public static function get(): array
+        {
+        }
+        /**
+         * @param array $input enabled, currencies[{code, rounding}], rate_lock_minutes
+         * @return array|\WP_Error the saved settings
+         */
+        public static function save(array $input)
+        {
+        }
+        /**
+         * Whether the storefront prices in other currencies: switched on, with a
+         * currency, and available (Pro). The one gate every storefront path uses.
+         */
+        public static function isEnabled(): bool
+        {
+        }
+        /**
+         * The merchant's saved switch, with or without Pro. The base-currency
+         * lock follows it: stored foreign orders are measured in that base.
+         */
+        public static function isSwitchedOn(): bool
+        {
+        }
+        /**
+         * Multi-currency is a Pro feature. Without it the storefront offers and
+         * places new orders in the base currency only; stored orders keep theirs.
+         */
+        public static function isAvailable(): bool
+        {
+        }
+        /**
+         * Presentment currency codes the storefront may offer, base excluded.
+         *
+         * @return string[]
+         */
+        public static function currencyCodes(): array
+        {
+        }
+        public static function isOffered($currency): bool
+        {
+        }
+        public static function roundingRule($currency): string
+        {
+        }
+        /**
+         * How prices in $currency are derived from the converted base price:
+         * a % adjustment, then rounding up to a step, then a charm ending
+         * (plan §15.4). Applies to product prices only, never to shipping or
+         * coupon amounts.
+         *
+         * @return array{rounding: string, charm: string, adjustment: string}
+         */
+        public static function pricingRules($currency): array
+        {
+        }
+        /**
+         * A % adjustment kept as a short decimal string ("5", "-2.5") so quotes
+         * and snapshots compare equal however it was entered.
+         *
+         * @param mixed $value
+         */
+        public static function formatAdjustment($value): string
+        {
+        }
+        public static function rateLockSeconds(): int
+        {
+        }
+        /**
+         * Changing the base currency would re-label every historical amount, so
+         * it is refused once orders exist while multi-currency is on (plan §10,
+         * invariant #7).
+         *
+         * @return true|\WP_Error
+         */
+        public static function guardBaseCurrencyChange($current, $requested)
+        {
+        }
+        public static function isBaseCurrencyLocked(): bool
+        {
+        }
+        public static function clearCache(): void
+        {
+        }
+        private static function normalize(array $input): array
+        {
+        }
+    }
+    /**
+     * Base-currency cents <-> presentment-currency cents at a given quote.
+     *
+     * A quote is {currency, rate, rounding, charm, adjustment, ...}. Amounts
+     * that are not prices (shipping, coupon amounts) convert with toQuote():
+     * rate, then the currency's smallest unit. Product prices convert with
+     * toPrice(): rate, the % adjustment, rounding up to the step, the charm
+     * ending (plan §2.5.1, §15.4). Amounts stay ×100 for every currency.
+     */
+    class PriceConverter
+    {
+        /**
+         * @param int|float $baseCents
+         * @param array $quote {currency, rate, rounding}
+         */
+        public static function toQuote($baseCents, array $quote): int
+        {
+        }
+        /**
+         * An amount already in the quote's currency (a share of a converted
+         * line) rounded to that currency's smallest unit, as toQuote() rounds.
+         *
+         * @param int|float $cents
+         */
+        public static function toQuoteUnit($cents, array $quote): int
+        {
+        }
+        /**
+         * The quote currency's smallest unit in stored cents: 100 for a
+         * zero-decimal currency, 1 otherwise.
+         */
+        public static function unit(array $quote): int
+        {
+        }
+        /**
+         * A product price (or signup fee) in the quote's currency, with the
+         * currency's pricing rules applied.
+         *
+         * @param int|float $baseCents
+         * @param array $quote {currency, rate, rounding, charm, adjustment}
+         */
+        public static function toPrice($baseCents, array $quote): int
+        {
+        }
+        /**
+         * An amount already in one currency (e.g. a prorate credit the customer
+         * paid in GBP) as an amount in another: back to base at $from's rate —
+         * the order's frozen rate — then out at $to's. Plain conversion; pricing
+         * rules are for product prices, not credits. The result is in $to's
+         * smallest unit (whole yen), also when the currency does not change.
+         *
+         * Null when the amount would have to change currency but $from's rate
+         * cannot be trusted (unknown / legacy_unknown, or no usable rate): that
+         * rate 1 is a currency label, not a rate, so converting at it would be
+         * a 1:1 guess. The caller keeps the amount in its own currency or
+         * refuses (CurrencySnapshot::hasTrustedRate(), BaseAmountSql::trustedRate()).
+         *
+         * @param int|float $cents in $from's currency
+         * @param array $from quote or snapshot the amount was priced at
+         * @param array $to quote to express it in
+         */
+        public static function between($cents, array $from, array $to): ?int
+        {
+        }
+        /**
+         * Whether amounts priced at $quote can move to or from the base
+         * currency: the base currency itself, or a foreign one at a real,
+         * trusted rate.
+         */
+        private static function canConvertFrom(array $quote): bool
+        {
+        }
+        /**
+         * The quote's pricing rules as one comparable string — a cart item priced
+         * under other rules is re-priced (plan §11.6).
+         */
+        public static function rulesKey(array $quote): string
+        {
+        }
+        /**
+         * Presentment cents back to base cents — for turning a shopper's price
+         * filter bound into a base-currency SQL bound. Never used for money that
+         * is charged.
+         *
+         * @param int|float $cents
+         */
+        public static function toBase($cents, array $quote): int
+        {
+        }
+        private static function adjustmentFactor(array $quote): float
+        {
+        }
+        /**
+         * A shopper's price filter bound as the base bound that keeps exactly the
+         * products shown inside it. Rounding gives several base prices one shown
+         * price, so dividing by the rate cuts some of them off (£39.33 is both
+         * $49.78 and $49.79 at 0.79); the price never decreases, so a binary
+         * search finds the edge. Bounds are compared with the shown price —
+         * toPrice(), with the currency's pricing rules — which never decreases
+         * either (rounding up and a fixed charm ending keep the order).
+         *
+         * @param int|float $cents bound in the quote's currency
+         * @param bool $upper true: the highest base price shown at or below $cents;
+         *                    false: the lowest base price shown at or above it
+         */
+        public static function priceBoundToBase($cents, array $quote, bool $upper): int
+        {
+        }
+        public static function isBaseQuote(array $quote): bool
+        {
+        }
+        public static function baseQuote(): array
+        {
+        }
+    }
+    /**
+     * Currency scoping for reports.
+     *
+     * Every report is in exactly one currency: the one requested, else the base
+     * currency — never "all currencies added together". Amounts of different
+     * currencies are not summable without a rate.
+     * dev-docs/multi-currency/plan.md §2.4 Tier A, §13.
+     */
+    class ReportCurrency
+    {
+        /**
+         * "All currencies, converted to the base currency" — Tier B (plan §2.4).
+         * Each order is converted at its own frozen rate; orders without a
+         * trustworthy rate are left out and counted.
+         */
+        const ALL = '__all__';
+        /** Order money columns converted in the ALL mode */
+        const ORDER_MONEY_COLUMNS = ['subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'total_amount', 'total_paid', 'total_refund'];
+        const ITEM_MONEY_COLUMNS = ['unit_price', 'cost', 'subtotal', 'tax_amount', 'discount_total', 'line_total', 'refund_total'];
+        const TRANSACTION_MONEY_COLUMNS = ['total'];
+        const SUBSCRIPTION_MONEY_COLUMNS = ['signup_fee', 'initial_tax_total', 'recurring_amount', 'recurring_tax_total', 'recurring_total'];
+        /** @var array<string, string[]> */
+        private static $columns = [];
+        /**
+         * The currency a report is scoped to.
+         *
+         * @param mixed $requested currency code from the request, if any
+         * @param bool $allowConverted whether this report supports the ALL mode
+         */
+        public static function resolve($requested = null, bool $allowConverted = false): string
+        {
+        }
+        /**
+         * Currencies that have orders in the range, most orders first.
+         *
+         * @return array<int, array{currency: string, order_count: int, min_created_at: string|null}>
+         */
+        public static function orderCurrencies($startDate = null, $endDate = null): array
+        {
+        }
+        public static function isConverted(array $filters): bool
+        {
+        }
+        /**
+         * `fct_orders as o` — or, in the ALL mode, a derived table of the same
+         * shape whose money columns are already in base-currency cents
+         * (ROUND(amount / rate), once per order and column) and which holds
+         * only orders with a trustworthy rate. Every existing SUM(o.total_paid)
+         * then reads base currency unchanged.
+         *
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        public static function ordersTable(array $filters)
+        {
+        }
+        /**
+         * ->from('fct_orders as o') for a builder that is already started.
+         *
+         * @param \FluentCart\Framework\Database\Query\Builder $query
+         */
+        public static function fromOrders($query, array $filters)
+        {
+        }
+        /**
+         * ->join('fct_order_items as oi', 'oi.order_id', '=', 'o.id')
+         *
+         * @param \FluentCart\Framework\Database\Query\Builder $query
+         */
+        public static function joinOrderItems($query, array $filters)
+        {
+        }
+        /**
+         * ->join('fct_order_transactions as ot', 'o.id', '=', 'ot.order_id')
+         *
+         * @param \FluentCart\Framework\Database\Query\Builder $query
+         */
+        public static function joinTransactions($query, array $filters)
+        {
+        }
+        /**
+         * `fct_subscriptions [as $alias]` — or, in the ALL mode, a derived table
+         * whose recurring amounts are in base-currency cents at each
+         * subscription's own frozen rate (config.fx.rate), holding only
+         * subscriptions with a trustworthy rate. MRR and churn SQL then reads
+         * base currency unchanged.
+         *
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        public static function subscriptionsTable(array $filters, ?string $alias = null)
+        {
+        }
+        /**
+         * ->from('fct_subscriptions as $alias') for a builder that is already started.
+         *
+         * @param \FluentCart\Framework\Database\Query\Builder $query
+         */
+        public static function fromSubscriptions($query, array $filters, string $alias)
+        {
+        }
+        /**
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        private static function convertedSubscriptions()
+        {
+        }
+        /**
+         * Orders in range the ALL mode leaves out for want of a trustworthy rate.
+         */
+        public static function excludedOrderCount($startDate = null, $endDate = null): int
+        {
+        }
+        /**
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        private static function convertedOrders()
+        {
+        }
+        /**
+         * Order items / transactions with money columns converted at their
+         * order's rate, restricted to orders with a trustworthy rate.
+         *
+         * @return \FluentCart\Framework\Database\Query\Builder
+         */
+        private static function convertedChildren(string $table, array $moneyColumns)
+        {
+        }
+        /**
+         * @return string[]
+         */
+        private static function columns(string $table): array
+        {
+        }
+        /**
+         * Scope a subscription (or retention snapshot) query to one currency.
+         *
+         * Rows written before the currency column existed carry '' until their
+         * backfill runs; they were created on a single-currency store, so they
+         * count as the base currency rather than vanishing from every report.
+         *
+         * @param \FluentCart\Framework\Database\Query\Builder|\FluentCart\Framework\Database\Orm\Builder $query
+         * @param string $column e.g. 's.currency'
+         * @param string $currency
+         */
+        public static function whereCurrencyColumn($query, string $column, string $currency)
+        {
+        }
+    }
+    /**
+     * How a converted price is rounded in its presentment currency. Rounding
+     * applies to prices, never to the rate (dev-docs/multi-currency/plan.md
+     * §11.5, §15.4). Per currency the admin picks a rounding step (prices round
+     * up to it) and an optional charm ending (.99 / .95), as WooPayments and
+     * Shopify Markets do.
+     */
+    class RoundingRules
+    {
+        const NONE = 'none';
+        /** @var array<string, int> rule key => step in cents (×100 for every currency) */
+        const STEPS = ['up_0_05' => 5, 'up_0_10' => 10, 'up_0_25' => 25, 'up_0_50' => 50, 'up_1' => 100, 'up_5' => 500, 'up_10' => 1000, 'up_50' => 5000, 'up_100' => 10000];
+        /** @var array<string, int> charm key => cents taken off */
+        const CHARMS = ['minus_0_01' => 1, 'minus_0_05' => 5];
+        /**
+         * @return array<string, string> rule key => label
+         */
+        public static function options(): array
+        {
+        }
+        /**
+         * @return array<string, string> charm key => label
+         */
+        public static function charmOptions(): array
+        {
+        }
+        /**
+         * Round a converted amount to the currency's smallest unit — for amounts
+         * that are not prices (shipping, coupon amounts, thresholds).
+         *
+         * @param float|int $cents converted, not yet rounded (×100 for every currency)
+         */
+        public static function apply($cents, string $currency, string $rule = self::NONE): int
+        {
+        }
+        /**
+         * Round a converted product price: up to the rule's step, then the charm
+         * ending. Never below zero; a price of zero stays zero.
+         *
+         * @param float|int $cents converted, not yet rounded (×100 for every currency)
+         */
+        public static function price($cents, string $currency, string $rule = self::NONE, string $charm = self::NONE): int
+        {
+        }
+        private static function toSmallestUnit($cents, string $currency): int
+        {
+        }
+        /**
+         * ×100 storage: a zero-decimal currency's smallest unit is 100 stored units.
+         */
+        public static function unit(string $currency): int
+        {
+        }
+        private static function finish(int $rounded, $raw, string $currency, string $rule, string $charm): int
+        {
+        }
+        private static function label(int $step): string
+        {
+        }
+    }
+    /**
+     * Catalogue prices for display. Product prices are stored once, in the base
+     * currency; every storefront read that shows one goes through here so the
+     * shown price equals the price the cart will charge (plan §12.2).
+     * Identity whenever the visitor is in the base currency.
+     */
+    class StorefrontPrice
+    {
+        /**
+         * A product price in the visitor's currency, with the currency's pricing
+         * rules (adjustment, rounding, charm ending) applied.
+         *
+         * @param int|float|string $baseCents
+         */
+        public static function amount($baseCents): int
+        {
+        }
+        /**
+         * An amount that is not a product price — shipping, a fee — in the
+         * visitor's currency: converted, rounded to the smallest unit only.
+         *
+         * @param int|float|string $baseCents
+         */
+        public static function fee($baseCents): int
+        {
+        }
+        /**
+         * Formatted price in the visitor's currency.
+         *
+         * @param int|float|string $baseCents
+         */
+        public static function format($baseCents, bool $withCurrency = true): string
+        {
+        }
+        /**
+         * A shopper-entered price range (presentment cents) as the base-currency
+         * range for SQL: every product shown inside it, and no other.
+         *
+         * @param int|float|string $fromCents
+         * @param int|float|string $toCents
+         * @return int[] [from, to] in base cents
+         */
+        public static function rangeToBase($fromCents, $toCents): array
+        {
+        }
+    }
+}
 namespace FluentCart\App\Modules\PaymentMethods\Core {
     interface PaymentGatewayInterface
     {
@@ -26465,7 +27927,7 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
 namespace FluentCart\App\Modules\PaymentMethods\Cod {
     class Cod extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
-        public array $supportedFeatures = ['payment', 'refund', 'offline'];
+        public array $supportedFeatures = ['payment', 'refund', 'offline', 'multi_currency'];
         public \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings $settings;
         public function boot()
         {
@@ -27222,7 +28684,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     class PayPal extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'paypal';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'resume_subscription', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'multi_currency', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'resume_subscription', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
         private $vaultUserIdToken = '';
         private $vaultSetupUnavailable = false;
         public function __construct()
@@ -29135,7 +30597,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     class Stripe extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'stripe';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'zero_recurring', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'multi_currency', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'zero_recurring', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
         public \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings $settings;
         public function __construct()
         {
@@ -29264,7 +30726,35 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     }
     class StripeHelper
     {
-        public static function createOrGetStripeCustomer(\FluentCart\App\Models\Customer $customer)
+        /**
+         * Stripe customer to bill $customer with.
+         *
+         * Stripe bills subscriptions and invoices in one currency per customer. When
+         * $currency is given and the stored `stripe_customer_id` already bills another
+         * currency, a customer dedicated to that currency is used instead, stored in
+         * `stripe_customer_id_{currency}` meta (lowercase ISO code, e.g. stripe_customer_id_eur).
+         * Leave $currency empty for PaymentIntents and SetupIntents, which have no such limit.
+         *
+         * @param \FluentCart\App\Models\Customer $customer
+         * @param string $currency order currency, for calls that create a Stripe subscription
+         * @return array|\WP_Error Stripe customer object
+         */
+        public static function createOrGetStripeCustomer(\FluentCart\App\Models\Customer $customer, $currency = '')
+        {
+        }
+        /**
+         * The Stripe customer when it still exists, belongs to $customer's email and
+         * can bill $currency; null otherwise.
+         */
+        private static function getUsableStripeCustomer($stripeCustomerId, \FluentCart\App\Models\Customer $customer, $currency = '')
+        {
+        }
+        // Stripe sets a customer's currency on its first subscription or invoice; empty means never billed.
+        private static function stripeCustomerCanBill(array $stripeCustomer, $currency)
+        {
+        }
+        // Stripe takes UGX amounts ×100 like a two-decimal currency, though it charges whole shillings.
+        public static function isZeroDecimal($currency)
         {
         }
         public static function transformSubscriptionStatus($stripeSubscription, $subscriptionModel = null)
@@ -29428,9 +30918,6 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         public function getRemainingRateLimit($customerId)
-        {
-        }
-        public function getOrCreateStripeCustomer($pm)
         {
         }
         public static function addOldSubscriptionMeta($subscriptionId, $oldSubData)
@@ -31905,6 +33392,7 @@ namespace FluentCart\App\Modules\Tax {
         protected $manualDiscounts = 0;
         protected $taxSettings = [];
         private $roundingMode = 'item';
+        private $currency = '';
         public function __construct($lineItems, $config = [])
         {
         }
@@ -34254,6 +35742,7 @@ namespace FluentCart\App\Services\Coupon {
         protected bool $usingCart = true;
         protected ?\FluentCart\Framework\Support\Collection $couponErrors = null;
         protected string $customerEmail = '';
+        protected ?array $currencyQuote = null;
         /**
          * @param array $lineItems
          * @param ?\FluentCart\Framework\Support\Collection $previouslyAppliedCoupons
@@ -34261,6 +35750,14 @@ namespace FluentCart\App\Services\Coupon {
          * @param string $customerEmail
          */
         public function __construct(array $lineItems = [], ?\FluentCart\Framework\Support\Collection $previouslyAppliedCoupons = null, $applicableCouponCodes = [], $customerEmail = '')
+        {
+        }
+        /**
+         * Coupons are authored in the base currency. Editing an order in another
+         * currency converts their fixed amounts and spend thresholds at the
+         * order's frozen rate, as the cart does at checkout.
+         */
+        public function withCurrencyQuote(?array $quote): self
         {
         }
         private function init()
@@ -36184,6 +37681,9 @@ namespace FluentCart\App\Services\Email {
         {
         }
         public function parseEmailContent($notification, $data, $templateData = null): array
+        {
+        }
+        private function renderEmailContent($notification, $data, $templateData = null): array
         {
         }
         public function sendAsyncOrderMail($emailName, $orderId)
@@ -38139,6 +39639,12 @@ namespace FluentCart\App\Services\Filter {
         {
         }
         public static function getSearchableFields(): array
+        {
+        }
+        /**
+         * Currencies that have orders — code => code.
+         */
+        protected static function currencyOptions(): array
         {
         }
         public static function advanceFilterOptions(): array
@@ -40801,6 +42307,103 @@ namespace FluentCart\App\Services\Localization {
     }
 }
 namespace FluentCart\App\Services {
+    /**
+     * Single owner of per-currency decimal knowledge.
+     *
+     * Storage is ALWAYS cents (value * 100) for every currency, including
+     * zero-decimal ones — a ¥7,400 order is stored 740000. Decimals decide
+     * display and wire formatting only, never storage scale.
+     *
+     * Wire formatting and display formatting answer different questions: display
+     * decimals follow the currency's local convention (locale-info.php), while a
+     * gateway's wire format follows that gateway's own documented table — e.g.
+     * TWD displays with 0 decimals but Mollie wants "7400.00". Gateways therefore
+     * pass their own zero-decimal override list to formatWireAmount() and never
+     * consult the display table.
+     */
+    class Money
+    {
+        /**
+         * ISO 4217 three-decimal currencies. Storage (*100) cannot represent
+         * their smallest unit, so they are refused at every gateway boundary
+         * instead of silently mischarging 10x.
+         */
+        const THREE_DECIMAL_CURRENCIES = ['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'];
+        /**
+         * currency => display decimals, derived from locale-info.php.
+         * @var array|null
+         */
+        private static $decimalsMap = null;
+        /**
+         * @param string $currency ISO 4217 code, any case
+         * @return bool
+         */
+        public static function isThreeDecimal($currency)
+        {
+        }
+        /**
+         * Display decimals for a currency (0, 2 or 3). Unknown currencies fall
+         * back to 2.
+         *
+         * @param string $currency ISO 4217 code, any case
+         * @return int
+         */
+        public static function getDecimals($currency)
+        {
+        }
+        /**
+         * Round a stored amount to a whole unit (a multiple of 100) when the
+         * currency has no minor unit. Other currencies get the amount back as is.
+         *
+         * @param int|float $cents stored amount (always *100)
+         * @param string $currency ISO 4217 code, any case
+         * @return int|float
+         */
+        public static function roundIfZeroDecimal($cents, $currency)
+        {
+        }
+        /** Amounts are stored ×100 even when the currency has no minor unit. */
+        public static function isWholeAmount($cents, $currency): bool
+        {
+        }
+        /**
+         * currency => decimals for every currency locale-info.php knows about.
+         *
+         * @return array
+         */
+        public static function getDecimalsMap()
+        {
+        }
+        /**
+         * Format a stored cents amount as the decimal string a gateway API wants.
+         *
+         * The wire value is a real-value decimal with 2 decimals for every
+         * currency unless the gateway's own documentation says the currency takes
+         * none — the caller passes that gateway-specific zero-decimal list.
+         *
+         * @param int|float $cents stored amount (always *100)
+         * @param string $currency ISO 4217 code, any case
+         * @param array $gatewayZeroDecimals currencies THIS gateway formats with 0 decimals
+         * @return string
+         * @throws \Exception for three-decimal currencies — they cannot round-trip through *100 storage
+         */
+        public static function formatWireAmount($cents, $currency, $gatewayZeroDecimals = [])
+        {
+        }
+        /**
+         * Convert an inbound gateway wire amount to stored cents.
+         *
+         * A wire amount is a real-value decimal for EVERY currency ("7400" yen,
+         * "39.95" pounds) and storage is *100 across the board, so parsing never
+         * branches on currency.
+         *
+         * @param string|int|float $amount
+         * @return int cents
+         */
+        public static function parseWireAmount($amount)
+        {
+        }
+    }
     class OrderService
     {
         /**
@@ -41567,6 +43170,36 @@ namespace FluentCart\App\Services {
         {
         }
         public static function getUpgardePathsFromVariation($variationId, $orderHash)
+        {
+        }
+        /**
+         * The order an upgrade from $order is credited from — and whose
+         * currency and rate the credit is in: a subscription's latest paid or
+         * partially refunded renewal, else $order itself. An unpaid or failed
+         * renewal was never paid, so it never counts. The customer portal and
+         * Pro's upgrade link both use this, so they credit the same order.
+         */
+        public static function upgradeSourceOrder(\FluentCart\App\Models\Order $order): \FluentCart\App\Models\Order
+        {
+        }
+        /**
+         * A quote in the order's own currency, or null when that currency cannot
+         * be quoted. Null means no upgrade from this order at all —
+         * CartCurrency::upgradeQuote() is null then too.
+         *
+         * The prorate credit is in the order's currency. A base-currency order
+         * always qualifies; a foreign one only with a current rate or its own
+         * trusted snapshot — quoteFor() otherwise falls back to the base
+         * currency, which must never be mixed with it.
+         */
+        public static function orderCurrencyQuote(\FluentCart\App\Models\Order $order): ?array
+        {
+        }
+        /**
+         * An upgrade path that is listed but cannot be priced. Every key of a
+         * priced path is kept; amounts are null and there is no upgrade link.
+         */
+        private static function unavailablePath(\FluentCart\App\Models\ProductVariation $variant, $toVariant, $currency): array
         {
         }
         public static function calculateUpgradeToDiscount(\FluentCart\App\Models\Order $order, \FluentCart\App\Models\OrderItem $originalItem)
@@ -44073,6 +45706,15 @@ namespace FluentCart\App\Services\Renderer {
         private static function stringToAssocArray($string): array
         {
         }
+        /**
+         * The setup fee line for a variant: its fee is stored in the base
+         * currency, so it is shown at the price the cart charges.
+         *
+         * @param array|object|null $otherInfo the variant's other_info
+         */
+        public static function setupFeeInfo($otherInfo): string
+        {
+        }
     }
     class ProductCardRender
     {
@@ -44880,6 +46522,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         public function render($hideWrapper = false)
         {
         }
+        private function renderReceipt($hideWrapper = false)
+        {
+        }
         public function renderHeader()
         {
         }
@@ -44972,6 +46617,17 @@ namespace FluentCart\App\Services\Renderer\Receipt {
          * Order items used to build the per-rate base map for the tax breakdown table.
          */
         private static function getOrderItemsForBaseMap(\FluentCart\App\Models\Order $order)
+        {
+        }
+        /**
+         * Fee tax lines in the item shape computeRateBaseMap() reads. Fee tax is folded
+         * into the rate rows, so without these the rate falls back to a base worked out
+         * from the rounded tax. Lines saved before rates were stored add nothing.
+         *
+         * @param array $feeTaxLines
+         * @return array
+         */
+        public static function feeTaxLinesAsBaseMapItems(array $feeTaxLines)
         {
         }
         /**
@@ -45094,7 +46750,7 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         protected static function getPriceSuffixIncluded(): string
         {
         }
-        public static function buildSimpleLine(array $summary): array
+        public static function buildSimpleLine(array $summary, $currencyCode = null): array
         {
         }
     }
@@ -45118,6 +46774,9 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function render($hide_wrapper = false)
+        {
+        }
+        private function renderOrder($hide_wrapper = false)
         {
         }
         protected function getHeaderState()
@@ -46533,7 +48192,7 @@ namespace FluentCart\App\Services\Report\Concerns\Subscription {
         /**
          * Get all active subscriptions with billing info
          */
-        private function getActiveSubscriptions()
+        private function getActiveSubscriptions($currency)
         {
         }
         /**
@@ -46820,7 +48479,15 @@ namespace FluentCart\App\Services\Report {
         public static function processRequest($params = []): array
         {
         }
-        public static function processParams($params = [], $additional = []): array
+        /**
+         * @param array $params
+         * @param string[] $additional
+         * @param bool $allowConverted opt-in: true only from a report that
+         *        implements the "All currencies (in base)" mode (it reads
+         *        ReportCurrency::ordersTable()). Every other report reads that
+         *        selection as the base currency (ReportCurrency::resolve()).
+         */
+        public static function processParams($params = [], $additional = [], bool $allowConverted = false): array
         {
         }
         /**
@@ -46931,7 +48598,7 @@ namespace FluentCart\App\Services\Report {
         /**
          * Insert aggregates into database in batches
          */
-        protected function insertAggregates(string $table, array $aggregates, ?callable $progressCallback): int
+        protected function insertAggregates(string $table, array $aggregates, ?callable $progressCallback, string $currency = ''): int
         {
         }
         /**
@@ -47062,7 +48729,7 @@ namespace FluentCart\App\Services\Report {
          * @param int $maxPeriods
          * @return array
          */
-        protected function getCohortDataByMonth($startCohort, $endCohort, $productIds, $metric, $maxPeriods)
+        protected function getCohortDataByMonth($startCohort, $endCohort, $productIds, $metric, $maxPeriods, $currency = null)
         {
         }
         /**
@@ -47081,7 +48748,7 @@ namespace FluentCart\App\Services\Report {
          * @param int $maxPeriods
          * @return array
          */
-        protected function getCohortDataByYear($startCohort, $endCohort, $productIds, $metric, $maxPeriods)
+        protected function getCohortDataByYear($startCohort, $endCohort, $productIds, $metric, $maxPeriods, $currency = null)
         {
         }
         /**
@@ -48138,6 +49805,9 @@ namespace FluentCart\App\Services\ShortCodeParser {
          * @throws \FluentCart\Framework\Container\Contracts\BindingResolutionException
          */
         public function parseTemplate(string $template, array $data): string
+        {
+        }
+        private function parseOrderTemplate(string $template, array $data): string
         {
         }
         /**
