@@ -7547,11 +7547,7 @@ namespace FluentCart\App\Helpers {
         {
         }
         /**
-         * Backfills payment_method_title when it was never stamped at creation.
-         *
-         * Only changeOrderStatus() (the COD-only path) writes payment_method_title.
-         * Every other gateway settles via syncOrderStatuses(), which never touched
-         * it, so the column stays empty for those orders.
+         * Backfills payment_method_title for orders created before checkout stamped it.
          */
         protected function resolvePaymentMethodTitle()
         {
@@ -8526,6 +8522,18 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout {
         {
         }
         public function render(array $shortCodeAttribute, $block = null, $content = null): string
+        {
+        }
+        /**
+         * Render the checkout block for an already resolved cart. Checkout assets
+         * must already be loaded for that cart.
+         *
+         * @param \FluentCart\App\Models\Cart|null $cart
+         * @param array $shortCodeAttribute
+         * @param \WP_Block|null $block
+         * @return string
+         */
+        public static function renderCart($cart, array $shortCodeAttribute, $block = null): string
         {
         }
         /**
@@ -10711,6 +10719,35 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
     }
+    class ModuleImportMap
+    {
+        /**
+         * Lets add-on admin bundles import core's Vue and UI kit instead of
+         * shipping their own copies (one Vue instance, one app). Element Plus
+         * needs no specifier: core registers it globally on the app.
+         */
+        public static function imports(): array
+        {
+        }
+        /**
+         * Runs on admin_enqueue_scripts priority 1: a browser drops an import map
+         * that comes after any module script, and the head ones print later.
+         */
+        public static function print(): void
+        {
+        }
+        /**
+         * Pro <= 2.0.0 still enqueues core's licensing bundle, which core no
+         * longer builds; drop the request (the licensing routes then show the
+         * "update Pro" screen). Remove together with legacyLicensingRoutes.js.
+         */
+        public static function dropLegacyBundles(): void
+        {
+        }
+        private static function sharedUrl(string $file): string
+        {
+        }
+    }
     class OrderEventHandler
     {
         public function maybeRecountCustomerStat($data)
@@ -10915,6 +10952,16 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes\Checkout {
         {
         }
         public function render(?array $viewData = null)
+        {
+        }
+        /**
+         * Render the checkout shortcode for an already resolved cart.
+         *
+         * @param \FluentCart\App\Models\Cart|null $cart
+         * @param array $attributes
+         * @return void
+         */
+        public function renderCart($cart, array $attributes = [])
         {
         }
     }
@@ -13444,6 +13491,9 @@ namespace FluentCart\App\Http\Controllers\Reports {
         {
         }
         public function getProductReport(\FluentCart\Framework\Http\Request\Request $request): array
+        {
+        }
+        public function getProductCompare(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -21140,7 +21190,7 @@ namespace FluentCart\App\Models {
     {
         use \FluentCart\App\Models\Concerns\CanSearch;
         protected $table = 'fct_order_transactions';
-        protected $appends = ['url', 'refundable'];
+        protected $appends = ['url', 'refundable', 'payment_method_title'];
         /**
          * The attributes that are mass assignable.
          *
@@ -21187,7 +21237,14 @@ namespace FluentCart\App\Models {
         public function getMaxRefundableAmount()
         {
         }
-        public function getPaymentMethodText()
+        /**
+         * @param Order|null $order Parent order; its title snapshot applies when the transaction used the same gateway
+         * @return string Card brand and last 4, else the payment method title
+         */
+        public function getPaymentMethodText($order = null)
+        {
+        }
+        public function getPaymentMethodTitleAttribute(): string
         {
         }
         /**
@@ -22716,9 +22773,8 @@ namespace FluentCart\App\Models {
         {
         }
         /**
-         * Display label of the backing gateway ("Authorize.Net", "Cash"), the same
-         * source StatusHelper stamps into order.payment_method_title. Empty when the
-         * slug resolves to no registered gateway.
+         * Display label of the backing gateway ("Authorize.Net", "Cash"). The slug
+         * in title case when no registered gateway matches.
          */
         public function getPaymentMethodTitleAttribute(): string
         {
@@ -30740,6 +30796,10 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
          * @return array|\WP_Error Stripe customer object
          */
         public static function createOrGetStripeCustomer(\FluentCart\App\Models\Customer $customer, $currency = '')
+        {
+        }
+        // Reactivating is how a customer corrects the billing address on future Stripe invoices.
+        public static function updateAddressOnReactivation(array $stripeCustomer, \FluentCart\App\Models\Order $order, \FluentCart\App\Models\Subscription $subscription)
         {
         }
         /**
@@ -42823,6 +42883,34 @@ namespace FluentCart\App\Services\Payments {
         public function successUrl($transaction, $args = null)
         {
         }
+        /**
+         * Display label of a registered gateway, honouring the admin checkout label.
+         *
+         * @param string|null $slug Gateway route, e.g. "offline_payment"
+         * @return string Empty when no registered gateway matches
+         */
+        public static function getGatewayTitle($slug): string
+        {
+        }
+        /**
+         * Label to show for a stored payment method slug.
+         *
+         * @param string|null $slug Gateway route stored on the order, transaction or subscription
+         * @param string|null $storedTitle Title snapshot, e.g. order.payment_method_title
+         * @return string The snapshot, else the gateway label, else the slug in title case
+         */
+        public static function getMethodTitle($slug, $storedTitle = ''): string
+        {
+        }
+        /**
+         * Gateway name for admin screens: the gateway's own name, never the buyer-facing checkout label.
+         *
+         * @param string|null $slug Gateway route stored on the order, transaction or subscription
+         * @return string admin_title, else the gateway's default title, else the slug
+         */
+        public static function getMethodAdminTitle($slug): string
+        {
+        }
         public static function getCustomPaymentLink($orderHash): string
         {
         }
@@ -44072,6 +44160,61 @@ namespace FluentCart\App\Services {
         public static function getReviewSettings(): array
         {
         }
+        /**
+         * Store-wide switch for reviewer names on public surfaces. A block can
+         * hide the name; it cannot show one this turns off.
+         */
+        public static function showsReviewerName(): bool
+        {
+        }
+        /**
+         * Store-wide switch for reviewer avatars on public surfaces. Off also
+         * drops the Gravatar URL, which carries a hash of the reviewer's email.
+         */
+        public static function showsReviewerAvatar(): bool
+        {
+        }
+        const REVIEWER_NAME_FORMATS = ['full', 'first', 'first_initial', 'anonymous', 'masked'];
+        /**
+         * How public reviews read a customer's name: one of REVIEWER_NAME_FORMATS,
+         * anything else falls back to the full name.
+         */
+        public static function reviewerNameFormat(): string
+        {
+        }
+        /**
+         * A customer's name in the given format. Applied at display time, so the
+         * stored name never changes.
+         *
+         * @param string $name
+         * @param string|null $format One of REVIEWER_NAME_FORMATS; null reads the filter.
+         * @return string
+         */
+        public static function formatReviewerName($name, $format = null): string
+        {
+        }
+        /**
+         * "Jordan Hughes" → "Jor***hes", "J Hughes" → "J***hes": up to three
+         * letters of the first name and the last three of the last. When that
+         * would spell the whole name, only the first letter shows.
+         *
+         * @param string $name Whitespace already collapsed.
+         * @return string
+         */
+        protected static function maskReviewerName(string $name): string
+        {
+        }
+        /**
+         * Apply the name format and the hide switches to rows another shopper
+         * reads. Store replies keep their name. Keys stay, so the response shape
+         * does not change.
+         *
+         * @param array $rows Serialized review rows.
+         * @return array
+         */
+        public static function redactReviewerIdentity(array $rows): array
+        {
+        }
         public static function getProductRatingSummary($postId): array
         {
         }
@@ -44760,6 +44903,10 @@ namespace FluentCart\App\Services\Renderer {
         public function renderNameFields()
         {
         }
+        // Field name and control type the docked / floating label styles read (see checkout.scss).
+        private function renderFieldAtts($label, $isRequired = false, $control = 'input')
+        {
+        }
         public function renderBusinessDetailsFields()
         {
         }
@@ -45198,10 +45345,45 @@ namespace FluentCart\App\Services\Renderer {
         public function render($config = [])
         {
         }
+        /**
+         * Whether a checkout block/shortcode is configured with its own products.
+         * Mirrors Pro's mode inference: products set and `checkout_mode` not `cart`.
+         */
+        public static function isCustomProductCheckout(array $attributes): bool
+        {
+        }
+        /**
+         * A custom-product checkout is rendered by the add-on that supplies its
+         * products. Without one it renders nothing, never the shopper's own cart.
+         *
+         * @param array $context ['surface' => string, 'attributes' => array, 'block' => \WP_Block|null]
+         * @return string
+         */
+        public static function renderCustomProductCheckout(array $context): string
+        {
+        }
+        /**
+         * Render a custom-product checkout from the cart its add-on supplied, on
+         * the surface it was placed on. Echoes the markup.
+         *
+         * @param \FluentCart\App\Models\Cart $cart
+         * @param array $context The context passed to render_custom_product_checkout.
+         * @return void
+         */
+        public static function renderCustomProductCart($cart, array $context)
+        {
+        }
         public function getFragment($fragmentName)
         {
         }
         public function wrapperStart()
+        {
+        }
+        /**
+         * How grouped checkout fields show their name: 'docked' (default),
+         * 'floating' or 'placeholder'. Unknown values fall back to the default.
+         */
+        public static function resolveFieldLabelStyle($style)
         {
         }
         public function renderNotices()
@@ -45305,6 +45487,10 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         private function renderCheckboxInputField($fieldData)
+        {
+        }
+        // Field name the docked / floating label styles draw from the wrapper; screen readers keep the input's aria-label.
+        private function getVisibleLabel($fieldData)
         {
         }
         private function renderSelectField($fieldData)
@@ -47264,6 +47450,9 @@ namespace FluentCart\App\Services\Renderer {
     {
         protected $review;
         protected $productName;
+        protected $showName;
+        protected $showAvatar;
+        protected $nameFormat;
         public function __construct(\FluentCart\App\Models\ProductReview $review, $productName = '')
         {
         }
@@ -48189,6 +48378,9 @@ namespace FluentCart\App\Services\Report\Concerns\Subscription {
         public function getFutureRenewals(array $params)
         {
         }
+        private function futureRenewalsByVariation(array $rows)
+        {
+        }
         /**
          * Get all active subscriptions with billing info
          */
@@ -48276,6 +48468,16 @@ namespace FluentCart\App\Services\Report {
         {
         }
         protected function getPeriodRange($startDate, $endDate, $groupKey, $keys = [])
+        {
+        }
+        // Clamp to the end of the current bucket, not just today, so a range
+        // starting mid-month (or mid-year) still yields the current bucket.
+        protected function clampToToday($endDate, $groupKey = 'daily')
+        {
+        }
+        // Chart queries and their zero-filled buckets must share this end date,
+        // or a future-dated row lands in a bucket after today.
+        protected function clampParamsToToday(array $params)
         {
         }
         public function getFutureInstallments($params = [])
@@ -48433,10 +48635,59 @@ namespace FluentCart\App\Services\Report {
     }
     class ProductReportService extends \FluentCart\App\Services\Report\ReportService
     {
+        // Header discounts are normally mirrored into item discount_total; admin and legacy orders can leave a remainder,
+        // and in the ALL mode per-item conversion can disagree with converting the order once. Such orders get
+        // their order-level net split in whole cents: floor per item, leftover cents to the first item.
+        private const LINE_TOTAL = '(CASE WHEN od.order_id IS NULL OR od.net = od.line_sum THEN oi.line_total ELSE
+            COALESCE(FLOOR(od.net * oi.line_total / NULLIF(od.line_sum, 0)), 0)
+            + CASE WHEN oi.id = od.first_item_id THEN od.net - od.floored ELSE 0 END
+        END)';
+        // Discounts subtract LINE_TOTAL from this, so the subtotal must share its order-once rounding,
+        // or an undiscounted converted order reports a cent of negative discount
+        private const LINE_SUBTOTAL = '(CASE WHEN od.order_id IS NULL OR od.sub = od.sub_sum THEN oi.subtotal ELSE
+            COALESCE(FLOOR(od.sub * oi.subtotal / NULLIF(od.sub_sum, 0)), 0)
+            + CASE WHEN oi.id = od.first_item_id THEN od.sub - od.floored_sub ELSE 0 END
+        END)';
+        private const NET_SALE = 'SUM(' . self::LINE_TOTAL . ' - oi.refund_total - oi.tax_amount)';
+        private const DISCOUNTS = 'SUM(' . self::LINE_SUBTOTAL . ') - SUM(' . self::LINE_TOTAL . ')';
+        // Picks past this are dropped in pick order; the page says so
+        public const MAX_COMPARE_VARIATIONS = 50;
+        // A year of daily points; the series payload is picks × buckets, so a finer grouping over a longer range coarsens
+        public const MAX_COMPARE_BUCKETS = 366;
         public function getProductTopChart(array $params)
         {
         }
         public function getProductReportData($params = [])
+        {
+        }
+        public function getProductCompare(array $params): array
+        {
+        }
+        private function compareTotals(array $params)
+        {
+        }
+        private function compareEntityFromRow($row): array
+        {
+        }
+        private function compareTotalsRow($row): array
+        {
+        }
+        private function compareGrouping(array $params): array
+        {
+        }
+        private function compareBuckets($startDate, $endDate, string $groupKey): array
+        {
+        }
+        private function compareSeries(array $params, array $group, array $buckets, array $variationIds): array
+        {
+        }
+        private function productLinesQuery(array $params)
+        {
+        }
+        private function productItemsQuery(array $params)
+        {
+        }
+        private function orderDiscountsQuery(array $params)
         {
         }
         public function calculateFluctuations($currentMetrics, $previousMetrics)
@@ -48513,17 +48764,30 @@ namespace FluentCart\App\Services\Report {
         public static function getCompareRange($type, $currentRange, $compareDate = null)
         {
         }
+        public static function formatCompareRange($comparePeriod)
+        {
+        }
+        public static function formatCompareRanges($params)
+        {
+        }
+        // Presets such as This Month end in the future; only the elapsed days
+        // have data, so the compare range is sized to them.
+        protected static function clampToToday($startDate, $endDate)
+        {
+        }
+        // A shifted compare range keeps the primary length but never reaches
+        // into the primary range (a 31-day month shifted back one month would).
+        protected static function shiftedRange($fromDate, $diffDays, $currentStartDate)
+        {
+        }
     }
     class RetentionSnapshotService
     {
         /**
-         * Statuses to exclude from analysis (never really started)
-         */
-        protected array $excludedStatuses = [\FluentCart\App\Helpers\Status::SUBSCRIPTION_PENDING, \FluentCart\App\Helpers\Status::SUBSCRIPTION_INTENDED, 'incomplete_expired'];
-        /**
          * Active statuses
          */
         protected array $activeStatuses = [\FluentCart\App\Helpers\Status::SUBSCRIPTION_ACTIVE, \FluentCart\App\Helpers\Status::SUBSCRIPTION_TRIALING];
+        protected ?\DateTime $now = null;
         /**
          * Generate retention snapshots
          * 
@@ -48607,25 +48871,21 @@ namespace FluentCart\App\Services\Report {
         protected function getCustomerStateForMonth($subscriptions, string $month): array
         {
         }
+        protected function getNow(): \DateTime
+        {
+        }
         /**
-         * Check if a subscription was active during a given month
-         * 
-         * A subscription is considered active in a month if:
-         * - It was created on or before the end of that month, AND
-         * - It had not ended before the start of that month
-         * 
-         * For ended subscriptions, we use the END date (expire_at, or canceled_at + billing period)
-         * For active subscriptions, we check if they existed during that month
+         * Check if a subscription was active at any time during a given month
          */
         protected function wasSubscriptionActiveInMonth($sub, \DateTime $monthStart, \DateTime $monthEnd): bool
+        {
+        }
+        protected function wasSubscriptionActiveAt($sub, \DateTime $at): bool
         {
         }
         /**
          * Get the effective end date of a subscription
          * Returns null if subscription is still ongoing
-         * 
-         * We use last_payment + billing_interval as the effective end date.
-         * This represents when the subscription actually stopped providing revenue.
          */
         protected function getSubscriptionEndDate($sub): ?\DateTime
         {
@@ -48695,6 +48955,8 @@ namespace FluentCart\App\Services\Report {
     class SubscriptionReportService extends \FluentCart\App\Services\Report\ReportService
     {
         use \FluentCart\App\Services\Report\Concerns\Subscription\FutureRenewals;
+        // Subscriptions that never started; every Retention-tab query leaves them out.
+        const RETENTION_EXCLUDED_STATUSES = [\FluentCart\App\Helpers\Status::SUBSCRIPTION_PENDING, \FluentCart\App\Helpers\Status::SUBSCRIPTION_INTENDED, 'incomplete_expired'];
         public function getRetentionChart($params = [])
         {
         }
@@ -48711,7 +48973,7 @@ namespace FluentCart\App\Services\Report {
          * Get cohort retention data from pre-calculated snapshots table
          * 
          * Supports both monthly and yearly g  * - Monthly: Uses period_offset 1, 2, 3... (each month)
-         * - Yearly: Aggregates cohorts by year and uses period_offset 12, 24, 36... (each year)
+         * - Yearly: Start sums each year's monthly cohorts at period_offset 0; Year 1, 2, 3... read 24, 36, 48...
          * 
          * @param array $params
          * @return array
@@ -48734,13 +48996,11 @@ namespace FluentCart\App\Services\Report {
         }
         /**
          * Get cohort data grouped by year
-         * 
-         * For yearly view, we use period_offset = 12 as the baseline (end of year 1, before first renewal)
-         * and show period_offset 24, 36, 48... as Year 1, Year 2, Year 3 (after 1st, 2nd, 3rd renewal)
-         * 
-         * This is because at period_offset = 12, yearly subscribers haven't had a renewal opportunity yet,
-         * so they show ~100% retention. The actual churn happens after the first renewal at offset 12+.
-         * 
+         *
+         * A year's Start is every monthly cohort of that year at period_offset 0. Year 1, 2, 3...
+         * read period_offset 24, 36, 48... (after the 1st, 2nd, 3rd renewal), because at offset 12
+         * yearly subscribers have not had a renewal opportunity yet and show ~100% retention.
+         *
          * @param string $startCohort
          * @param string $endCohort
          * @param array $productIds Array of product IDs to filter by (empty = all products combined)
@@ -48749,6 +49009,9 @@ namespace FluentCart\App\Services\Report {
          * @return array
          */
         protected function getCohortDataByYear($startCohort, $endCohort, $productIds, $metric, $maxPeriods, $currency = null)
+        {
+        }
+        protected function sumMonthlyCohorts($rows)
         {
         }
         /**
@@ -49296,7 +49559,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         //        'payment_summary' => 'getPaymentSummary',
         //        'payment_receipt' => 'getPaymentReceipt',
         //    ];
-        protected array $methodMap = ['item_count' => 'getItemCount', 'review_url' => 'getReviewUrl', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'store_company_name' => 'getStoreCompanyName', 'store_company_display' => 'getStoreCompanyDisplay', 'store_legal_registration_id' => 'getStoreLegalRegistrationId', 'store_legal_registration_display' => 'getStoreLegalRegistrationDisplay', 'store_seller_vat_id' => 'getStoreSellerVatId', 'store_seller_vat_display' => 'getStoreSellerVatDisplay', 'store_seller_tax_id' => 'getStoreSellerTaxId', 'store_tax_display' => 'getStoreTaxDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName', 'buyer_legal_registration_id' => 'getBuyerLegalRegistrationId', 'buyer_reverse_charge_declaration' => 'getBuyerReverseChargeDeclaration', 'tax_breakdown' => 'getTaxBreakdown', 'fee_lines' => 'getFeeLines'];
+        protected array $methodMap = ['item_count' => 'getItemCount', 'review_url' => 'getReviewUrl', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'store_company_name' => 'getStoreCompanyName', 'store_company_display' => 'getStoreCompanyDisplay', 'store_legal_registration_id' => 'getStoreLegalRegistrationId', 'store_legal_registration_display' => 'getStoreLegalRegistrationDisplay', 'store_seller_vat_id' => 'getStoreSellerVatId', 'store_seller_vat_display' => 'getStoreSellerVatDisplay', 'store_seller_tax_id' => 'getStoreSellerTaxId', 'store_tax_display' => 'getStoreTaxDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName', 'buyer_legal_registration_id' => 'getBuyerLegalRegistrationId', 'buyer_reverse_charge_declaration' => 'getBuyerReverseChargeDeclaration', 'tax_breakdown' => 'getTaxBreakdown', 'fee_lines' => 'getFeeLines', 'payment_method_human' => 'getPaymentMethodTitle'];
         protected array $attributeMap = ['id' => 'order.id', 'status' => 'order.status', 'created_at' => 'order.created_at', 'updated_at' => 'order.updated_at'];
         protected array $centColumns = ['total_amount', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'total_paid', 'total_refund'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
@@ -49603,6 +49866,9 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         }
         protected array $centColumns = ['total'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
+        {
+        }
+        public function getPaymentMethodTitle(): string
         {
         }
         public function getRefundAmount(): string
@@ -52513,7 +52779,9 @@ namespace FluentCart\App {
         private function getProductionFilePath($file): string
         {
         }
-        private function ensureChunkCssIsLoaded($file)
+        // Vite lists CSS on the chunk that owns it, so a shared chunk's styles live
+        // under the entry's static imports, not on the entry itself.
+        private function ensureChunkCssIsLoaded($file, array &$visited = [])
         {
         }
         public function with($params)
