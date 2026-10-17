@@ -144,6 +144,14 @@ namespace FluentCart\Api\Checkout {
         public static function validateData($data, \FluentCart\App\Models\Cart $cart, \FluentCart\App\Services\CheckoutService $cartCheckoutService, $prevOrder)
         {
         }
+        /**
+         * Checkout inputs are customer-typed: a {{...}} smartcode pasted into one is
+         * removed before validation, so it never reaches stored order data. Only the
+         * brace form is stripped — # and ## appear legitimately in street addresses.
+         */
+        private static function stripSmartCodes(array $data): array
+        {
+        }
         public static function validateShippingMethod(array $data, \FluentCart\App\Services\CheckoutService $cartCheckoutService): bool
         {
         }
@@ -1208,6 +1216,14 @@ namespace FluentCart\Api\Resource {
         {
         }
         private static function formatAmount($data)
+        {
+        }
+        /**
+         * The quote coupons are priced at on the admin order screens: an existing
+         * order's frozen rate, or the currency picked on the Create Order screen.
+         * Null prices them in the base currency.
+         */
+        private static function adminCouponQuote($data, $order): ?array
         {
         }
         public static function applyCoupon($data, $returnCouponService = true)
@@ -2506,6 +2522,13 @@ namespace FluentCart\Api\Resource {
         {
         }
         /**
+         * New catalog lines on an order in another currency are priced at the
+         * order's frozen rate on save. The edit screen must have shown that price.
+         */
+        public static function newItemPricesMatch($order, array $items): bool
+        {
+        }
+        /**
          * Create or Update order items with the provided data.
          *
          * This function creates or updates order items based on the provided data.
@@ -2759,24 +2782,6 @@ namespace FluentCart\Api\Resource {
         /**
          * @throws \Exception
          */
-        /**
-         * Validate a shipping cents value for the DIRECT Resource API boundary.
-         * REST callers can reach neither branch (OrderRequest's numeric/min:0 rules
-         * 422 them first); both exist purely for direct callers.
-         *
-         * - Only absent/null may default to zero — that is the omitted-key shape
-         *   REST produces (pickKeys null-fill). A present non-numeric is a caller
-         *   bug, and coercing it to 0 would silently grant free shipping.
-         * - The sign is checked on the RAW value, BEFORE rounding: roundCent(-0.4)
-         *   is 0, so a post-rounding check would wave fractional negatives through
-         *   as free shipping instead of rejecting them.
-         *
-         * @param mixed $value
-         * @return mixed the value, unchanged, when null or a non-negative numeric
-         */
-        protected static function assertShippingCents($value)
-        {
-        }
         public static function updatedPlaceOrder($data, $params = [])
         {
         }
@@ -2891,89 +2896,6 @@ namespace FluentCart\Api\Resource {
          * @return bool
          */
         private static function couponDiscountsMatch(array $submittedItems, array $submittedCoupons, array $couponCheck): bool
-        {
-        }
-        /**
-         * The quote an admin-created order is priced at: the base currency, or
-         * an enabled currency that has a rate.
-         *
-         * @param mixed $currency requested currency code
-         * @return array|\WP_Error
-         */
-        private static function adminOrderCurrencyQuote($currency)
-        {
-        }
-        /**
-         * Convert admin-entered base-currency item amounts to the order's currency.
-         *
-         * @param bool $percentageCoupons the line discounts come from percentage
-         *                                coupons only (areOnlyPercentageCoupons())
-         */
-        private static function convertAdminOrderItems(array $items, array $quote, bool $percentageCoupons = false): array
-        {
-        }
-        /**
-         * The Create Order screen applies coupons to the base-currency prices the
-         * admin entered; the applied-coupon amounts are converted with the items
-         * so the order's coupon records are in the order's currency.
-         *
-         * The order's coupon total is the sum of the converted line discounts,
-         * each rounded on its own, so it can drift from the separately converted
-         * coupons by more than a cent per coupon. When the base line discounts
-         * describe these coupons (equal base sums), the converted records are
-         * reconciled to the converted line total exactly: a shortfall goes on
-         * the largest coupon; a surplus is taken from the largest coupons first,
-         * none below 0 (ties: the first). When they don't, each coupon keeps its
-         * own converted amount.
-         *
-         * Percentage coupons (areOnlyPercentageCoupons()) follow their lines:
-         * each record is scaled by the lines' converted/base coupon ratio, then
-         * reconciled the same way.
-         *
-         * Every record is in the currency's smallest unit, as the lines are, so
-         * the difference reconciled is whole units too (whole yen for JPY).
-         *
-         * @param mixed $appliedCoupons code => ['id' => int, 'discount' => int cents, ...]
-         * @param float $baseLineCouponTotal line coupon discounts before conversion, unrounded
-         * @param int $convertedLineCouponTotal the same lines after conversion (the order's coupon total)
-         */
-        private static function convertAdminAppliedCoupons($appliedCoupons, array $quote, float $baseLineCouponTotal, int $convertedLineCouponTotal, bool $percentageCoupons = false): array
-        {
-        }
-        /**
-         * Whether every coupon applied on the Create Order screen is a plain
-         * percentage coupon — read from the coupons themselves, not the request.
-         * Their line discounts are then proportional to the line prices. A
-         * fixed coupon, or a percentage one with a maximum discount (a fixed
-         * cap), converts plainly instead.
-         *
-         * @param mixed $appliedCoupons code => ['id' => int, 'discount' => int cents, ...]
-         */
-        private static function areOnlyPercentageCoupons($appliedCoupons): bool
-        {
-        }
-        /**
-         * Sum of the lines' coupon discounts — the discount_total that
-         * AdminOrderProcessor adds up as coupon_discount_total (the manual
-         * discount is the separate manual_discount key). $asProcessed false:
-         * the unrounded sum, as the coupon service sent it.
-         *
-         * @return int|float
-         */
-        private static function lineCouponDiscountTotal(array $items, bool $asProcessed = true)
-        {
-        }
-        /**
-         * Spread the manual discount over the lines by their share of the
-         * subtotal, in whole units of the order's currency. Each line takes at
-         * most what it has left after its coupon discount (AdminOrderProcessor
-         * subtracts both from the line), so no line total goes negative; a
-         * discount larger than the lines can take is recorded only up to that.
-         *
-         * @param int $unit the order currency's smallest unit in cents (100 for
-         *                  a zero-decimal currency): each line's share is whole units
-         */
-        private static function distributeManualDiscount(&$items, $manualDiscountTotal, int $unit = 1)
         {
         }
         private static function getCustomer($data)
@@ -3933,6 +3855,11 @@ namespace FluentCart\Api\Resource {
          *     'page' => (int) Optional. Page number for pagination
          * ];
          */
+        // Shop pages are public: cap like WordPress REST collections (100). Keep it
+        // positive too, since callers divide by it for last_page.
+        public static function clampPerPage($perPage, int $default = 10): int
+        {
+        }
         public static function get(array $params = []): array
         {
         }
@@ -12743,11 +12670,14 @@ namespace FluentCart\App\Http\Controllers {
         public function store(\FluentCart\App\Http\Requests\OrderRequest $request)
         {
         }
+        public function price(\FluentCart\App\Http\Requests\OrderPriceRequest $request)
+        {
+        }
         public static function hasSubscription($orderItems): bool
         {
         }
         /**
-         * The variation row decides whether a line is recurring, so every label the payload
+         * The variation row decides the line's payment type, so every label the payload
          * carries has to agree with it. A recurring line must additionally be labelled in
          * other_info: that is the only copy AdminOrderProcessor reads, and the interval and
          * installment count travel beside it.
@@ -12865,6 +12795,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function syncOrderStatuses(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Order $order)
+        {
+        }
+        public function currencies()
         {
         }
     }
@@ -13648,6 +13581,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function getProductViews(\FluentCart\Framework\Http\Request\Request $request): array
+        {
+        }
+        private function perPage(\FluentCart\Framework\Http\Request\Request $request): int
         {
         }
         public function getTermIdsFromDefaultFilter($defaultFilters): array
@@ -14641,6 +14577,18 @@ namespace FluentCart\App\Http\Requests {
          * @return array
          */
         public function sanitize()
+        {
+        }
+    }
+    class OrderPriceRequest extends \FluentCart\App\Http\Requests\OrderRequest
+    {
+        /**
+         * The Create Order screen prices lines before a customer is picked, and
+         * applies a new coupon by posting its code with no id yet.
+         *
+         * @return array
+         */
+        public function rules(): array
         {
         }
     }
@@ -20683,6 +20631,15 @@ namespace FluentCart\App\Models {
         {
         }
         public function getBusinessInfo(): array
+        {
+        }
+        /**
+         * Seller identity snapshotted at checkout. Fields missing from the
+         * snapshot (orders placed before it existed) come from live settings.
+         *
+         * @return array{company_name: string, legal_registration_id: string, seller_vat_id: string, seller_tax_id: string, store_country: string}
+         */
+        public function getStoreBusinessInfo(): array
         {
         }
         public function getPrimaryOrderTaxRate()
@@ -26882,6 +26839,9 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         public static function quoteRevision(?\FluentCart\App\Models\Cart $cart): string
         {
         }
+        public static function revisionOfQuote(array $quote): string
+        {
+        }
         /**
          * @return array|\WP_Error
          */
@@ -26891,7 +26851,7 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         public static function reset(): void
         {
         }
-        private static function pricesUpdatedError(): \WP_Error
+        public static function pricesUpdatedError(array $data = []): \WP_Error
         {
         }
     }
@@ -27278,9 +27238,10 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
     {
         /**
          * Currencies an admin-created order can be priced in: the base, then each
-         * enabled currency with its current rate. Empty when multi-currency is off.
+         * enabled currency with its current rate and pricing rules. Empty when
+         * multi-currency is off.
          *
-         * @return array<int, array{code: string, sign: string, rate: string, is_base: bool}>
+         * @return array<int, array{code: string, sign: string, rate: string, is_base: bool, rounding?: string, charm?: string, adjustment?: string, decimals?: int}>
          */
         public static function orderCurrencies(): array
         {
@@ -33168,7 +33129,7 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
         /**
          * Resume a paused subscription
          *
-         * For manual subscriptions, this updates status back to active.
+         * Store-billed subscriptions resume as active or past_due based on the billing date.
          * For automatic subscriptions, delegates to the gateway.
          *
          * @param \FluentCart\App\Models\Subscription $subscription
@@ -33772,6 +33733,17 @@ namespace FluentCart\App\Modules\Tax {
         {
         }
         public static function taxTitleLists(): array
+        {
+        }
+        public static function businessIdLabelLists(): array
+        {
+        }
+        /**
+         * Label formats for the seller ID lines on receipts, emails and PDFs.
+         *
+         * @return array{legal_registration_id: string, seller_tax_id: string, seller_vat_id: string}
+         */
+        public static function getBusinessIdLabels(string $countryCode = ''): array
         {
         }
         public static function getCountryTaxTitle($countryCode = '')
@@ -35281,6 +35253,155 @@ namespace FluentCart\App\Modules\WooCommerceMigrator {
     }
 }
 namespace FluentCart\App\Services {
+    /**
+     * Prices an admin-created order in the currency the admin picked. The
+     * Create Order screen previews with it and the save prices again with it,
+     * so the screen shows exactly what the order will store. A save without a
+     * preview takes priceInPostedCurrency() in another currency, else asPosted().
+     */
+    class AdminOrderPricing
+    {
+        /**
+         * The quote an admin-created order is priced at: the base currency, or
+         * an enabled currency that has a rate.
+         *
+         * @param mixed $currency requested currency code
+         * @return array|\WP_Error
+         */
+        public static function quoteFor($currency)
+        {
+        }
+        /**
+         * Shipping the admin entered, in the order's currency. Null (omitted)
+         * is 0. Non-numeric and negative values are rejected on the raw value,
+         * before rounding: roundCent(-0.4) is 0 and would read as free shipping.
+         *
+         * @param mixed $value
+         * @throws \InvalidArgumentException
+         */
+        public static function shippingCents($value): int
+        {
+        }
+        /**
+         * @param array $data currency, order_items, applied_coupon, discount, shipping_total
+         * @param string $customerEmail for per-customer coupon limits
+         * @param string|float|null $rate a CurrencySnapshot::storableRate() value, taken as final (no margin, rounding, ending or adjustment); null for the store's
+         * @return array|\WP_Error quote, quote_revision, items, applied_coupons, shipping_total,
+         *                         subtotal, coupon_discount_total, manual_discount_total, total
+         * @throws \InvalidArgumentException on a malformed shipping_total
+         */
+        public static function price(array $data, $customerEmail = '', $rate = null)
+        {
+        }
+        /**
+         * A save in another currency sent without a preview (REST callers):
+         * priced on the server like the screen, at the posted rate when one is
+         * sent, else the store's. A posted catalog line price or total must
+         * match the server's, or the caller is told the prices changed.
+         *
+         * @param array $data currency, rate, total_amount, order_items, applied_coupon, discount, shipping_total
+         * @param string $customerEmail for per-customer coupon limits
+         * @return array|\WP_Error as price()
+         * @throws \InvalidArgumentException on a malformed shipping_total
+         */
+        public static function priceInPostedCurrency(array $data, $customerEmail = '')
+        {
+        }
+        /**
+         * A save in the store currency sent without a preview (the documented
+         * REST payload, PHP callers) keeps the pre multi-currency contract: the
+         * posted line prices, coupons and manual discount applied on top.
+         *
+         * @param array $data order_items, applied_coupon, discount, shipping_total
+         * @param string $customerEmail for per-customer coupon limits
+         * @return array|\WP_Error quote, items, applied_coupons, shipping_total
+         * @throws \InvalidArgumentException on a malformed shipping_total
+         */
+        public static function asPosted(array $data, $customerEmail = '')
+        {
+        }
+        /**
+         * Fingerprint of everything the preview shows, so a save is rejected when
+         * any line changed, not only the rate. A trial's recurring price is not in
+         * the total.
+         */
+        private static function revision(array $quote, array $items, array $totals): string
+        {
+        }
+        /**
+         * The coupon service spreads discounts in fractions of a cent. Round the
+         * total to whole units of the currency, then give each line its floor plus
+         * one unit by largest remainder, never past the line subtotal.
+         */
+        private static function roundLineDiscounts(array $items, int $unit): array
+        {
+        }
+        /**
+         * Coupon records are rounded on their own, so they can drift from the
+         * line discounts. Move the difference so they sum to the order's coupon
+         * total: a shortfall goes on the largest coupon, a surplus is taken from
+         * the largest first, none below 0.
+         */
+        private static function reconcileCouponRecords(array $appliedCoupons, int $lineTotal, int $unit): array
+        {
+        }
+        /**
+         * A catalog line takes its price from the product at the order's quote.
+         * A custom price the admin typed is already in the order's currency and
+         * is only bounds-checked.
+         *
+         * @param array $variations ProductVariation keyed by id, from loadVariations()
+         * @return array|\WP_Error
+         */
+        private static function priceLine(array $item, array $quote, int $unit, array $variations)
+        {
+        }
+        /**
+         * @return array ProductVariation keyed by id
+         */
+        private static function loadVariations(array $orderItems): array
+        {
+        }
+        private static function withLineTotals(array $item, int $unitPrice): array
+        {
+        }
+        /**
+         * @param mixed $value cents in the order's currency
+         * @return int|\WP_Error
+         */
+        private static function typedAmount($value, int $unit)
+        {
+        }
+        /**
+         * Helper::roundCent() throws past this range instead of returning a 422.
+         *
+         * @param mixed $value
+         */
+        private static function fitsInCents($value): bool
+        {
+        }
+        /**
+         * A trial line's price is billed after the trial, not on this order.
+         */
+        private static function chargedNow(array $item): int
+        {
+        }
+        private static function amountError($message): \WP_Error
+        {
+        }
+        /**
+         * Spread the manual discount over the lines by their share of the
+         * subtotal, in whole units of the order's currency. Each line takes at
+         * most what it has left after its coupon discount (AdminOrderProcessor
+         * subtracts both from the line), so no line total goes negative.
+         *
+         * @param int $unit the order currency's smallest unit in cents (100 for
+         *                  a zero-decimal currency): each line's share is whole units
+         */
+        public static function distributeManualDiscount(&$items, $manualDiscountTotal, int $unit = 1)
+        {
+        }
+    }
     class AdvancedVariationService
     {
         /**
@@ -37675,6 +37796,54 @@ namespace FluentCart\App\Services\Email {
          * @return array|null
          */
         public static function resolve($presetId)
+        {
+        }
+    }
+    class EmailDirection
+    {
+        private static $cache = [];
+        /**
+         * Email text is written in the site language, so an admin sending from an
+         * English profile on an Arabic store must still get an RTL email.
+         */
+        public static function isRtl(): bool
+        {
+        }
+        public static function dir(): string
+        {
+        }
+        /**
+         * Arrow pointing in the reading direction, as an HTML entity.
+         */
+        public static function forwardArrow(): string
+        {
+        }
+        /**
+         * Isolate an amount, as WooCommerce's wc_price() does with <bdi>: its own
+         * characters pick the direction, so the sign and symbol stay put in RTL.
+         */
+        public static function amount(string $formatted): string
+        {
+        }
+        // Phone numbers always read left to right.
+        public static function ltr(string $text): string
+        {
+        }
+        public static function lang(): string
+        {
+        }
+        // Side text starts from: left in LTR, right in RTL.
+        public static function start(): string
+        {
+        }
+        public static function end(): string
+        {
+        }
+        /**
+         * Four-value padding/margin ("top right bottom left") with the side values
+         * swapped in RTL. Email clients ignore logical CSS, so sides stay physical.
+         */
+        public static function sides(string $shorthand): string
         {
         }
     }
@@ -45594,9 +45763,6 @@ namespace FluentCart\App\Services\Renderer {
         public function showCouponApplied()
         {
         }
-        public function renderCheckoutReviews()
-        {
-        }
         /**
          * First/Last name inputs for the modal. Enabling either in Checkout Fields
          * replaces the single Full name input. The field definitions come from
@@ -46784,6 +46950,21 @@ namespace FluentCart\App\Services\Renderer\Receipt {
         {
         }
         public function renderTaxSummaryBox()
+        {
+        }
+    }
+    class StoreBusinessInfoHelper
+    {
+        /**
+         * Seller ID lines (registration, tax, VAT) for receipts, the thank-you
+         * page and order emails. Plain text; callers escape and style them.
+         *
+         * @return string[]
+         */
+        public static function getIdLines(\FluentCart\App\Models\Order $order): array
+        {
+        }
+        public static function getCompanyName(\FluentCart\App\Models\Order $order, string $fallback = ''): string
         {
         }
     }
@@ -49559,8 +49740,8 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         //        'payment_summary' => 'getPaymentSummary',
         //        'payment_receipt' => 'getPaymentReceipt',
         //    ];
-        protected array $methodMap = ['item_count' => 'getItemCount', 'review_url' => 'getReviewUrl', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'store_company_name' => 'getStoreCompanyName', 'store_company_display' => 'getStoreCompanyDisplay', 'store_legal_registration_id' => 'getStoreLegalRegistrationId', 'store_legal_registration_display' => 'getStoreLegalRegistrationDisplay', 'store_seller_vat_id' => 'getStoreSellerVatId', 'store_seller_vat_display' => 'getStoreSellerVatDisplay', 'store_seller_tax_id' => 'getStoreSellerTaxId', 'store_tax_display' => 'getStoreTaxDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName', 'buyer_legal_registration_id' => 'getBuyerLegalRegistrationId', 'buyer_reverse_charge_declaration' => 'getBuyerReverseChargeDeclaration', 'tax_breakdown' => 'getTaxBreakdown', 'fee_lines' => 'getFeeLines', 'payment_method_human' => 'getPaymentMethodTitle'];
-        protected array $attributeMap = ['id' => 'order.id', 'status' => 'order.status', 'created_at' => 'order.created_at', 'updated_at' => 'order.updated_at'];
+        protected array $methodMap = ['item_count' => 'getItemCount', 'review_url' => 'getReviewUrl', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'store_company_name' => 'getStoreCompanyName', 'store_company_display' => 'getStoreCompanyDisplay', 'store_seller_name' => 'getStoreSellerName', 'store_legal_registration_id' => 'getStoreLegalRegistrationId', 'store_legal_registration_display' => 'getStoreLegalRegistrationDisplay', 'store_seller_vat_id' => 'getStoreSellerVatId', 'store_seller_vat_display' => 'getStoreSellerVatDisplay', 'store_seller_tax_id' => 'getStoreSellerTaxId', 'store_tax_display' => 'getStoreTaxDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName', 'buyer_legal_registration_id' => 'getBuyerLegalRegistrationId', 'buyer_reverse_charge_declaration' => 'getBuyerReverseChargeDeclaration', 'tax_breakdown' => 'getTaxBreakdown', 'fee_lines' => 'getFeeLines', 'payment_method_human' => 'getPaymentMethodTitle'];
+        protected array $attributeMap = ['id' => 'order.id', 'status' => 'order.status', 'created_at' => 'order.created_at', 'updated_at' => 'order.updated_at', 'parent_id' => 'order.parent_id', 'invoice_no' => 'order.invoice_no', 'fulfillment_type' => 'order.fulfillment_type', 'type' => 'order.type', 'customer_id' => 'order.customer_id', 'payment_method' => 'order.payment_method', 'payment_status' => 'order.payment_status', 'currency' => 'order.currency', 'rate' => 'order.rate', 'note' => 'order.note', 'ip_address' => 'order.ip_address', 'completed_at' => 'order.completed_at', 'refunded_at' => 'order.refunded_at', 'uuid' => 'order.uuid', 'customer.email' => 'order.customer.email', 'customer.first_name' => 'order.customer.first_name', 'customer.last_name' => 'order.customer.last_name', 'customer.full_name' => 'order.customer.full_name'];
         protected array $centColumns = ['total_amount', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'total_paid', 'total_refund'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
         {
@@ -49656,7 +49837,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         }
         /**
          * Wrap the accumulated tax-breakdown rows in their own grey rounded box,
-         * right-aligned to a fixed 400px column.
+         * aligned to the end side in a fixed 400px column.
          *
          * The tax breakdown is the only thing that lives inside the grey box; the
          * surrounding Subtotal/Discount/Shipping/Fees rows (above) and Refund/Total/
@@ -49711,7 +49892,13 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         private function getStoreBusinessField(string $field): string
         {
         }
+        private function formatStoreIdLine(string $field, string $value): string
+        {
+        }
         public function getStoreCompanyName(): string
+        {
+        }
+        public function getStoreSellerName(): string
         {
         }
         public function getStoreCompanyDisplay(): string
@@ -49865,6 +50052,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         protected array $centColumns = ['total'];
+        protected array $attributeMap = ['payment_method' => 'transaction.payment_method', 'card_last_4' => 'transaction.card_last_4', 'card_brand' => 'transaction.card_brand', 'status' => 'transaction.status', 'currency' => 'transaction.currency', 'created_at' => 'transaction.created_at', 'vendor_charge_id' => 'transaction.vendor_charge_id'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
         {
         }
