@@ -2836,6 +2836,9 @@ namespace FluentCart\Api\Resource {
         public static function syncItemDerivedTotals(\FluentCart\App\Models\Order $order)
         {
         }
+        private static function allocateShippingForTax($order, array $taxItems): array
+        {
+        }
         /**
          * Recalculate and persist tax for an existing order after create or update.
          * Reads saved items + billing address from the DB, runs AdminOrderTaxService,
@@ -5749,6 +5752,36 @@ namespace FluentCart\App\Helpers {
         {
         }
         /**
+         * Whether an enabled carrier builds its own rate request, so any checkout
+         * form field may change its quote (ProvidesLiveRates::liveRatesRequest()).
+         */
+        public static function carriersBuildRequests(): bool
+        {
+        }
+        /**
+         * The checkout fields a live carrier may quote from, each with where the cart
+         * stores it. Checkout saves exactly these, plus the shipping and payment method.
+         *
+         * @return array<string, string> field name => checkout_data path
+         */
+        public static function quoteFormFields(): array
+        {
+        }
+        /**
+         * quoteFormFields() read from a cart's checkout_data, by field name.
+         */
+        public static function checkoutFormFields(array $checkoutData): array
+        {
+        }
+        /**
+         * The checkout form for live carriers (CarrierContract::getRates 'form_data'):
+         * the quoteFormFields() that are scalar, as plain text, at most 255 characters.
+         * In quoteFormFields() order, so display and Place Order build the same request.
+         */
+        public static function quoteFormData(array $formData): array
+        {
+        }
+        /**
          * The contact a live carrier quote uses, read from checkout form data. All ''
          * until every field quoteContactFields() lists is filled, so a half-typed
          * contact never makes a new quote.
@@ -5779,7 +5812,8 @@ namespace FluentCart\App\Helpers {
         /**
          * The last rate list's key and the carrier rate sources it left pending.
          *
-         * @return array ['key' => string, 'pending' => [['carrier' =>, 'source' =>, 'label' =>], ...]]
+         * @return array ['key' => string, 'pending' => [['carrier' =>, 'source' =>, 'label' =>], ...],
+         *                'ids' => string[]|null after fetchRateSource(): the whole list's rate ids]
          */
         public static function rateSourceState(): array
         {
@@ -6325,7 +6359,7 @@ namespace FluentCart\App\Helpers {
         public static function calculateShippingCharge(\FluentCart\App\Models\ProductVariation $variation, int $quantity = 1)
         {
         }
-        private static function itemHasFreeShipping($item): bool
+        public static function itemHasFreeShipping($item): bool
         {
         }
         private static function excludeFreeShippingPhysicalItems(array &$items, array &$physicalItems): void
@@ -7313,6 +7347,12 @@ namespace FluentCart\App\Helpers {
         public static function mergeTermIdsForFilter($array1 = [], $array2 = []): array
         {
         }
+        /**
+         * Older one-time bundle variations lost is_bundle_product, so bundle_child_ids also counts.
+         */
+        public static function isBundleItem($otherInfo): bool
+        {
+        }
         public static function loadBundleChild(array $variants, $select = ['id', 'variation_title']): array
         {
         }
@@ -8262,6 +8302,9 @@ namespace FluentCart\App\Hooks\Cart {
         public function handleCartStatusAjax()
         {
         }
+        protected function buildCartDrawerFragments($cart, $requestData)
+        {
+        }
         public function handleCartUpdateAjax()
         {
         }
@@ -8900,7 +8943,7 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\Checkout\InnerBlocks {
 namespace FluentCart\App\Hooks\Handlers\BlockEditors {
     /**
      * Currency switcher block — the block form of [fluent_cart_currency_switcher]
-     * (dev-docs/multi-currency/plan.md §8.2). Server-rendered; renders nothing
+     * (dev-docs/multi-currency/05-storefront-cart-checkout.md). Server-rendered; renders nothing
      * unless more than one currency can be offered.
      */
     class CurrencySwitcherBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
@@ -10814,6 +10857,20 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
         /**
+         * A stand-in registered while its add-on or FluentCart Pro is missing (see PromoGatewaysHandler, AddonGatewaysHandler).
+         */
+        public static function isPlaceholder($methodInstance): bool
+        {
+        }
+        /**
+         * True when the gateway overrides AbstractPaymentGateway::testConnection().
+         *
+         * @phpstan-assert-if-true \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway $methodInstance
+         */
+        public static function canTestConnection($methodInstance): bool
+        {
+        }
+        /**
          * @throws \Exception
          */
         public function getAll(): array
@@ -10913,6 +10970,9 @@ namespace FluentCart\App\Hooks\Handlers {
         {
         }
         protected function getMenuIcon(): string
+        {
+        }
+        private static function getBuilderAddons()
         {
         }
     }
@@ -11047,6 +11107,11 @@ namespace FluentCart\App\Hooks\Handlers\ShortCodes {
         {
         }
         public static function register()
+        {
+        }
+        // Not get_the_content(): wp_enqueue_scripts runs outside the Loop, where
+        // its post globals may be unset and count(null) fatals on PHP 8.
+        public static function currentPostContent(): string
         {
         }
         protected function generateEnqueueSlug(): string
@@ -11657,6 +11722,32 @@ namespace FluentCart\App\Hooks\Handlers {
         //     return $template;
         // }
     }
+    /**
+     * Product picker on the Product Categories and Brands term screens.
+     */
+    class TermProductsHandler
+    {
+        const TAXONOMIES = ['product-categories', 'product-brands'];
+        const PRELOAD_LIMIT = 200;
+        public function register(): void
+        {
+        }
+        public function renderAddField($taxonomy): void
+        {
+        }
+        public function renderEditField($term, $taxonomy): void
+        {
+        }
+        public function save($termId, $ttId, $taxonomy): void
+        {
+        }
+        public function enqueueAssets(): void
+        {
+        }
+        private function renderMount(array $config): void
+        {
+        }
+    }
     class UserHandler
     {
         public function register()
@@ -12080,6 +12171,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function saveFields(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        public function saveFieldOrder(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
     }
@@ -12908,7 +13002,7 @@ namespace FluentCart\App\Http\Controllers {
         public function verifyTurnstileKeys(\FluentCart\Framework\Http\Request\Request $request): \WP_REST_Response
         {
         }
-        private function getRegisteredPluginAddons(): array
+        public function getRegisteredPluginAddons(): array
         {
         }
     }
@@ -13111,6 +13205,9 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function disconnect(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Hooks\Handlers\GlobalPaymentHandler $globalHandler)
+        {
+        }
+        public function testConnection(\FluentCart\Framework\Http\Request\Request $request)
         {
         }
         public function setPayPalWebhook(\FluentCart\Framework\Http\Request\Request $request)
@@ -15533,8 +15630,6 @@ namespace FluentCart\App\Http\Rules {
      * behaviour, with one deliberate exception: the wildcard in $otherField is
      * resolved for every row, where the framework's `/\.\d\./` matched only
      * single-digit indexes and quietly gave up from row 10 on.
-     *
-     * See dev-docs/framework-update-2.12.6-qa.md findings 5 and 10.
      */
     class RequiredWhenRule
     {
@@ -15611,8 +15706,6 @@ namespace FluentCart\App\Http\Rules {
      * allowed, these decide whether a supplied value is acceptable. Neither fires on
      * the other's territory, so "" and null pass through here untouched and are the
      * requirement's business alone.
-     *
-     * See dev-docs/framework-update-2.12.6-qa.md finding 9.
      */
     class WhenFilledRule
     {
@@ -20287,6 +20380,23 @@ namespace FluentCart\App\Models {
         public function getFees(): array
         {
         }
+        /** Billing terms a line takes from its variation; the signup fee is compared in base currency. */
+        private const CATALOG_BILLING_KEYS = ['manage_setup_fee', 'trial_days', 'repeat_interval', 'times'];
+        /**
+         * Whether a stored line would be charged differently from the same line built now.
+         */
+        private function hasStaleCharge(array $stored, array $fresh): bool
+        {
+        }
+        /**
+         * A line keeps the price from when it was added. Re-price the lines whose
+         * catalog price changed since, so checkout never charges an old price.
+         *
+         * @return bool Whether any line was re-priced.
+         */
+        public function refreshStalePrices(): bool
+        {
+        }
         /**
          * Recalculate the cart when it still stores a filter-added fee that no
          * filter adds any more (the add-on is off, or its rule no longer applies),
@@ -21721,6 +21831,15 @@ namespace FluentCart\App\Models {
         {
         }
         public function getMaxRefundableAmount()
+        {
+        }
+        public function linkedRefunds()
+        {
+        }
+        public static function refundChargeId(\FluentCart\App\Models\OrderTransaction $refund): int
+        {
+        }
+        public static function pendingRefundTotal($orderId)
         {
         }
         /**
@@ -23461,6 +23580,21 @@ namespace FluentCart\App\Models {
         public function addLog($title, $description = '', $type = 'info', $by = '')
         {
         }
+        /**
+         * Cancel the vendor subscription this row was moved off. On failure the
+         * switch stands and the admin gets an error log with the dashboard link.
+         *
+         * @return true|\WP_Error
+         */
+        public function cancelReplacedVendorSubscription(string $paymentMethod, string $vendorSubscriptionId, string $reason = '')
+        {
+        }
+        public function lockPaymentMethodSwitch(): bool
+        {
+        }
+        public function unlockPaymentMethodSwitch(): void
+        {
+        }
         public function getDownloads()
         {
         }
@@ -23508,24 +23642,21 @@ namespace FluentCart\App\Models {
         {
         }
         /**
-         * The `switch_payment_method` entry of `supportedFeatures`, or [] when the
-         * gateway does not declare one.
+         * Days a new vendor subscription must trial so its first charge lands on the
+         * current next_billing_date. 0 means no paid days are left.
          *
-         * Unlike the flat feature flags this is a KEYED entry carrying config
-         * (`supported_gateways`), so `has()` cannot answer it — it needs the raw
-         * `supportedFeatures` property, which only AbstractPaymentGateway carries.
-         * An interface-only gateway therefore reports no switch support rather
-         * than triggering an undefined-property read.
-         *
-         * @return array
+         * @return int
          */
-        private function switchPaymentConfig(): array
+        public function paymentMethodChangeTrialDays()
+        {
+        }
+        public function hasPaidDaysLeft()
         {
         }
         public function canUpdatePaymentMethod()
         {
         }
-        public function canSwitchPaymentMethod()
+        public function canSwitchPaymentMethod($requirePaidDays = true)
         {
         }
         public function switchablePaymentMethods()
@@ -27160,8 +27291,8 @@ namespace FluentCart\App\Modules\MCP\Tools {
 }
 namespace FluentCart\App\Modules\MultiCurrency {
     /**
-     * Storefront side of multi-currency (dev-docs/multi-currency/plan.md §5
-     * Phase 3). Everything here is inert until multi-currency is enabled with at
+     * Storefront side of multi-currency (dev-docs/multi-currency/01-architecture.md,
+     * "Boot"). Everything here is inert until multi-currency is enabled with at
      * least one currency.
      */
     class MultiCurrencyModule
@@ -27209,8 +27340,8 @@ namespace FluentCart\App\Modules\MultiCurrency {
         }
         /**
          * Pages rendered in a non-base currency must not be served from a page
-         * cache to a visitor in another currency (plan §12.7). Base-currency
-         * visitors keep full caching.
+         * cache to a visitor in another currency. Base-currency visitors keep
+         * full caching (dev-docs/multi-currency/05-storefront-cart-checkout.md, "Display").
          */
         public function preventCaching()
         {
@@ -27222,7 +27353,7 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
      * SQL fragments for deriving base-currency figures from an order's frozen
      * rate. Base values are never stored; they are ROUND(amount / rate), rounded
      * once per order so per-row values and aggregate totals agree exactly.
-     * dev-docs/multi-currency/plan.md §2.5.5.
+     * dev-docs/multi-currency/07-reports.md, "Building blocks".
      *
      * One definition of "this order has a rate we may divide by" for every
      * consumer — customer LTV, converted reports — so they cannot disagree.
@@ -27260,7 +27391,7 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
      * Deliberately NOT read through CurrencySettings::get(): that path carries the
      * fluent_cart/global_currency_setting filter, which a storefront may use to
      * present a different currency per request. The base currency must never vary
-     * by visitor. dev-docs/multi-currency/plan.md §12.1.
+     * by visitor. dev-docs/multi-currency/01-architecture.md, "The model".
      */
     class BaseCurrency
     {
@@ -27273,7 +27404,7 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
     }
     /**
      * A cart is priced in exactly one currency at one locked rate
-     * (dev-docs/multi-currency/plan.md §2.3 invariant #6, §11.6).
+     * (dev-docs/multi-currency/05-storefront-cart-checkout.md, "The cart").
      *
      * - Every cart item carries its base-currency price in other_info.fx_base;
      *   the price shown and charged is derived from it at the cart's quote.
@@ -27335,8 +27466,9 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
          * The quote a plan upgrade of $order is priced at. An upgrade is a new
          * order and a new subscription, so it is in the currency the shopper has
          * chosen (switcher / cookie), else the subscription's currency, at
-         * today's rate (plan §15.6). An order whose rate was never known stays
-         * in its own currency — its credit cannot be converted.
+         * today's rate. An order whose rate was never known stays in its own
+         * currency — its credit cannot be converted.
+         * See dev-docs/multi-currency/06-orders-subscriptions.md, "Plan upgrades".
          *
          * Null when the order's own currency cannot be quoted (no rate today and
          * no trusted snapshot): the prorate credit is in that currency, so the
@@ -27358,7 +27490,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
          * Hold a new cart to $currency — e.g. a plan upgrade, which must be
          * priced in the subscription's currency whatever the visitor browses
          * in. Unlike pin(), items are still converted from their base price at
-         * the current rate (plan decision #10). Call after checkout_data is set.
+         * the current rate (dev-docs/multi-currency/06-orders-subscriptions.md,
+         * "Plan upgrades"). Call after checkout_data is set.
          *
          * @return array the quote the cart is priced at
          */
@@ -27575,7 +27708,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
     /**
      * Coupons are authored in the base currency. For a cart priced in another
      * currency, fixed amounts and spend thresholds are converted at the cart's
-     * rate — on in-memory copies that can never be saved (plan §2.5.2).
+     * rate — on in-memory copies that can never be saved
+     * (dev-docs/multi-currency/05-storefront-cart-checkout.md, "The cart").
      */
     class CouponCurrency
     {
@@ -27621,11 +27755,12 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
     /**
      * The presentment currency for the current storefront request.
      *
-     * Distinct from the base currency on purpose (plan §12.1): admin screens,
+     * Distinct from the base currency on purpose: admin screens,
      * cron, renewals and webhooks always work in the base currency; only a
      * storefront visitor ever sees another one. Resolution order: a cart pinned
      * to an existing order's currency, the ?currency= switch / cookie, a
      * geo-hint via fluent_cart/currency/resolve_for_request, then the base.
+     * See dev-docs/multi-currency/04-conversion-engine.md, "Which currency a request is in".
      */
     class CurrencyContext
     {
@@ -27736,7 +27871,7 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
      * Money is converted from the base currency once, when an amount is first
      * authored onto an order; everything downstream (transactions, renewals,
      * refunds, reports) copies the stored rate instead of looking one up.
-     * dev-docs/multi-currency/plan.md §9.
+     * dev-docs/multi-currency/01-architecture.md, "Where conversion happens".
      *
      * `rate` = units of the order's currency per 1 unit of the base currency,
      * kept as a 12-decimal string so it round-trips DECIMAL(24,12) exactly.
@@ -27793,7 +27928,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         }
         /**
          * Classify a row that predates snapshots. Never guesses a rate: a
-         * non-base-currency row without one is `legacy_unknown` (plan §10).
+         * non-base-currency row without one is `legacy_unknown`
+         * (dev-docs/multi-currency/08-exchange-rates.md, "Old orders without a rate").
          */
         public static function legacy($currency, $rate = 1, $capturedAt = null): array
         {
@@ -27818,11 +27954,12 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         {
         }
         /**
-         * A transaction always carries its order's rate (plan §2.3 invariant #2).
+         * A transaction always carries its order's rate
+         * (dev-docs/multi-currency/06-orders-subscriptions.md, "The snapshot on new records").
          *
          * A currency that differs from the order's is detected and logged, never
          * rejected: refusing the insert after a gateway has taken the money would
-         * lose the only record of a real payment (plan §12.8). The comparison is
+         * lose the only record of a real payment. The comparison is
          * case-insensitive — some gateways report lowercase codes.
          */
         public static function applyToNewTransaction(\FluentCart\App\Models\OrderTransaction $transaction): void
@@ -27831,7 +27968,7 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         /**
          * Give a new subscription its currency column and its parent order's
          * snapshot — renewals carry that rate for the subscription's life
-         * (plan §9.2, decision #8).
+         * (dev-docs/multi-currency/06-orders-subscriptions.md).
          */
         public static function applyToNewSubscription(\FluentCart\App\Models\Subscription $subscription): void
         {
@@ -28057,8 +28194,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         /**
          * How prices in $currency are derived from the converted base price:
          * a % adjustment, then rounding up to a step, then a charm ending
-         * (plan §15.4). Applies to product prices only, never to shipping or
-         * coupon amounts.
+         * (dev-docs/multi-currency/04-conversion-engine.md, "Pricing rules").
+         * Applies to product prices only, never to shipping or coupon amounts.
          *
          * @return array{rounding: string, charm: string, adjustment: string}
          */
@@ -28079,8 +28216,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         }
         /**
          * Changing the base currency would re-label every historical amount, so
-         * it is refused once orders exist while multi-currency is on (plan §10,
-         * invariant #7).
+         * it is refused once orders exist while multi-currency is on
+         * (dev-docs/multi-currency/08-exchange-rates.md, "Safeguards").
          *
          * @return true|\WP_Error
          */
@@ -28104,7 +28241,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
      * that are not prices (shipping, coupon amounts) convert with toQuote():
      * rate, then the currency's smallest unit. Product prices convert with
      * toPrice(): rate, the % adjustment, rounding up to the step, the charm
-     * ending (plan §2.5.1, §15.4). Amounts stay ×100 for every currency.
+     * ending (dev-docs/multi-currency/04-conversion-engine.md). Amounts stay
+     * ×100 for every currency.
      */
     class PriceConverter
     {
@@ -28171,7 +28309,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
         }
         /**
          * The quote's pricing rules as one comparable string — a cart item priced
-         * under other rules is re-priced (plan §11.6).
+         * under other rules is re-priced
+         * (dev-docs/multi-currency/03-data-storage-map.md, "Cart item keys").
          */
         public static function rulesKey(array $quote): string
         {
@@ -28218,12 +28357,12 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
      * Every report is in exactly one currency: the one requested, else the base
      * currency — never "all currencies added together". Amounts of different
      * currencies are not summable without a rate.
-     * dev-docs/multi-currency/plan.md §2.4 Tier A, §13.
+     * dev-docs/multi-currency/07-reports.md, "Two modes".
      */
     class ReportCurrency
     {
         /**
-         * "All currencies, converted to the base currency" — Tier B (plan §2.4).
+         * "All currencies, converted to the base currency".
          * Each order is converted at its own frozen rate; orders without a
          * trustworthy rate are left out and counted.
          */
@@ -28384,10 +28523,10 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
     }
     /**
      * How a converted price is rounded in its presentment currency. Rounding
-     * applies to prices, never to the rate (dev-docs/multi-currency/plan.md
-     * §11.5, §15.4). Per currency the admin picks a rounding step (prices round
-     * up to it) and an optional charm ending (.99 / .95), as WooPayments and
-     * Shopify Markets do.
+     * applies to prices, never to the rate
+     * (dev-docs/multi-currency/04-conversion-engine.md, "Pricing rules"). Per
+     * currency the admin picks a rounding step (prices round up to it) and an
+     * optional charm ending (.99 / .95), as WooPayments and Shopify Markets do.
      */
     class RoundingRules
     {
@@ -28445,7 +28584,8 @@ namespace FluentCart\App\Modules\MultiCurrency\Services {
     /**
      * Catalogue prices for display. Product prices are stored once, in the base
      * currency; every storefront read that shows one goes through here so the
-     * shown price equals the price the cart will charge (plan §12.2).
+     * shown price equals the price the cart will charge
+     * (dev-docs/multi-currency/05-storefront-cart-checkout.md, "Display").
      * Identity whenever the visitor is in the base currency.
      */
     class StorefrontPrice
@@ -28502,6 +28642,8 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
     abstract class AbstractPaymentGateway implements \FluentCart\App\Modules\PaymentMethods\Core\PaymentGatewayInterface
     {
         private $methodSlug = '';
+        // Set by enqueue(); a gateway without a checkout script gets no skeleton.
+        protected bool $hasCheckoutScripts = false;
         public array $supportedFeatures = [];
         public \FluentCart\Api\StoreSettings $storeSettings;
         public ?\FluentCart\App\Modules\PaymentMethods\Core\AbstractSubscriptionModule $subscriptions;
@@ -28539,6 +28681,17 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         public static function beforeSettingsUpdate($data, $oldSettings): array
         {
         }
+        /**
+         * Check the saved credentials of one mode against the gateway API, without creating anything.
+         * Writes nothing: no option, cache, lock or token storage.
+         * A gateway gets the admin "Test connection" button by overriding this method.
+         *
+         * @param string $mode 'test' or 'live'
+         * @return array|\WP_Error ['message' => string] on success
+         */
+        public function testConnection(string $mode)
+        {
+        }
         public function updateSettings($data)
         {
         }
@@ -28571,6 +28724,18 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
          * SHOULD override this when their API supports zero-amount setup.
          */
         public function supportsSetupWithoutCharge(): bool
+        {
+        }
+        /** Whether the customer can update this subscription's payment method now. */
+        public function canUpdateSubscriptionPaymentMethod(\FluentCart\App\Models\Subscription $subscription): bool
+        {
+        }
+        /** Whether the customer can switch this subscription to another gateway now. */
+        public function canSwitchSubscriptionPaymentMethod(\FluentCart\App\Models\Subscription $subscription, bool $requirePaidDays = true): bool
+        {
+        }
+        /** Gateway slugs this subscription can be switched to. */
+        public function getSwitchableSubscriptionPaymentMethods(\FluentCart\App\Models\Subscription $subscription): array
         {
         }
         /**
@@ -28645,6 +28810,13 @@ namespace FluentCart\App\Modules\PaymentMethods\Core {
         public function getEnqueueStyleSrc(): array
         {
         }
+        /**
+         * Placeholder shown while the gateway's script mounts its form, so the
+         * payment block keeps its size. Override to match your form; '' shows none.
+         */
+        public function getCheckoutSkeleton(): string
+        {
+        }
         public function getTransactionUrl($url, $data)
         {
         }
@@ -28708,6 +28880,9 @@ namespace FluentCart\App\Modules\PaymentMethods\Cod {
         {
         }
         public function getEnqueueScriptSrc($hasSubscription = 'no'): array
+        {
+        }
+        public function getCheckoutSkeleton(): string
         {
         }
         public function getLocalizeData(): array
@@ -29002,7 +29177,16 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
         protected static function getAuthAPI($mode = 'test')
         {
         }
-        public static function validateCredentials($clientId, $clientSecret, $mode = 'test')
+        /**
+         * Request an access token with the given credentials from the PayPal host of the mode.
+         *
+         * @param string $clientId
+         * @param string $clientSecret
+         * @param string $mode 'test' or 'live'
+         * @param bool $storeToken Save the new token as the store's cached token for the mode.
+         * @return true|\WP_Error
+         */
+        public static function validateCredentials($clientId, $clientSecret, $mode = 'test', $storeToken = true)
         {
         }
         /**
@@ -29063,7 +29247,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway\API {
          * Retrieves PayPal access token using WP_HTTP.
          *
          * @param string $mode The PayPal mode (live/sandbox).
-         * @param array $args Additional arguments including public_key and api_key.
+         * @param array $args Additional arguments including public_key and api_key. store_token false keeps the new token out of the request and option caches.
          * @return string|\WP_Error Access token on success, WP_Error on failure.
          */
         private static function getAccessToken($mode = '', $args = [])
@@ -29286,15 +29470,15 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         private const RESYNC_RETRY_HOOK = 'fluent_cart/paypal/subscription_resync_retry';
         private const PENDING_SALES_META = 'paypal_pending_sales';
         private static $paypalSettings = null;
-        /** @var \WP_Error|null unacknowledged failure from the recurring-payment handler */
-        private static $recurringPaymentError = null;
+        /** @var \WP_Error|null retryable failure: the webhook answers 500 so PayPal redelivers */
+        private static $webhookRetryError = null;
         /**
          * Indirection so PHPStan reads the declared property type instead of
          * narrowing it to the literal null assigned right before processPaypalWebhookEvents().
          *
          * @return \WP_Error|null
          */
-        private static function getRecurringPaymentError()
+        private static function getWebhookRetryError()
         {
         }
         public function init()
@@ -29344,6 +29528,9 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         {
         }
         public function processSubscriptionActivated($data)
+        {
+        }
+        private function finishPendingSwitch(\FluentCart\App\Models\Subscription $subscription, array $paypalSubscription)
         {
         }
         public function processSubscriptionPaymentFailed($data)
@@ -29437,6 +29624,11 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         private function getSubscriptionByPaypalSubscriptionInfo($subscriptionInfo = [])
         {
         }
+        // Every PayPal sub of a row carries custom_id = row uuid; once the row is
+        // linked to another vendor id, the event is about a sub it no longer owns.
+        private function getUnlinkedSubscriptionByUuid($uuid)
+        {
+        }
         private static function getPayPalSettings()
         {
         }
@@ -29444,7 +29636,7 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
     class PayPal extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'paypal';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'multi_currency', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'resume_subscription', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'multi_currency', 'dispute_handler', 'subscriptions', 'resume_subscription', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
         private $vaultUserIdToken = '';
         private $vaultSetupUnavailable = false;
         public function __construct()
@@ -29471,6 +29663,15 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
          * pre-feature behavior (gateway hidden for zero-payable system carts).
          */
         public function supportsSetupWithoutCharge(): bool
+        {
+        }
+        public function canUpdateSubscriptionPaymentMethod(\FluentCart\App\Models\Subscription $subscription): bool
+        {
+        }
+        public function canSwitchSubscriptionPaymentMethod(\FluentCart\App\Models\Subscription $subscription, bool $requirePaidDays = true): bool
+        {
+        }
+        public function getSwitchableSubscriptionPaymentMethods(\FluentCart\App\Models\Subscription $subscription): array
         {
         }
         /**
@@ -29626,6 +29827,9 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public function webHookPaymentMethodName()
         {
         }
+        public function testConnection(string $mode)
+        {
+        }
         public static function validateSettings($data): array
         {
         }
@@ -29638,6 +29842,9 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
          * or to remove a version, return null
          */
         public function getEnqueueVersion()
+        {
+        }
+        public function getCheckoutSkeleton(): string
         {
         }
         public function getEnqueueScriptSrc($hasSubscription = false): array
@@ -30155,11 +30362,31 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public function confirmSubscriptionSwitch($data, $subscriptionId)
         {
         }
+        private function confirmSwitchLocked(\FluentCart\App\Models\Subscription $subscription, $newVendorSubscriptionId)
+        {
+        }
         /**
-         * Confirm subscription reactivation
+         * Binds the new PayPal subscription to the plan issued for this switch, moves the
+         * local subscription onto it and cancels the replaced one. Caller holds the switch lock.
          *
-         * @param array $data | newVendorSubscriptionId (string) required
-         * @param int $subscriptionId
+         * @param \FluentCart\App\Models\Subscription $subscription fresh row, read under the switch lock
+         * @param array $paypalSubscription PayPal subscription resource
+         * @return string|\WP_Error the new vendor subscription id
+         */
+        public function finishSwitch(\FluentCart\App\Models\Subscription $subscription, array $paypalSubscription)
+        {
+        }
+        private function cancelUnusedSwitchSubscription(\FluentCart\App\Models\Subscription $subscription, $vendorSubscriptionId)
+        {
+        }
+        private function sendSwitchSuccess($vendorSubscriptionId)
+        {
+        }
+        /**
+         * Append the replaced vendor subscription to the subscription's old_subscriptions meta.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscription
+         * @param array $oldSubData
          * @return void
          */
         public static function addOldSubscriptionMeta($subscription, $oldSubData)
@@ -31371,7 +31598,7 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
     class Stripe extends \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway
     {
         private $methodSlug = 'stripe';
-        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'card_update', 'multi_currency', 'switch_payment_method' => ['supported_gateways' => ['stripe', 'paypal']], 'dispute_handler', 'subscriptions', 'zero_recurring', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
+        public array $supportedFeatures = ['payment', 'refund', 'webhook', 'custom_payment', 'multi_currency', 'dispute_handler', 'subscriptions', 'zero_recurring', 'system_subscription', 'manual_subscription', 'verify_vendor_ids'];
         public \FluentCart\App\Modules\PaymentMethods\Core\BaseGatewaySettings $settings;
         public function __construct()
         {
@@ -31394,6 +31621,15 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
          * `mode: setup` (Processor::handleHostedSetupOnlyCheckout()).
          */
         public function supportsSetupWithoutCharge(): bool
+        {
+        }
+        public function canUpdateSubscriptionPaymentMethod(\FluentCart\App\Models\Subscription $subscription): bool
+        {
+        }
+        public function canSwitchSubscriptionPaymentMethod(\FluentCart\App\Models\Subscription $subscription, bool $requirePaidDays = true): bool
+        {
+        }
+        public function getSwitchableSubscriptionPaymentMethods(\FluentCart\App\Models\Subscription $subscription): array
         {
         }
         /**
@@ -31449,6 +31685,9 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public function getEnqueueScriptSrc($hasSubscription = 'no'): array
         {
         }
+        public function getCheckoutSkeleton(): string
+        {
+        }
         private function getStripeLocale(): string
         {
         }
@@ -31456,6 +31695,9 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         public static function beforeSettingsUpdate($data, $oldSettings): array
+        {
+        }
+        public function testConnection(string $mode)
         {
         }
         public static function validateSettings($data): array
@@ -31718,6 +31960,12 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         public function switchPayMethod($data, $subscriptionId)
         {
         }
+        /**
+         * @throws \Exception
+         */
+        private function switchLocked($data, \FluentCart\App\Models\Subscription $subscriptionModel)
+        {
+        }
         private function validateRequest($data, $subscriptionId): bool
         {
         }
@@ -31734,9 +31982,6 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
         {
         }
         private function updateBillingInfo($subscriptionId, $pm)
-        {
-        }
-        private function handleOldSubscription($oldData, $newSub, $subscriptionModel)
         {
         }
         public function getSubscriptionItem($subscription, $variation)
@@ -31983,8 +32228,39 @@ namespace FluentCart\App\Modules\Shipping\Carriers\Concerns {
         abstract public function canQuoteInCurrency(string $currency): ?bool;
         /**
          * Cache-key fragment for a carrier that prices the cart; '' when it does not.
+         * Not read once liveRatesRequest() returns a request.
          */
         protected function liveRatesCacheItemsKey(array $items): string
+        {
+        }
+        /**
+         * The API request one quote sends: everything that changes the price, the
+         * account or mode included, and nothing that changes on every call (a date,
+         * a request id). The cache is keyed on it, so the carrier may read any of
+         * $args (e.g. 'form_data') without a stale or shared quote. Null keeps the
+         * fetchLiveRates() path and its key.
+         *
+         * @since 2.4.0
+         */
+        protected function liveRatesRequest(array $destination, array $items, string $currency, array $args, string $source): ?array
+        {
+        }
+        /**
+         * Whether this carrier builds its own request, so any checkout field may
+         * change its quote. True once liveRatesRequest() is declared outside this trait.
+         *
+         * @since 2.4.0
+         */
+        public function buildsLiveRatesRequests(): bool
+        {
+        }
+        /**
+         * Sends the request liveRatesRequest() built. Implement both or neither.
+         *
+         * @since 2.4.0
+         * @return array[]|\WP_Error Same as fetchLiveRates().
+         */
+        protected function sendLiveRatesRequest(array $request, string $currency, string $source)
         {
         }
         /**
@@ -32208,6 +32484,11 @@ namespace FluentCart\App\Modules\Shipping\Carriers\Contracts {
          *                    'city' => string, 'name' => string, 'address_1' => string,
          *                    'phone' => string (all '' until the checkout contact is complete,
          *                    see AddressHelper::quoteContact()), 'items' => cart line items,
+         *                    'form_data' => the checkout form, scalar fields as plain text
+         *                    (AddressHelper::quoteFormData(); [] when none, since 2.4.0),
+         *                    'cart' => the visitor's Cart, or null (since 2.4.0): read it for
+         *                    any detail; 'items' and the address are what is priced, and a
+         *                    saved field may lag the form until checkout saves it,
          *                    'currency' => ISO to quote in, 'base_currency' => store ISO,
          *                    'reuse_quote' => true at Place Order: answer from the last quote
          *                    for these args when one is still fresh, else quote live,
@@ -37034,6 +37315,10 @@ namespace FluentCart\App\Services {
         public static function price(array $data, $customerEmail = '', $rate = null)
         {
         }
+        /** @return array|\WP_Error */
+        private static function priceShippingMethod(int $methodId, array $items, array $quote)
+        {
+        }
         /**
          * A save in another currency sent without a preview (REST callers):
          * priced on the server like the screen, at the posted rate when one is
@@ -37774,8 +38059,8 @@ namespace FluentCart\App\Services\Coupon {
          * Clamp this coupon's total contribution under $valueKey to $maxAmount,
          * scaling each item's share proportionally (cents in, cents out).
          *
-         * $preValues holds each item's value before this coupon ran, keyed by item
-         * id — only the delta above it (this coupon's share) is ever reduced.
+         * $preValues holds each item's value before this coupon ran, keyed by cart
+         * line index — only the delta above it (this coupon's share) is ever reduced.
          *
          * @return array [items, appliedTotalForThisCoupon]
          */
@@ -45143,7 +45428,7 @@ namespace FluentCart\App\Services\Payments {
         /**
          * @param \FluentCart\App\Models\Order $order
          *
-         * @return int Succeeded charges minus recorded refunds, in cents
+         * @return int Succeeded charges minus recorded and pending refunds, in cents
          */
         public static function netPaidAmount($order)
         {
@@ -45279,6 +45564,14 @@ namespace FluentCart\App\Services\Payments {
         {
         }
         private static function advanceRefundStatus(\FluentCart\App\Models\OrderTransaction $refund, $status, \FluentCart\App\Models\OrderTransaction $parentTransaction)
+        {
+        }
+        /**
+         * The gateway already moved the money, so a refund above its charge is counted in full and only flagged.
+         * Excess another row already carries is left out, so the flags add up to refunded_total minus the charge
+         * total, and a redelivery of a row that was within the charge never takes a later row's flag.
+         */
+        private static function flagChargeOverflow(\FluentCart\App\Models\OrderTransaction $refund, \FluentCart\App\Models\OrderTransaction $parentTransaction)
         {
         }
         /**
@@ -45655,6 +45948,33 @@ namespace FluentCart\App\Services\PluginInstaller {
         {
         }
         public static function getAddonStatus($pluginSlug, $pluginFile)
+        {
+        }
+        /**
+         * What the dashboard recommendations look at: store country, another store plugin, physical products.
+         */
+        public static function getStoreSignals()
+        {
+        }
+        /**
+         * Page builders that are active while their FluentCart add-on is not. Constants only, so it costs nothing
+         * on the many requests where the list is empty.
+         */
+        public static function getBuilderSignals()
+        {
+        }
+        /**
+         * Add-on list entries for the builders without their add-on, in order; the page shows the first one not closed.
+         * Only entries whose button this user may run: activate_plugins if installed, install_plugins if not.
+         */
+        public static function pickBuilderAddons(array $addons, array $missingBuilders)
+        {
+        }
+        /**
+         * Add-ons from the plugin add-on list whose signal matches this store and that are not active.
+         * Builders are left out: the Getting Started checklist already lists them.
+         */
+        public static function pickRecommendations(array $addons, array $signals)
         {
         }
         /**
@@ -47239,6 +47559,40 @@ namespace FluentCart\App\Services\Renderer {
         public function renderAddAddressForm()
         {
         }
+        // Saved checkout order, then the filter; city and postcode share a row only when adjacent.
+        private function modalAddressFieldOrder()
+        {
+        }
+        private function renderModalAddressFields()
+        {
+        }
+        private function renderModalAddressField($key)
+        {
+        }
+        private function renderModalPhoneField()
+        {
+        }
+        private function renderModalCountryField()
+        {
+        }
+        private function renderModalAddress1Field()
+        {
+        }
+        private function renderModalAddress2Field()
+        {
+        }
+        private function renderModalStateField()
+        {
+        }
+        private function renderModalCityField()
+        {
+        }
+        private function renderModalPostcodeField()
+        {
+        }
+        private function renderModalCityZipSection($first, $second)
+        {
+        }
         public function renderNameFields()
         {
         }
@@ -47301,10 +47655,15 @@ namespace FluentCart\App\Services\Renderer {
         protected $cartRenderer = null;
         protected $defaultOpenCart = false;
         protected $isAdminBarEnabled = false;
+        protected $cart = null;
         public function __construct($cartItems, $config = [])
         {
         }
         public function render()
+        {
+        }
+        // Own wrapper so cart updates, and other tabs that keep their drawer, can replace this block.
+        public function renderAfterItems()
         {
         }
         public function renderCartLoader()
@@ -47377,6 +47736,14 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderItems()
+        {
+        }
+        // Same markup as the drawer loader; static so the block's regions layout can print it too.
+        public static function renderPageLoader()
+        {
+        }
+        // Cart page only (the drawer has its own); the wrapper always prints so a fragment can fill it later.
+        public function renderAfterItems($cart = null)
         {
         }
         public function renderDummyItems()
@@ -47541,6 +47908,22 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public static function getAddressBaseFields($config, $scope = 'render')
+        {
+        }
+        // Fields missing from the saved order keep their relative place after it.
+        public static function applyAddressFieldOrder($fields, $type)
+        {
+        }
+        // Each section's order has its own WP option (unique name, so no duplicate rows),
+        // owned by the save-field-order endpoint.
+        public static function addressFieldOrderKey($section)
+        {
+        }
+        public static function getAddressFieldOrder($section)
+        {
+        }
+        // Keeps only known field keys of each address section, once each.
+        public static function sanitizeAddressFieldOrder($order, $settings)
         {
         }
         private static function getRequirementType($config, $key)
@@ -47771,7 +48154,8 @@ namespace FluentCart\App\Services\Renderer {
          * One pending carrier rate source, quoted for the same address as the shown
          * list: its rows to append, and the key of the list they belong to.
          *
-         * @return array ['rates_key' => string, 'view' => string, 'rate_ids' => string[]]
+         * @return array ['rates_key' => string, 'view' => string, 'rate_ids' => string[],
+         *                'list_ids' => string[]|null (the whole list's rate ids; null = unknown)]
          */
         public function getRateSourceFragment(string $carrier, string $source): array
         {
@@ -47798,7 +48182,10 @@ namespace FluentCart\App\Services\Renderer {
         protected function renderPaymentMethod($method, $config = [])
         {
         }
-        private function maybeRearrangeAddressFields($fields)
+        private function maybeRearrangeAddressFields($fields, $type = 'billing')
+        {
+        }
+        private function mergeAdjacentCityPostcode($fields)
         {
         }
         public function agreeTerms($atts = [])
@@ -49251,6 +49638,13 @@ namespace FluentCart\App\Services\Renderer\Receipt {
          * @return array [rate_id => ['base' => float, 'tax' => float]]
          */
         public static function computeRateBaseMap($items, $excludeInclusive = false)
+        {
+        }
+        /**
+         * Whether a saved net base agrees with its tax. Tax is rounded to whole units
+         * in a zero-decimal currency, so the tolerance follows the currency's unit.
+         */
+        public static function baseMatchesTax($net, $ratePercent, $tax, $currency = null)
         {
         }
         /**
@@ -54067,6 +54461,57 @@ namespace FluentCart\App\Services\Tax {
         {
         }
     }
+    /**
+     * The tax rate rows a renewal charges, built from the parent order.
+     */
+    class RenewalTaxRates
+    {
+        /**
+         * Each row carries the subscription's recurring tax for its rate, plus the
+         * shipping tax when the subscription itself ships. Rates the parent had only
+         * for one-time items, fees or the signup fee are left out. Subscriptions
+         * bought before recurring tax was stored per rate keep the parent's rows.
+         *
+         * @param \FluentCart\App\Models\Order       $parentOrder
+         * @param object|null $parentOrderItem The parent's subscription item.
+         * @param int         $recurringTax    The renewal's item tax; the rows are fitted to it.
+         * @param string|null $currency        The renewal's currency.
+         * @return object[] Each: tax_rate_id, order_tax, shipping_tax, total_tax, meta, from_recurring.
+         */
+        public static function fromParent(\FluentCart\App\Models\Order $parentOrder, $parentOrderItem, $recurringTax, $currency = null)
+        {
+        }
+        /**
+         * Makes a renewal's columns add up like its tax rows, without changing its
+         * total. Refunds rely on the line and shipping charged amounts adding up to
+         * that total, and shipping tax follows the store setting: added tax is
+         * charged as shipping, included tax stays inside the line.
+         *
+         * @param \FluentCart\App\Models\Order $order The renewal, after its tax rows and item are written.
+         */
+        public static function reconcileOrder(\FluentCart\App\Models\Order $order)
+        {
+        }
+        /**
+         * Refits a pending renewal's rows after an admin changes its amounts.
+         *
+         * @param \FluentCart\App\Models\Order $order The renewal, after its columns and item are updated.
+         */
+        public static function refreshAfterEdit(\FluentCart\App\Models\Order $order)
+        {
+        }
+        /**
+         * Makes the rows' item tax add up to the renewal's. Rounding goes to the last
+         * taxed rows; a larger gap means the rates are stale (the price changed after
+         * purchase), so the tax and its base scale together. Shipping tax stays as is.
+         */
+        private static function fitItemTax(array $rows, $target, $currency)
+        {
+        }
+        private static function baseMatchesTax(array $meta, $tax, $currency)
+        {
+        }
+    }
     class TaxManager
     {
         /**
@@ -54222,6 +54667,22 @@ namespace FluentCart\App\Services {
         {
         }
         public static function getCelebration($type = 'order')
+        {
+        }
+    }
+    class TermProductsService
+    {
+        public static function sync(int $termId, string $taxonomy, array $addIds, array $removeIds): void
+        {
+        }
+        public static function getProducts(int $termId, string $taxonomy, int $limit): array
+        {
+        }
+        // Keeps only real, non-trashed products so a forged ID can't tag other posts.
+        private static function productIds(array $ids): array
+        {
+        }
+        private static function statuses(): array
         {
         }
     }
