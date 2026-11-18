@@ -3475,6 +3475,9 @@ namespace FluentCart\Api\Resource {
         public static function update($product, $postId = '', $params = [])
         {
         }
+        protected static function notifyAfterCommit(callable $callback, int $postId): void
+        {
+        }
         public static function partialUpdate(array $data, $postId)
         {
         }
@@ -4654,6 +4657,8 @@ namespace FluentCart\App\CPT {
     }
     class Pages
     {
+        /** Set when a store creates its Shop page, so block templates use layout cards for new stores only. */
+        const LAYOUT_CARD_OPTION = 'fluent_cart_layout_card_defaults';
         protected static array $cachedPages = [];
         public function pages(): array
         {
@@ -4662,6 +4667,9 @@ namespace FluentCart\App\CPT {
         {
         }
         public function createPages(array $exclude = []): array
+        {
+        }
+        public static function markLayoutCardStore(): void
         {
         }
         public function getGeneratablePage(bool $withDefaultId = false): array
@@ -4676,6 +4684,17 @@ namespace FluentCart\App\CPT {
         public static function isPage($pageId): bool
         {
         }
+        /**
+         * The Products block's attributes on the Shop page: filters on, with the category, brand and price
+         * filters. $withoutFilters names filters to leave out, e.g. the category filter on a category page.
+         */
+        public static function productsBlockAttributes(array $withoutFilters = []): string
+        {
+        }
+        /**
+         * The Products block as the editor inserts it, with the filters on and the Classic layout card.
+         * Written into a Shop page once, when it is created; existing Shop pages keep their content.
+         */
         public static function getShopPageContent(): string
         {
         }
@@ -6333,6 +6352,13 @@ namespace FluentCart\App\Helpers {
     {
         const MAX_QUANTITY = 100000;
         const QUANTITY_HARD_LIMIT = 10000000;
+        // Product and class rows one method and item set read, reused within a request.
+        private static $chargeLookupFingerprint = null;
+        private static $chargeProducts = null;
+        private static $chargeShippingClasses = null;
+        public static function resetChargeLookupCache()
+        {
+        }
         /**
          * The ceiling is what keeps `unit_price * quantity` inside PHP's integer range —
          * without one the product overflows to a float and casts back to a wrapped total.
@@ -7354,6 +7380,9 @@ namespace FluentCart\App\Helpers {
         {
         }
         public static function loadBundleChild(array $variants, $select = ['id', 'variation_title']): array
+        {
+        }
+        public static function formatBundleChildTitle($productTitle, $variationTitle): string
         {
         }
         /**
@@ -9196,6 +9225,18 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         public function localizeData(): array
         {
         }
+        public function blockAttributes(): array
+        {
+        }
+        public function useContext(): array
+        {
+        }
+        protected function skipInnerBlocks(): bool
+        {
+        }
+        private function renderTemplate(array $attributes, $block): string
+        {
+        }
         public function render(array $shortCodeAttribute, $block = null): string
         {
         }
@@ -9421,6 +9462,47 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         public function render(array $shortCodeAttribute, $block = null): string
+        {
+        }
+    }
+    /**
+     * Quick view trigger for the current product of a product loop. It opens the same
+     * modal as View Options; the card script places it beside the buy button or on the image.
+     * The editor sets Position from where the block sits: in the image block, or beside the button.
+     */
+    class ProductQuickViewBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-quick-view';
+        const POSITIONS = ['button', 'image'];
+        const SHOW_ON = ['always', 'hover'];
+        const DISPLAYS = ['icon', 'icon_text'];
+        // Where on the image, as the badges have it; the first is the default.
+        const IMAGE_POSITIONS = ['bottom-center', 'bottom-left', 'bottom-right', 'top-left', 'top-center', 'top-right'];
+        public function init(): void
+        {
+        }
+        public function ancestor(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        public function blockAttributes(): array
+        {
+        }
+        public function getScripts(): array
+        {
+        }
+        public function getStyles(): array
+        {
+        }
+        public function localizeData(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+        private static function pick(array $attributes, string $key, array $allowed): string
         {
         }
     }
@@ -10438,6 +10520,45 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
     }
+    /**
+     * Attribute swatches (colour, image or label per variant) for the current product
+     * of a product loop: Products, Product Carousel or Related Products.
+     */
+    class ProductSwatchesBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
+    {
+        protected static string $editorName = 'product-swatches';
+        public function init(): void
+        {
+        }
+        public function blockAttributes(): array
+        {
+        }
+        public function ancestor(): array
+        {
+        }
+        public function supports(): array
+        {
+        }
+        public function getScripts(): array
+        {
+        }
+        public function getStyles(): array
+        {
+        }
+        public function localizeData(): array
+        {
+        }
+        /**
+         * Attribute groups with a few real values each, so the editor preview shows what the
+         * chosen attributes will look like rather than a fixed sample.
+         */
+        private function getPreviewGroups(): array
+        {
+        }
+        public function render(array $shortCodeAttribute, $block = null)
+        {
+        }
+    }
     class ProductTitleBlockEditor extends \FluentCart\App\Hooks\Handlers\BlockEditors\BlockEditor
     {
         protected static string $editorName = 'product-title';
@@ -10551,6 +10672,7 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp\InnerBlocks {
         use \FluentCart\Api\Contracts\CanEnqueue;
         public static $parentBlock = 'fluent-cart/products';
         public array $blocks = [];
+        private const CARD_ELEMENTS = ['ProductTitleBlock', 'ProductPriceBlock', 'ProductImageBlock', 'ProductButtonBlock'];
         public static function textBlockSupport(): array
         {
         }
@@ -10573,6 +10695,16 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp\InnerBlocks {
         {
         }
         public function renderProductActionContainer($attributes, $content, $block)
+        {
+        }
+        // Saved pages and patterns keep their Floating card, so the frontend hides the switch from the card itself.
+        // A grid-only layout also shows the grid, so a block saved in list view is not left without a way back.
+        public function hideViewSwitcherContext($context, $parsedBlock, $parentBlock)
+        {
+        }
+        // Follows the card the editor's Layout panel does: the first current Product Card straight in the first
+        // product loop. Null when there is no such loop.
+        private function firstCardIsGridOnly(array $blocks): ?bool
         {
         }
         public function renderFilterViewSwitcher($attributes, $content, $block)
@@ -10642,9 +10774,6 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors\ShopApp\InnerBlocks {
         {
         }
         public function renderProductPaginatorNumber($attributes, $content, $block)
-        {
-        }
-        private function renderPaginatorItems($paginator, $paginationJump = 3)
         {
         }
         public function getInitialProducts($block = null)
@@ -12935,6 +13064,13 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         /**
+         * Turn on the FluentHub MCP server, or another Fluent plugin's MCP, from the card.
+         * Turn on only. FluentHub checks the capability again and does the switching.
+         */
+        public function enableHub(\FluentCart\Framework\Http\Request\Request $request)
+        {
+        }
+        /**
          * One-click FluentHub install. The free plugin can only detect + trigger;
          * the actual installer lives in a Fluent Pro plugin (FluentCart Pro, or any
          * Fluent product) that hooks the site-wide `fluent_toolkit/*` contract. With
@@ -13138,6 +13274,12 @@ namespace FluentCart\App\Http\Controllers {
         {
         }
         public function markAsPaid(\FluentCart\Framework\Http\Request\Request $request, \FluentCart\App\Models\Order $order)
+        {
+        }
+        private function gatewayReceivedResponse(\FluentCart\App\Models\OrderTransaction $charge)
+        {
+        }
+        private function gatewayTitle($method)
         {
         }
         public function handleBulkActions(\FluentCart\Framework\Http\Request\Request $request)
@@ -15204,7 +15346,8 @@ namespace FluentCart\App\Http\Requests {
         /**
          * Drop the subscription fields from any variant saved as one-time, so a
          * product switched back to a single payment does not keep billing settings
-         * the merchant can no longer see.
+         * the merchant can no longer see. An empty title on a simple product's
+         * variant takes the product title, as core sets it on create.
          *
          * This does NOT fill missing keys. The block below it — which rebuilt
          * `other_info` and `fulfillment_type` from defaults, as ProductRequest still
@@ -15215,7 +15358,8 @@ namespace FluentCart\App\Http\Requests {
          * Models/Product/productUpdatePayload.js by merging each change record with
          * the variation it came from.
          *
-         * @return array The request data, with dead subscription fields removed.
+         * @return array The request data, with dead subscription fields removed and
+         *               empty simple variant titles filled.
          */
         public function beforeValidation()
         {
@@ -15227,6 +15371,21 @@ namespace FluentCart\App\Http\Requests {
         {
         }
         function validateTaxClassSlug($attribute, $value): ?string
+        {
+        }
+        /** @var array|null times each sku appears in this save, keyed by lower-case sku */
+        private $skuCounts = null;
+        /** @var array ids of the stored variations that hold each sku of this save, keyed by that sku */
+        private $skuOwners = [];
+        public function validateSkuIsUnique($attribute, $value): ?string
+        {
+        }
+        // mbstring is optional on a WordPress host.
+        private function skuKey(string $sku): string
+        {
+        }
+        // One pass over the save and one query, so the check does not cost a query per variant.
+        private function loadSkuUsage(): void
         {
         }
         public function validatePostDate($attribute, $value): ?string
@@ -20009,6 +20168,7 @@ namespace FluentCart\App\Models {
      */
     class AttributeRelation extends \FluentCart\App\Models\Model
     {
+        use \FluentCart\App\Models\Concerns\CanSearch;
         protected $table = 'fct_atts_relations';
         protected $fillable = ['group_id', 'term_id', 'object_id'];
         public function group()
@@ -23760,6 +23920,13 @@ namespace FluentCart\App\Models {
         {
         }
         /**
+         * Subscriptions whose parent order matches the store's order mode. With the mode guard
+         * on, a test-mode store never touches live subscriptions (and the reverse).
+         */
+        public function scopeInStoreMode($query)
+        {
+        }
+        /**
          * @deprecated Use canReactivate(). Kept as a backward-compatible alias.
          * @return bool
          */
@@ -24229,6 +24396,12 @@ namespace FluentCart\App\Modules\Data {
         public static function getProductModel($postId)
         {
         }
+        /**
+         * The products the current page already loaded, keyed by post ID.
+         */
+        public static function getCachedProducts(): array
+        {
+        }
         public static function setProductsCache($products)
         {
         }
@@ -24340,7 +24513,7 @@ namespace FluentCart\App\Modules\FluentPlayer {
         }
         /**
          * A FluentPlayer failure must never break the product page, but it must not
-         * vanish either: it is logged under WP_DEBUG and exposed as an action.
+         * vanish either: it is exposed as an action.
          */
         protected static function reportFailure(string $stage, int $mediaId, \Throwable $e): void
         {
@@ -24902,7 +25075,7 @@ namespace FluentCart\App\Modules\Integrations {
     }
     class IntegrationHelper
     {
-        public static function validateAndFormatIntegrationFeedSettings(array $integration, $args = [])
+        public static function validateAndFormatIntegrationFeedSettings($integration, $args = [])
         {
         }
         public static function formatFeedDataForEditing($meta, $args = [])
@@ -24998,6 +25171,19 @@ namespace FluentCart\App\Modules\MCP {
         private static function wrapExecuteCallback($toolName, $callback, $declaredParams = [])
         {
         }
+        /**
+         * Give WordPress' own input validation error the JSON shape of every other tool error.
+         * WordPress raises it before the tool runs, as plain text with no code and no field.
+         * Hooked on wp_ability_validate_input.
+         *
+         * @param true|\WP_Error $validity
+         * @param mixed           $input
+         * @param string          $abilityName
+         * @return true|\WP_Error
+         */
+        public static function structuredInputError($validity, $input, $abilityName)
+        {
+        }
     }
     /**
      * Bootstrap for FluentCart's Model Context Protocol (MCP) integration.
@@ -25045,6 +25231,36 @@ namespace FluentCart\App\Modules\MCP {
         {
         }
         /**
+         * After a tool call on the FluentCart server, send its result once.
+         *
+         * The adapter (0.7) always sends a result as JSON text and again as `structuredContent`,
+         * and some AI apps give the model both. The response hook is added here, so it exists
+         * only on a request that ran a FluentCart tool. That includes a call through the
+         * FluentHub router, which runs this filter with the FluentCart server; sendResultOnce()
+         * leaves that response to the hub by checking the route.
+         *
+         * @param mixed  $result The tool result, returned as is.
+         * @param array  $args
+         * @param string $toolName
+         * @param mixed  $tool
+         * @param mixed  $server The adapter's server object.
+         */
+        public function armSingleResultCopy($result, $args = [], $toolName = '', $tool = null, $server = null)
+        {
+        }
+        /**
+         * Drop `structuredContent` from a result that also has its text. No FluentCart tool
+         * declares an output schema, so the text alone is a valid result.
+         *
+         * @param \WP_HTTP_Response|mixed $response
+         * @param \WP_REST_Server|mixed   $server
+         * @param \WP_REST_Request|mixed  $request
+         * @return \WP_HTTP_Response|mixed
+         */
+        public function sendResultOnce($response, $server = null, $request = null)
+        {
+        }
+        /**
          * Register the dedicated FluentCart MCP server. Endpoint defaults to
          * /wp-json/fluent-cart/mcp (sibling to, but distinct from, the admin REST
          * namespace so it doesn't get caught by that policy stack).
@@ -25052,6 +25268,15 @@ namespace FluentCart\App\Modules\MCP {
          * @param object $adapter The \WP\MCP\Core\McpAdapter instance.
          */
         public function registerCustomServer($adapter)
+        {
+        }
+        /**
+         * What the server tells an AI app on connect, and what the FluentHub router returns
+         * from its help action: the rules that hold for every tool, so no tool repeats them.
+         * Plain English, not translated: the model reads it, and it names exact tools,
+         * parameters and values. Sent on every help call, so keep it short.
+         */
+        public static function serverInstructions()
         {
         }
         /**
@@ -25068,6 +25293,50 @@ namespace FluentCart\App\Modules\MCP {
          * Toolkit actually applies them, so there's no cost when it's absent.
          */
         public static function registerWithToolkit()
+        {
+        }
+        /**
+         * Let FluentCart's own users reach the FluentCart tools through the FluentHub URL.
+         * FluentHub admits administrators by default; a store manager is not one. The rule is
+         * the one the direct endpoint uses (PermissionGate::transport), and only for our slug.
+         *
+         * @param bool          $allowed
+         * @param string        $slug    The product FluentHub asks about.
+         * @param \WP_User|null $user
+         * @return bool
+         */
+        public static function vouchForStoreUser($allowed, $slug = '', $user = null)
+        {
+        }
+        /**
+         * What FluentHub says about the one-URL connection, for the MCP settings screen, or
+         * null when FluentHub is absent or speaks a contract version this code does not know
+         * (fluent-toolkit docs/mcp-product-connect.md). Read through the filter, never its classes.
+         *
+         * @return array|null
+         */
+        public static function hubState()
+        {
+        }
+        /**
+         * Ask FluentHub to turn on its MCP server ('hub') or another Fluent plugin's MCP (its
+         * slug). FluentHub checks the capability; there is no way to turn anything off here.
+         *
+         * @param string $target
+         * @return array{ok: bool, status: int, message: string}
+         */
+        public static function enableHub($target)
+        {
+        }
+        /**
+         * The name an AI app gives this store's direct connection: "cart-" plus the site
+         * address. An app refuses a second connection with a name it already has, so two stores
+         * must differ. The site part is at most 14 characters: the app names a tool
+         * mcp__{name}__{tool} and allows 64 characters for it.
+         *
+         * @param string|null $homeUrl Defaults to this site.
+         */
+        public static function clientServerName($homeUrl = null)
         {
         }
         /**
@@ -25139,6 +25408,8 @@ namespace FluentCart\App\Modules\MCP\Support {
         // Applied on non-custom conditions only: custom callbacks (searchByFullName,
         // searchByPayerEmail) consume their advertised labels verbatim.
         const OPERATOR_ALIASES = ['equals' => '=', 'not_equals' => '!='];
+        // Catalog key of the label filter as the admin defines it; advertised as labels.label.
+        const LEGACY_LABEL_KEY = 'labels.customer_email';
         /**
          * Entities that expose advanced search, keyed by the public MCP name.
          * Each maps to its admin filter class, the capability that gates reading
@@ -25513,46 +25784,6 @@ namespace FluentCart\App\Modules\MCP\Support {
         {
         }
         // -----------------------------------------------------------------
-        // Output schema (advertised to clients; not validated server-side)
-        // -----------------------------------------------------------------
-        /**
-         * JSON Schema fragment for the full money object returned by money(). Inlined
-         * by each tool's output_schema (rather than a $ref) so it never depends on the
-         * client validator resolving $defs across JSON-Schema draft versions.
-         *
-         * @return array
-         */
-        public static function moneyDef()
-        {
-        }
-        /**
-         * JSON Schema for the shared meta block. Permissive (extra keys allowed) so a
-         * tool can add its own meta (mode, date_basis, page, warnings, …) without a
-         * client that validates structuredContent tripping on the extras.
-         *
-         * @param array $extraProps additional documented meta properties for this tool
-         * @return array
-         */
-        public static function metaSchema(array $extraProps = [])
-        {
-        }
-        /**
-         * Wrap a `data` schema in the canonical { summary, data, meta } envelope every
-         * tool returns.
-         *
-         * `data` keys are DESCRIBED but not required: the fields[] projection may prune
-         * them and summary_only omits records, so a client should treat declared data
-         * keys as optional. The adapter advertises this to the model but does not
-         * validate results against it, so it is documentation, not a runtime gate.
-         *
-         * @param array $dataSchema JSON Schema for the tool's data payload
-         * @param array $metaProps  extra documented meta properties
-         * @return array
-         */
-        public static function envelopeSchema(array $dataSchema, array $metaProps = [])
-        {
-        }
-        // -----------------------------------------------------------------
         // Money
         // -----------------------------------------------------------------
         /**
@@ -25594,6 +25825,40 @@ namespace FluentCart\App\Modules\MCP\Support {
         // -----------------------------------------------------------------
         // Dates
         // -----------------------------------------------------------------
+        /**
+         * Whether a date input starts with a real calendar day. PHP alone is too lenient:
+         * it reads "x" as a timezone and rolls 2026-02-31 into March.
+         */
+        public static function isReadableDate($value)
+        {
+        }
+        /**
+         * A date filter bound as a stored UTC 'Y-m-d H:i:s', or null when it is not a date.
+         *
+         * A value with no offset is store time, as in the report windows, so a list and a
+         * report agree on what a day is; a day alone covers the whole store day. A value
+         * with an offset or Z is that exact moment.
+         *
+         * @param bool $isEnd true for an upper bound: a day alone then ends at 23:59:59
+         */
+        public static function storeDateBound($value, $isEnd = false)
+        {
+        }
+        /**
+         * The error for the first unreadable date among the named params, or null.
+         */
+        public static function unreadableDateError(array $params, array $fields)
+        {
+        }
+        /**
+         * The error for a start bound later than its end bound, or null. A reversed filter
+         * matches nothing, which reads as "no records" instead of a mistake.
+         *
+         * @param array $pairs after-param => before-param
+         */
+        public static function reversedBoundsError(array $params, array $pairs)
+        {
+        }
         /**
          * Normalize any stored datetime to an ISO-8601 UTC string. Accepts a
          * DateTime, a {date,timezone} object, or a Y-m-d H:i:s string (DB values
@@ -25682,12 +25947,17 @@ namespace FluentCart\App\Modules\MCP\Support {
      *
      * The billing rules it encodes (single source of truth for both tools):
      *   - Anchor on next_billing_date, never created_at.
-     *   - Step by the subscription's own interval.
+     *   - Step by the subscription's own interval, month steps clamped to the month
+     *     end as the billing engine does (SubscriptionHelper::addBillingInterval).
+     *     A config billing_schedule wins over the interval slug, as in billing.
      *   - A finite (bill_times > 0) subscription stops after its remaining bills;
      *     a perpetual one runs to the horizon.
+     *   - A finite installment already past due is still owed: it counts at as_of,
+     *     as in the installments report. A perpetual past anchor moves forward.
      *
-     * No WordPress, no models — plain arrays of integer cents, so it is unit-tested
-     * without a database and both callers get identical numbers.
+     * No models — plain arrays of integer cents, so it is unit-tested without a
+     * database and both callers get identical numbers. A billing_schedule step needs
+     * WordPress (SubscriptionHelper).
      *
      * PHP 7.4 safe: no null-safe, no match, no named args, no enums, no union types.
      */
@@ -25707,19 +25977,30 @@ namespace FluentCart\App\Modules\MCP\Support {
          *     'recur'           => int cents per charge,
          *     'remaining_bills' => int (finite) | -1 (perpetual/unbounded),
          *     'anchor'          => 'Y-m-d H:i:s' UTC next-bill anchor,
+         *     'schedule'        => optional, SubscriptionHelper::getBillingSchedule(),
          *   ]
          *
          * @param array  $projSubs      descriptors (see above)
          * @param int    $asOfTs        unix ts — never bill before this instant
          * @param int    $horizonEndTs  unix ts — never bill after this instant
          * @param string $bucket        'day' | 'week' | 'month'
+         * @param \DateTimeZone|null $tz timezone of the bucket keys (the store's, as the reports bucket); UTC when null
+         * @param int|null $nowTs   unix ts of now; null treats as_of as now
          *
          * @return array{
          *   buckets: array<string, array{finite:int,recurring:int,finite_count:int,recurring_count:int}>,
          *   recurring_next_30d:int, recurring_next_90d:int, by_interval_next_30d: array<string,int>
          * } buckets are period-sorted; the next_30d/90d scalars are relative to as_of.
          */
-        public static function project(array $projSubs, $asOfTs, $horizonEndTs, $bucket)
+        public static function project(array $projSubs, $asOfTs, $horizonEndTs, $bucket, $tz = null, $nowTs = null)
+        {
+        }
+        /**
+         * One billing cycle later. Month-based intervals keep the day of month and clamp it into a
+         * shorter month (Jan 31 -> Feb 28), as SubscriptionHelper::addBillingInterval() bills;
+         * a plain "+1 month" would roll Jan 31 into March and leave February empty.
+         */
+        public static function advance(\DateTimeImmutable $date, $interval, $schedule = null)
         {
         }
         /**
@@ -25875,6 +26156,8 @@ namespace FluentCart\App\Modules\MCP\Support {
          *   forward_statuses array of statuses that feed forward metrics, or ['all']
          *   include_schedule bool — emit payment_schedule[] (30d/90d scalars always computed)
          *   one_time         ['gross'=>int,'refunds'=>int,'units'=>int,'orders'=>int] | null
+         *   one_time_lifetime_net int — all-time one-time net for totals when one_time is windowed
+         *   bucket_timezone  \DateTimeZone — timezone of the payment_schedule periods (default UTC)
          *
          * Returns all money as integer cents; the tool wraps it through money().
          */
@@ -25887,7 +26170,7 @@ namespace FluentCart\App\Modules\MCP\Support {
          *   recurring_next_30d/90d   int cents of recurring renewals within 30/90 days of as_of
          *   by_interval_next_30d     [ interval => int cents ] recurring renewals within 30d
          */
-        private static function project(array $projSubs, $asOfTs, $horizonMonths, $bucket)
+        private static function project(array $projSubs, $asOfTs, $horizonMonths, $bucket, $tz = null)
         {
         }
     }
@@ -25995,8 +26278,8 @@ namespace FluentCart\App\Modules\MCP\Tools {
      * Discovery tools — the agent's entry point into a FluentCart store.
      *
      * `get-store-context` is the documented "call this first" tool. One call tells
-     * the agent who it is, what it's allowed to do, the store's money/time
-     * conventions, headline numbers, and every valid enum value — so it never has
+     * the agent who it is, what it's allowed to do, the store's currency and
+     * timezone, headline numbers, and every valid enum value — so it never has
      * to guess a status string or invent a currency format. It's cached (60s) and
      * invalidated when reference data changes, because it's called every session.
      *
@@ -26114,7 +26397,6 @@ namespace FluentCart\App\Modules\MCP\Tools {
         private static function safeMoney(callable $fn)
         {
         }
-        /* translators: %1$s: revenue amount, %2$d: orders in 30 days, %3$d: total customers */
         private static function summary($stats)
         {
         }
@@ -26123,18 +26405,9 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         /**
-         * Task → tool routing table so an agent picks the right ability among ~30
-         * without trial and error, grouped by intent (discovery / find / load /
-         * analytics / write).
-         *
-         * Derived from the LIVE registry so a newly registered tool can never
-         * silently go missing — each is annotated with a curated "reach for this
-         * when…" hint, and any tool without one still appears under its label.
-         * Filterable so pro / add-on tools can slot themselves in.
+         * The full rules are the server instructions (MCPInit::serverInstructions()). Some MCP
+         * clients never show those to the model, so the rules it must not miss are repeated here.
          */
-        private static function toolIndex()
-        {
-        }
         private static function guidelines()
         {
         }
@@ -26351,9 +26624,6 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         private static function total($paginator)
-        {
-        }
-        private static function toDbDate($value)
         {
         }
         private static function invalidDateError($field)
@@ -26591,9 +26861,6 @@ namespace FluentCart\App\Modules\MCP\Tools {
         private static function total($paginator)
         {
         }
-        private static function toDbDate($value)
-        {
-        }
         private static function invalidDateError($field)
         {
         }
@@ -26601,8 +26868,8 @@ namespace FluentCart\App\Modules\MCP\Tools {
     /**
      * get-upcoming-payments — the renewal cohort view: expected billings grouped by
      * date over a window, separating finite (split-pay) installments from open-ended
-     * recurring renewals, with an at_risk figure derived from past_due subscriptions
-     * and the store's historical renewal success rate.
+     * recurring renewals, with an at_risk figure: what the overdue subscriptions
+     * (past_due, expiring, failing) are expected to bill in the window.
      *
      * It anchors on next_billing_date (never created_at), steps by each
      * subscription's interval, and stops finite plans at their remaining bills —
@@ -26615,7 +26882,9 @@ namespace FluentCart\App\Modules\MCP\Tools {
     class PaymentScheduleTools
     {
         /** Statuses that produce a future charge and so feed the projection. */
-        const FORWARD_STATUSES = ['active', 'past_due', 'trialing'];
+        const FORWARD_STATUSES = ['active', 'trialing', 'past_due', 'expiring', 'failing'];
+        // Overdue, as InstallmentReportService::OVERDUE: a payment was due and is not collected yet
+        const AT_RISK_STATUSES = ['past_due', 'expiring', 'failing'];
         /** Safety ceiling on subscriptions loaded for one projection. */
         const MAX_SUBS = 50000;
         public static function definitions()
@@ -26656,10 +26925,6 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         private static function resolveWindow($params)
-        {
-        }
-        /** Parse a date bound to UTC 'Y-m-d H:i:s'; date-only snaps to the day edge. */
-        private static function instant($value, $tz, $isEnd)
         {
         }
         private static function summary($totals, $atRiskCents, $currency, $bucketCount)
@@ -26755,10 +27020,6 @@ namespace FluentCart\App\Modules\MCP\Tools {
          * @return array{from:string,to:string,range:string,basis:string}|\WP_Error
          */
         private static function resolveWindow($params)
-        {
-        }
-        /** Parse a date bound (store timezone unless it has an offset) to a UTC 'Y-m-d H:i:s'; null on failure. */
-        private static function dayBound($value, $tz, $endOfDay)
         {
         }
     }
@@ -26871,7 +27132,7 @@ namespace FluentCart\App\Modules\MCP\Tools {
         /**
          * The admin Overview's Needs Attention card, by its rules: failing subscriptions, a dispute rate above the card
          * networks' 0.75% monitoring line, installment plans with a failed payment, and a refund rate that rose at least
-         * 2 points and half again against the prior period. Subscription MRR in currency units, other amounts in cents.
+         * 2 points and half again against the prior period. Amounts in currency units.
          */
         private static function needsAttention(array $range, $currency)
         {
@@ -27001,6 +27262,13 @@ namespace FluentCart\App\Modules\MCP\Tools {
         public static function getInstallmentReport($params = [])
         {
         }
+        /**
+         * The named keys of a report array from cents to currency units, at any depth. A key that holds an array
+         * (due_soon.overdue) is walked, not converted.
+         */
+        private static function centsToDecimal(array $data, array $keys)
+        {
+        }
         public static function getVariationRevenue($params = [])
         {
         }
@@ -27052,8 +27320,17 @@ namespace FluentCart\App\Modules\MCP\Tools {
          * Public so the single source of truth for MCP date-window resolution is
          * shared (e.g. list-transactions) instead of duplicated — every tool then
          * accepts the identical range vocabulary and store-day semantics.
+         *
+         * @return array|\WP_Error an error when a custom window starts after it ends
          */
         public static function resolveRange($params)
+        {
+        }
+        /**
+         * A window that starts after it ends matches nothing: an error, not a report of zeros.
+         * Public for the tools that resolve their own window.
+         */
+        public static function reversedRangeError($startUtc, $endUtc, array $fields)
         {
         }
         /**
@@ -27064,7 +27341,7 @@ namespace FluentCart\App\Modules\MCP\Tools {
         }
         /**
          * The admin Customers overview for a date range: new, returning and renewing customers and their net, repeat
-         * purchase rate and average lifetime value. Amounts in cents.
+         * purchase rate and average lifetime value. Amounts in currency units.
          */
         private static function customerOverview($params)
         {
@@ -27219,9 +27496,6 @@ namespace FluentCart\App\Modules\MCP\Tools {
         {
         }
         private static function total($paginator)
-        {
-        }
-        private static function toDbDate($value)
         {
         }
         private static function invalidDateError($field)
@@ -34967,6 +35241,8 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
         const MANUAL_FALLBACK_KEY = 'subscription_manual_fallback';
         /** Config key stamped at checkout — the durable per-subscription record of the mode it was born under. */
         const CONFIG_KEY = 'management_mode';
+        /** Transaction meta: this renewal payment saves the method and converts manual → system. */
+        const CONVERT_TO_SYSTEM_META = 'convert_to_system';
         public static function getMode(): string
         {
         }
@@ -34997,6 +35273,31 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
          * collection_method; only a new subscription cart reads the store setting.
          */
         public static function currentCheckoutIsSystem($gateway): bool
+        {
+        }
+        /**
+         * A manual sub may become `system` when its renewal invoice is paid through a
+         * gateway that can charge a saved method, while auto-charge is on.
+         */
+        public static function canConvertToSystem($subscription, $gateway): bool
+        {
+        }
+        public static function currentCheckoutCanConvertToSystem($gateway): bool
+        {
+        }
+        /**
+         * Decided once at payment start and stored on the transaction, so confirmation
+         * never re-reads settings that may have changed meanwhile. Cleared otherwise:
+         * a retried payment reuses the same transaction.
+         *
+         * @param \FluentCart\App\Services\Payments\PaymentInstance $paymentInstance
+         * @param \FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway $gateway
+         * @return bool true when the payment must save the method for conversion
+         */
+        public static function flagSystemConversion($paymentInstance, $gateway): bool
+        {
+        }
+        public static function transactionConvertsToSystem($transaction): bool
         {
         }
         /**
@@ -35291,6 +35592,19 @@ namespace FluentCart\App\Modules\Subscriptions\Services {
         {
         }
         /**
+         * manual → system after a renewal invoice payment saved a reusable method.
+         * Runs after recordManualRenewal(), so this cycle's schedule is already set.
+         *
+         * @param \FluentCart\App\Models\Subscription $subscription
+         * @param array $billingInfo active_payment_method meta, with vendor_method_id
+         * @param string $vendorCustomerId gateway customer the saved method belongs to
+         * @param string $gatewaySlug
+         * @return bool true when the subscription was converted
+         */
+        public static function promoteToSystem($subscription, array $billingInfo, string $vendorCustomerId, string $gatewaySlug): bool
+        {
+        }
+        /**
          * system → manual: cancel the queued charges, drop the charge bookkeeping, and
          * put any invoice that was waiting for an automatic charge back into the manual
          * flow (pending + the pay-now invoice email it was deliberately not sent).
@@ -35538,7 +35852,10 @@ namespace FluentCart\App\Modules\Tax {
         public function register()
         {
         }
-        private function resolvePriceSuffix($variant)
+        public function getPriceSuffix($variant, ?array $settings = null): string
+        {
+        }
+        private function resolvePriceSuffix($variant, ?array $settings = null)
         {
         }
         public function renderTaxRow($cart, $atts = '')
@@ -35808,7 +36125,22 @@ namespace FluentCart\App\Modules\Templating {
         public static function reviewJsVars(): array
         {
         }
+        /** The single product page's scripts and styles, its reviews section's included. For what shows reviews. */
         public static function loadSingleProductAssets()
+        {
+        }
+        /**
+         * The single product bundle without its reviews section: gallery, zoom, buy section and buttons.
+         * For product parts and cards (their Quick View opens the buy section), which show no reviews.
+         */
+        public static function loadSingleProductAssetsWithoutReviews()
+        {
+        }
+        /**
+         * The handles stay the bundle's own, so a page that needs the reviews section after the rest is
+         * loaded adds only the review files. Each part checks the queue, not a flag, so it follows resets.
+         */
+        private static function loadSingleProductBundle(bool $withReviews)
         {
         }
         public static function loadAddToCartCss()
@@ -35885,6 +36217,27 @@ namespace FluentCart\App\Modules\Templating\BlockTemplates {
          * @return string
          */
         public function getDescription()
+        {
+        }
+        /**
+         * Stores that created their Shop page after layout cards shipped get the filters on, which
+         * the Shop page uses: the Sort control only renders with them.
+         */
+        private function productsAttributes(): string
+        {
+        }
+        /**
+         * Stores that created their Shop page after layout cards shipped get the Shop page's action bar
+         * (Grid/List and Sort). Other stores keep the switcher alone.
+         */
+        private function actionBar(): string
+        {
+        }
+        /**
+         * Stores that created their Shop page after layout cards shipped get the Classic layout card, as the
+         * Products block inserts it. Other stores keep the legacy card (see Pages::LAYOUT_CARD_OPTION).
+         */
+        private function loopCard(): string
         {
         }
         public function getDefaultTemplate()
@@ -36246,7 +36599,28 @@ namespace FluentCart\App\Modules\Templating\Bricks {
         public function getTagsPairs()
         {
         }
+        public function renderContent($content, $post, $context = 'text')
+        {
+        }
         public function renderValue($tag, $post, $context = 'text')
+        {
+        }
+    }
+    /**
+     * Builder canvas only: warns that the element moves to the Bricks add-on in the next release.
+     * init() covers both the first canvas load and Bricks' re-render, which skips render filters.
+     */
+    trait MovingToBricksAddonNotice
+    {
+        public function init()
+        {
+        }
+        // Inside the root tag, so Bricks still selects the element by its root.
+        public static function addMovingToBricksAddonNotice($elementHtml, $elementLabel)
+        {
+        }
+        // Install in place for users who can; the download page for everyone.
+        private static function bricksAddonLinksHtml()
         {
         }
     }
@@ -36255,6 +36629,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class BuySection extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-product-buy-section';
         public $icon = 'ti-bag fluent-cart-element-icon';
@@ -36283,6 +36658,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class PriceRange extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-price-range';
         public $icon = 'ti-money fluent-cart-element-icon';
@@ -36301,6 +36677,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     }
     class ProductContent extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-product-content';
         public $icon = 'ion-md-list-box fluent-cart-element-icon';
@@ -36317,6 +36694,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductGallery extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-product-gallery';
         public $icon = 'ti-gallery fluent-cart-element-icon';
@@ -36336,6 +36714,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductShortDescription extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-product-short-description';
         public $icon = 'ti-paragraph fluent-cart-element-icon';
@@ -36352,6 +36731,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductStock extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-product-stock';
         public $icon = 'ti-package fluent-cart-element-icon';
@@ -36374,6 +36754,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductTitle extends \Bricks\Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
         public $category = 'fluent-cart';
         public $name = 'fct-product-title';
         public $icon = 'ti-text fluent-cart-element-icon';
@@ -36394,11 +36775,18 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
     // Exit if accessed directly
     class ProductsCollection extends \Bricks\Custom_Render_Element
     {
+        use \FluentCart\App\Modules\Templating\Bricks\MovingToBricksAddonNotice;
+        /** Parts of core's Classic layout the Classic card adds, each with its own settings. */
+        const CLASSIC_PARTS = ['rating', 'swatches', 'quick_view'];
         public $category = 'fluent-cart';
         public $name = 'fct-products';
         public $icon = 'ti-archive fluent-cart-element-icon';
         protected $cssRoot = '.fct-products-wrapper-inner .fct-products-container';
         public function enqueue_scripts()
+        {
+        }
+        /** The stagger's height rules live in the layout stylesheet, so a Fields card with Masonry needs it too. */
+        private function needsLayoutAssets(): bool
         {
         }
         public function get_label()
@@ -36428,7 +36816,7 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         /**
          * Render product loop.
          */
-        private function renderProducts($products)
+        private function renderProducts($products, $cardLayout = '', $priceFormat = 'starts_from', array $layoutOptions = [])
         {
         }
         /**
@@ -36452,6 +36840,14 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         private function legacyShowEmptyKey($taxonomy)
         {
         }
+        /** Shown only while the card layout is not a grid-only one (Floating), which has no list view or switch. */
+        private function notGridOnlyCondition(): array
+        {
+        }
+        /** The saved layout when core can render it, else '' for the Classic (Fields) card. */
+        private function selectedCardLayout()
+        {
+        }
         private function setBricksQuery()
         {
         }
@@ -36462,6 +36858,147 @@ namespace FluentCart\App\Modules\Templating\Bricks\Elements {
         {
         }
         private function getAjaxDefaultFilters(array $defaultFilters, array $settings): array
+        {
+        }
+    }
+}
+namespace FluentCart\App\Modules\Templating\Bricks {
+    /**
+     * Card layouts in Bricks elements, here and in the Bricks add-on. "Classic" is the element's own
+     * card, saved as '' or 'classic'; core's Classic preset is not offered. A layout has the Classic
+     * card's settings with its own values: a Card Elements list per layout and a copy of each badge
+     * setting. Its badges are on for a new element (Bricks saves a checkbox's default when the element
+     * is added and drops the setting when it is unticked).
+     */
+    class LayoutCardControls
+    {
+        /** The element's own card. */
+        const ELEMENT_CARD = 'classic';
+        /** Tells an add-on that core has the shared Swatches panel (Gutenberg's). */
+        const SHARED_SWATCH_PANEL = true;
+        /** A layout's badge Show toggle => ProductCardRender layout_options key. */
+        const TOGGLES = ['layoutShowSaleBadge' => 'sale_badge', 'layoutShowSoldOutBadge' => 'sold_out_badge'];
+        /** The Classic card's badge settings => the badge block's own settings. */
+        const BADGE_SETTINGS = ['sale_badge' => ['saleBadgeText' => 'badge_text', 'saleBadgeShowPercentage' => 'show_percentage', 'saleBadgePercentageText' => 'percentage_text', 'saleBadgePriceSource' => 'price_source', 'saleBadgeShape' => 'badge_style', 'saleBadgePosition' => 'badge_position'], 'sold_out_badge' => ['soldOutBadgeText' => 'badge_text', 'soldOutBadgeShape' => 'badge_style', 'soldOutBadgePosition' => 'badge_position']];
+        /** A required condition for the Classic card ('' or 'classic'). */
+        public static function classicOnly(): array
+        {
+        }
+        /** A required condition for core's layouts. */
+        public static function layoutOnly(): array
+        {
+        }
+        /** A control's required condition(s) with the Classic-card condition added. */
+        public static function withClassicOnly($required): array
+        {
+        }
+        /**
+         * Keeps the Classic card's settings in these groups to the Classic card, as a layout draws its
+         * own parts; a layout shows only its Show toggle there.
+         */
+        public static function classicOnlyInGroups(array $controls, array $groups): array
+        {
+        }
+        /**
+         * A layout's copy of each Classic badge setting in these groups, with the same defaults
+         * ("saleBadgeText" is "layoutSaleBadgeText"). The Classic settings stay the Classic card's.
+         */
+        public static function layoutBadgeControls(array $controls, array $groups): array
+        {
+        }
+        /** A Card Elements list for each layout, holding its own parts in its own order. */
+        public static function elementsControls(string $group): array
+        {
+        }
+        private static function elementsControl(string $layout, array $parts, string $group): array
+        {
+        }
+        /** Content and Style groups for a layout's Swatches, Product Rating and Quick View. */
+        public static function partGroups(array $classicParts = []): array
+        {
+        }
+        /**
+         * Each layout's own copy of its Swatches, Product Rating and Quick View settings, pre-filled
+         * with that layout's values ("layoutSwatchesMaxVisible_compact"), and their style settings.
+         * $classicParts are the parts the element's own card can draw; they get the Classic layout's.
+         */
+        public static function partControls(array $classicParts = []): array
+        {
+        }
+        /**
+         * The Classic card's Card Elements list, which draws core's Classic layout in any order. A new
+         * element starts with it; an element saved before, or one whose list is emptied, has none.
+         */
+        public static function classicElementsControl(string $group): array
+        {
+        }
+        /** The Classic card drawn from its Card Elements list, or '' for the element's own card. */
+        public static function classicListSelected(array $settings): string
+        {
+        }
+        /** @return array<string, string> Classic, then core's other layouts, for the select's options. */
+        public static function layoutOptions(): array
+        {
+        }
+        /** The saved layout when core can render it, else '' for the element's own card. */
+        public static function selected($value): string
+        {
+        }
+        /** ProductCardRender's layout_options from the selected layout's own settings. */
+        /**
+         * ProductCardRender's layout_options. $layout is the card drawn, when the element knows it:
+         * 'classic' for its Classic Card Elements list, whose badges are the Classic card's own settings.
+         */
+        public static function cardOptions(array $settings, bool $withSoldOut = true, ?string $layout = null): array
+        {
+        }
+        /**
+         * A layout part's saved settings; a setting not saved keeps the layout's. Show/Hide is a select,
+         * as Bricks drops an unticked checkbox and "off" would read as "never set".
+         */
+        private static function partValues(array $settings, string $part, string $layout, array $entries): array
+        {
+        }
+        /**
+         * The attribute pickers' options. In the builder each says how many values it has, as Gutenberg's list does;
+         * the storefront builds the same controls but never shows them, so it skips the count query.
+         */
+        private static function groupOptionsForPicker(): array
+        {
+        }
+        /** The element's own card's saved settings for one part, for ProductCardRender::renderCardPart(). */
+        public static function classicPartSettings(array $settings, string $part): array
+        {
+        }
+        /** The layouts whose card has this part, with Classic first when the element's own card draws it. */
+        private static function layoutsWith(string $part, array $classicParts = []): array
+        {
+        }
+        private static function partGroup(string $part): string
+        {
+        }
+        private static function partKey(string $part, string $name, string $layout): string
+        {
+        }
+        /**
+         * Each part's settings: name => attribute (the block's), the block's default, the control.
+         * 'checkbox' is an on/off switch (a missing one is off); 'onImage' shows only on the picture.
+         */
+        private static function partSettings(): array
+        {
+        }
+        /** Style settings for a layout's Swatches, Product Rating and Quick View; the same for every layout. */
+        private static function partStyleControls(): array
+        {
+        }
+        private static function layoutKey(string $key): string
+        {
+        }
+        private static function withCondition($required, array $condition): array
+        {
+        }
+        /** The conditions with each copied setting's key changed to its layout copy's. */
+        private static function renamedConditions($required, array $keys)
         {
         }
     }
@@ -36482,6 +37019,10 @@ namespace FluentCart\App\Modules\Templating {
         {
         }
         public function initSingleProductHooks()
+        {
+        }
+        // The card layout a site picks for Related Products on the single product page; empty keeps the standard card.
+        private function relatedCardLayout($productId): string
         {
         }
         public function filterSingleProductContent($content)
@@ -42325,6 +42866,104 @@ namespace FluentCart\App\Services\Filter {
         {
         }
     }
+    /**
+     * Shop filters on variation attributes (Size, Colour...), keyed "attr_{groupId}".
+     */
+    class ShopAttributeFilter
+    {
+        const KEY_PREFIX = 'attr_';
+        // Defaults for maxGroups() and maxTerms(); the ceilings keep a filtered limit bounded.
+        const MAX_GROUPS = 10;
+        const MAX_GROUPS_CEILING = 50;
+        // As many as the sidebar can show, so every box a shopper checks reaches the query.
+        const MAX_TERMS_PER_GROUP = 200;
+        const MAX_TERMS_SHOWN = 200;
+        const MAX_TERMS_CEILING = 1000;
+        /** @var array<int, array{group: ?\FluentCart\App\Models\AttributeGroup, terms: \FluentCart\App\Models\AttributeTerm[]}> */
+        private static $groupCache = [];
+        /**
+         * Most attribute filters one sidebar shows and a URL can select.
+         * Filter: fluent_cart/shop_app/product_attribute/max_groups (int, default 10, 1–50).
+         */
+        public static function maxGroups(): int
+        {
+        }
+        /**
+         * Most values one attribute filter shows and a URL can select, kept equal so every shown box reaches the query.
+         * Filter: fluent_cart/shop_app/product_attribute/max_terms (int, default 200, 1–1000).
+         */
+        public static function maxTerms(): int
+        {
+        }
+        /** @var array<int, int> termId => product count */
+        private static $countCache = [];
+        /**
+         * Attribute groups for editor pickers (Gutenberg and the page builder add-ons), library order.
+         *
+         * @return array<int, array{id: int, title: string, type: string}>
+         */
+        public static function groupOptions(): array
+        {
+        }
+        public static function filterKey(int $groupId): string
+        {
+        }
+        /**
+         * The selected terms per group, from a shop "filters" payload.
+         *
+         * @param mixed $filters
+         * @return array<int, int[]> groupId => termIds
+         */
+        public static function parseSelection($filters): array
+        {
+        }
+        /**
+         * Keep products that have one active variant matching every selected group.
+         *
+         * Terms within a group are OR, groups are AND, and both must hold on the same
+         * variant: "M + Camel" must not match a product sold only in M Black and L Camel.
+         */
+        public static function apply($query, array $selection)
+        {
+        }
+        /**
+         * Published products per term, across the given groups. Counted live, like WordPress
+         * term counts are always current, so no write path has to clear a cache.
+         *
+         * @param int[] $groupIds
+         * @return array<int, int> termId => product count
+         */
+        public static function termCounts(array $groupIds): array
+        {
+        }
+        /**
+         * Sidebar filter entries for groups named in code (shortcode custom_filters), by slug or ID.
+         * Same shape the block editor saves, so the sidebar and the query need nothing else.
+         *
+         * @param string|array $groups "color,size" or ['color', 21]
+         */
+        public static function filterConfig($groups, bool $showCount = false, bool $showEmpty = false): array
+        {
+        }
+        /**
+         * Loads groups, their terms and counts in three queries, so a sidebar with
+         * several attribute filters does not query once per group. Each render reloads.
+         *
+         * @param int[] $groupIds
+         * @param int[] $groupIdsHidingUnusedTerms groups whose unused values are not shown
+         */
+        public static function preload(array $groupIds, array $groupIdsHidingUnusedTerms = []): void
+        {
+        }
+        /**
+         * One group as sidebar filter data, or null when it has nothing to show.
+         *
+         * @param int[] $checkedTermIds
+         */
+        public static function filterOptions(int $groupId, array $checkedTermIds = [], bool $hideEmpty = true): ?array
+        {
+        }
+    }
     class TaxFilter extends \FluentCart\App\Services\Filter\BaseFilter
     {
         public function applySimpleFilter(?string $search = null): void
@@ -47621,7 +48260,7 @@ namespace FluentCart\App\Services\Renderer {
          * content, or a bare CSS named color; anything else returns '' and
          * the caller drops the style attribute entirely.
          */
-        protected function safeCssColor($color): string
+        public static function safeCssColor($color): string
         {
         }
         /**
@@ -48640,6 +49279,153 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
     }
+    class ProductCardLayoutPresets
+    {
+        private static array $built = [];
+        public static function resetCache(): void
+        {
+        }
+        public static function all(): array
+        {
+        }
+        /** The layouts shown only as a grid (Floating), which get no Grid/List switch. */
+        public static function gridOnlyLayouts(): array
+        {
+        }
+        public static function isGridOnly(string $layout): bool
+        {
+        }
+        /** A layout's Product Card block, parsed as the editor saves it; null for an unknown layout. */
+        public static function cardBlock(string $layout): ?array
+        {
+        }
+        /**
+         * The Products block's loop with the Classic card, as the editor inserts it. For a template
+         * registered before init: it skips the registry check and the cardBlock() cache, which would
+         * otherwise keep a card built before the blocks exist.
+         */
+        public static function classicLoopMarkup(): string
+        {
+        }
+        /**
+         * A layout card with a builder's settings applied. 'swatches': false drops the swatch block,
+         * an array sets its settings; 'sale_badge', 'sold_out_badge' or 'rating' false drops that block,
+         * and a badge's array sets its settings. 'elements' (cardParts() keys) leaves out the parts not
+         * listed and orders the rest, each within its own area of the card. 'masonry' true staggers the cards.
+         */
+        public static function withCardOptions(array $cardBlock, array $options): array
+        {
+        }
+        /** A layout's parts in card order, as cardParts keys: image, quick_view, category, rating, ... */
+        public static function cardParts(string $layout): array
+        {
+        }
+        /** The Classic layout's parts in card order, for a builder's Classic Card Elements list. */
+        public static function classicCardParts(): array
+        {
+        }
+        /** The cardParts key a block draws, or null. */
+        private static function partOf(string $blockName): ?string
+        {
+        }
+        /** A layout's own settings for one part's block (cardParts key), as its template sets them. */
+        public static function partAttributes(string $layout, string $part): array
+        {
+        }
+        /**
+         * A Rating, Swatches or Quick View block for a builder's own card: the Classic layout's
+         * settings with the builder's over them. Null for any other part.
+         */
+        public static function partBlock(string $part, array $settings = []): ?array
+        {
+        }
+        private static function partsIn(array $nodes): array
+        {
+        }
+        /** The listed cardParts keys, in their order; unknown and repeated ones are left out. */
+        private static function cardElements($elements): array
+        {
+        }
+        /** The rating block's thresholds from a builder, kept in range. */
+        private static function ratingAttributes(array $settings): array
+        {
+        }
+        /** The Quick View block's placement from a builder; unknown values keep the layout's. */
+        private static function quickViewAttributes(array $settings): array
+        {
+        }
+        /** A badge block's own settings from a builder; unknown values keep the block's. */
+        private static function badgeAttributes(array $settings, bool $isSale): array
+        {
+        }
+        /**
+         * layout_options from a shortcode's comma list of parts to leave out, e.g. "sale_badge,rating".
+         * Shortcode attributes cannot carry JSON, so builders that render through a shortcode use this.
+         */
+        public static function hiddenCardParts(string $list): array
+        {
+        }
+        /** The card attributes a card layout shortcode takes; see shortcodeCardOptions(). */
+        public const SHORTCODE_CARD_ATTRIBUTES = ['masonry' => '', 'layout_hide' => '', 'swatch_count' => '', 'swatch_selected_name' => '', 'swatch_group_name' => '', 'swatch_sold_out' => '', 'quick_view' => ''];
+        /**
+         * layout_options from a shortcode's card attributes; an empty or unknown value keeps the layout's own:
+         * swatch_count (1-12, or 0 / all for every option), swatch_selected_name and swatch_group_name (yes/no), swatch_sold_out (normal, cross,
+         * hide), quick_view (image, button), masonry (yes) and layout_hide (see hiddenCardParts()).
+         */
+        public static function shortcodeCardOptions(array $atts): array
+        {
+        }
+        private static function applyCardOptions(array $block, array $drop, array $attributes, array $order): array
+        {
+        }
+        /** Sorts an area's parts by the builder's list; areas and other blocks keep their places. */
+        private static function orderParts(array $children, array $order): array
+        {
+        }
+        /** A swatch count as the swatches block saves it: exactly 0 is All, anything else 1-12. */
+        private static function swatchCount($value): int
+        {
+        }
+        /** The swatch block's own settings from a builder, typed as the block saves them. */
+        private static function swatchAttributes(array $settings): array
+        {
+        }
+        // What layout cards need when none are on the first page: AJAX pages and filters bring no assets.
+        public static function enqueueAssets(): void
+        {
+        }
+        private static function templateMarkup(array $nodes, bool $onlyRegistered = true): string
+        {
+        }
+        // A layout card's parts a builder can leave out or reorder, by the block that draws each.
+        private const CARD_PARTS = ['image' => 'fluent-cart/shopapp-product-image', 'quick_view' => 'fluent-cart/product-quick-view', 'category' => 'core/post-terms', 'rating' => 'fluent-cart/product-rating', 'title' => 'fluent-cart/shopapp-product-title', 'swatches' => 'fluent-cart/product-swatches', 'price' => 'fluent-cart/shopapp-product-price', 'button' => 'fluent-cart/shopapp-product-buttons'];
+        // The Classic layout draws these parts with the standard card's blocks.
+        private const CLASSIC_PART_BLOCKS = ['fluent-cart/product-image' => 'image', 'fluent-cart/product-title' => 'title', 'fluent-cart/price-range' => 'price'];
+        // The grid the card layouts are designed for.
+        private const GRID = ['view_mode' => 'grid', 'product_box_grid_size' => 3];
+        // The chosen option's name above the options: "OPTION · 500 G" for simple variations, "LIGHT" for attributes.
+        private const DEFAULT_SWATCHES = ['show_label' => true, 'show_group_name' => false, 'simple_show_label' => true];
+        // Two options with "OPTION · 6 EGGS" above them.
+        private const COMPACT_SWATCHES = ['max_visible' => 2, 'simple_max_visible' => 2, 'show_label' => true, 'show_group_name' => true, 'simple_show_label' => true];
+        // Two options alone, without a caption.
+        private const FLOATING_SWATCHES = ['max_visible' => 2, 'simple_max_visible' => 2, 'show_label' => false, 'show_group_name' => false, 'simple_show_label' => false];
+        // Two options and only the chosen one's name as the caption; the rest collapse into "+N".
+        // simple_show_label is the simple variations' group name ("Option"), so it is off like show_group_name.
+        private const FRAMED_SWATCHES = ['max_visible' => 2, 'simple_max_visible' => 2, 'show_label' => true, 'show_group_name' => false, 'simple_show_label' => false];
+        private const QUICK_VIEW_BESIDE_BUTTON = ['position' => 'button', 'display' => 'icon'];
+        // An eye and "Quick View" on the picture, shown on hover.
+        private const QUICK_VIEW_ON_IMAGE = ['position' => 'image', 'show_on' => 'hover', 'display' => 'icon_text'];
+        private static function group(string $className, array $children): array
+        {
+        }
+        /**
+         * @param array $footerQuickView Quick View settings for one right after the button, or [] for none.
+         * @param array $mediaQuickView  Quick View settings for one in the image block, or [] for none.
+         */
+        private static function template(string $layout, array $swatches, array $footerQuickView = [], array $mediaQuickView = []): array
+        {
+        }
+    }
     class ProductCardRender
     {
         protected $product;
@@ -48655,6 +49441,14 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function render()
+        {
+        }
+        // Renders the layout's blocks as a Product Loop does, so the card matches the block version.
+        /** A Rating, Swatches or Quick View block for this product, for a builder's own card; '' for another part. */
+        public function renderCardPart(string $part, array $settings = []): string
+        {
+        }
+        private function renderLayoutCard(array $cardBlock): string
         {
         }
         /**
@@ -48703,6 +49497,124 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         private function parseAttributes($atts)
+        {
+        }
+    }
+    /**
+     * Attribute swatches for product cards (one colour per term, with that colour's image).
+     *
+     * Attribute links and variant images are loaded for every product on the page at once,
+     * so a grid of cards costs a few queries, not a few per card.
+     */
+    class ProductCardSwatchesRenderer
+    {
+        /** @var array<int, array<int, int>> variantId => [groupId => termId] */
+        private static $variantTerms = [];
+        /** @var array<int, string> variantId => image url */
+        private static $variantImages = [];
+        /** @var array<int, \FluentCart\App\Models\AttributeTerm> */
+        private static $terms = [];
+        /** @var array<int, \FluentCart\App\Models\AttributeGroup> */
+        private static $groups = [];
+        /** @var array<int, true> products whose variants were already preloaded */
+        private static $preloadedProducts = [];
+        const MAX_ROWS = 10;
+        /** Row id of a simple-variations product's options, which have no attribute group. */
+        const OPTION_ROW = 'option';
+        /**
+         * One swatch row per attribute group, plus every active variant's values so a click can
+         * match all rows at once.
+         *
+         * @param int[]     $groupIds     The picked attributes, in order.
+         * @param string    $optionLabel  Name of a simple-variations product's one row; empty means "Option".
+         * @param bool|null $includeOther True adds the product's other attributes after the picked ones, in
+         *                                library order; false shows only the picked ones. Null (saved pages,
+         *                                builders) keeps the old rule: no pick shows every attribute.
+         * @param int[]     $hiddenGroupIds Attributes the merchant unticked: never added as "other" ones.
+         * @return array{rows: array[], variants: array[], resolves: bool}
+         */
+        public static function rowsForProduct(\FluentCart\App\Models\Product $product, array $groupIds = [], string $optionLabel = '', ?bool $includeOther = null, array $hiddenGroupIds = []): array
+        {
+        }
+        /**
+         * What the card's button becomes for the picked variant; null keeps View Options.
+         * Bundles keep it too: their stock depends on child items the card does not load.
+         */
+        private static function cardButtonConfig(\FluentCart\App\Models\Product $product, array $swatchData): ?array
+        {
+        }
+        /**
+         * Simple variations have no attributes: their variants become one row of options.
+         */
+        private static function optionRow(\FluentCart\App\Models\Product $product, \FluentCart\Framework\Support\Collection $variants, string $label): array
+        {
+        }
+        /**
+         * The swatch rows for one product card, shared by the Gutenberg block and the page
+         * builder add-ons. Settings: group_ids (picked, in order), show_other_groups (unset: empty group_ids = all),
+         * max_visible (0 = all), sold_out_display ('normal', 'cross' or 'hide'; simple_sold_out_display overrides it for list products), show_label, show_group_name,
+         * selected_position ('name' or 'below'), advanced_enabled; simple variations: simple_enabled, simple_label,
+         * simple_max_visible, simple_show_label, simple_show_selected (unset follows show_label), simple_selected_position.
+         *
+         * @param string $wrapperAttributes Escaped attributes for the wrapper; must include its class.
+         */
+        public static function render(\FluentCart\App\Models\Product $product, array $settings, string $wrapperAttributes = 'class="fct-card-swatch-rows"'): string
+        {
+        }
+        /** The attributes the product's variants use, in the store's attribute order. */
+        private static function productGroupIds($variants): array
+        {
+        }
+        /**
+         * The rows start on each one's default (or first) value. When those make a combination the
+         * product does not sell, start every row on one variant instead: the default when all its
+         * values are visible, else the first that is. Null keeps the per-row start.
+         */
+        private static function startTerms(\FluentCart\App\Models\Product $product, array $swatchData, int $maxVisible, array $soldOut = [], bool $preferInStock = false): ?array
+        {
+        }
+        private static function isSoldOut(array $soldOut, $groupId, array $term): bool
+        {
+        }
+        /**
+         * The values no in-stock variant has, by row: [group_id => [term_id => true]]. A list product's
+         * one row ('option') holds variant ids, so there a value is sold out when its variant is.
+         * A product marked out of stock ($productSoldOut) has every value sold out.
+         */
+        private static function soldOutTerms(array $swatchData, bool $productSoldOut = false): array
+        {
+        }
+        /**
+         * Queue the swatch styles and click handler. Call before any early return, since cards
+         * loaded later by AJAX bring no stylesheet of their own.
+         */
+        public static function enqueueAssets(): void
+        {
+        }
+        /**
+         * @param int $groupId 0 picks the product's first colour or image group.
+         * @return array|null ['group_id', 'group_type', 'group_title', 'terms' => [...]]
+         */
+        public static function forProduct(\FluentCart\App\Models\Product $product, int $groupId = 0): ?array
+        {
+        }
+        private static function activeVariants(\FluentCart\App\Models\Product $product): \FluentCart\Framework\Support\Collection
+        {
+        }
+        private static function pickVisualGroup($variants): int
+        {
+        }
+        /**
+         * Load attribute links, terms, groups and variant images for variants not seen yet.
+         */
+        private static function preload(array $products): void
+        {
+        }
+        /**
+         * Carousels and related products hand over products without variants; one query
+         * loads them for all, instead of one lazy load per card.
+         */
+        private static function loadMissingVariants(array $products): void
         {
         }
     }
@@ -48788,6 +49700,13 @@ namespace FluentCart\App\Services\Renderer {
         public function renderCheckbox($option)
         {
         }
+        /**
+         * Colour groups as swatches, image groups as image tiles, the rest (sizes...) as boxes.
+         * Each option is a real checkbox, so the form, keyboard and screen readers work unchanged.
+         */
+        public function renderAttributeFilter($filter, $key)
+        {
+        }
         public function renderPriceRange($filter = [])
         {
         }
@@ -48810,6 +49729,9 @@ namespace FluentCart\App\Services\Renderer {
         protected $columns = 4;
         protected $hideExcerpt = false;
         protected $ratingContext = '';
+        protected $cardConfig = [];
+        /** @var callable|null A builder's own card markup for one product, in place of core's card. */
+        protected $renderCard = null;
         public function __construct($products, $listTitle = null, $wrapperClass = null, $config = [])
         {
         }
@@ -50036,7 +50958,17 @@ namespace FluentCart\App\Services\Renderer {
         public static function renderPriceSuffix($product, $variant, $scope)
         {
         }
+        public static function getPriceSuffix($product, $variant, $scope, string $default = '', array $context = []): string
+        {
+        }
         public static function getBlockWrapperAttributes(array $attributes = [])
+        {
+        }
+        /**
+         * The quick view eye. It lives in app/Views/icons/quick-view.svg, which the block editor
+         * imports too, so every quick view trigger draws the same eye. Decorative: the trigger carries the label.
+         */
+        public static function quickViewIconSvg(): string
         {
         }
     }
@@ -50533,6 +51465,7 @@ namespace FluentCart\App\Services\Renderer {
     class ShopAppRenderer
     {
         protected $viewMode = 'grid';
+        protected $isGridOnly = false;
         protected $isFilterEnabled = false;
         protected $per_page = 10;
         protected $order_type = 'DESC';
@@ -50592,6 +51525,11 @@ namespace FluentCart\App\Services\Renderer {
         {
         }
         public function renderPerPageSelector()
+        {
+        }
+        // Same pages as #renderPaginator() in LengthAwarePaginator.js; keep the two in step,
+        // or the pager changes shape after the first AJAX page load.
+        private function pagerItems(int $currentPage, int $lastPage, int $jump = 5): array
         {
         }
     }
@@ -53835,7 +54773,7 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         //        'payment_summary' => 'getPaymentSummary',
         //        'payment_receipt' => 'getPaymentReceipt',
         //    ];
-        protected array $methodMap = ['item_count' => 'getItemCount', 'review_url' => 'getReviewUrl', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'store_company_name' => 'getStoreCompanyName', 'store_company_display' => 'getStoreCompanyDisplay', 'store_seller_name' => 'getStoreSellerName', 'store_legal_registration_id' => 'getStoreLegalRegistrationId', 'store_legal_registration_display' => 'getStoreLegalRegistrationDisplay', 'store_seller_vat_id' => 'getStoreSellerVatId', 'store_seller_vat_display' => 'getStoreSellerVatDisplay', 'store_seller_tax_id' => 'getStoreSellerTaxId', 'store_tax_display' => 'getStoreTaxDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName', 'buyer_legal_registration_id' => 'getBuyerLegalRegistrationId', 'buyer_reverse_charge_declaration' => 'getBuyerReverseChargeDeclaration', 'tax_breakdown' => 'getTaxBreakdown', 'fee_lines' => 'getFeeLines', 'payment_method_human' => 'getPaymentMethodTitle'];
+        protected array $methodMap = ['item_count' => 'getItemCount', 'review_url' => 'getReviewUrl', 'is_digital' => 'getIsDigital', 'store_vat_display' => 'getStoreVatDisplay', 'store_company_name' => 'getStoreCompanyName', 'store_company_display' => 'getStoreCompanyDisplay', 'store_seller_name' => 'getStoreSellerName', 'store_legal_registration_id' => 'getStoreLegalRegistrationId', 'store_legal_registration_display' => 'getStoreLegalRegistrationDisplay', 'store_seller_vat_id' => 'getStoreSellerVatId', 'store_seller_vat_display' => 'getStoreSellerVatDisplay', 'store_seller_tax_id' => 'getStoreSellerTaxId', 'store_tax_display' => 'getStoreTaxDisplay', 'buyer_vat_display' => 'getBuyerVatDisplay', 'buyer_company_name' => 'getBuyerCompanyName', 'buyer_legal_registration_id' => 'getBuyerLegalRegistrationId', 'buyer_reverse_charge_declaration' => 'getBuyerReverseChargeDeclaration', 'tax_breakdown' => 'getTaxBreakdown', 'fee_lines' => 'getFeeLines', 'payment_method_human' => 'getPaymentMethodTitle', 'payment_instructions' => 'getPaymentInstructions'];
         protected array $attributeMap = ['id' => 'order.id', 'status' => 'order.status', 'created_at' => 'order.created_at', 'updated_at' => 'order.updated_at', 'parent_id' => 'order.parent_id', 'invoice_no' => 'order.invoice_no', 'fulfillment_type' => 'order.fulfillment_type', 'type' => 'order.type', 'customer_id' => 'order.customer_id', 'payment_method' => 'order.payment_method', 'payment_status' => 'order.payment_status', 'currency' => 'order.currency', 'rate' => 'order.rate', 'note' => 'order.note', 'ip_address' => 'order.ip_address', 'completed_at' => 'order.completed_at', 'refunded_at' => 'order.refunded_at', 'uuid' => 'order.uuid', 'customer.email' => 'order.customer.email', 'customer.first_name' => 'order.customer.first_name', 'customer.last_name' => 'order.customer.last_name', 'customer.full_name' => 'order.customer.full_name'];
         protected array $centColumns = ['total_amount', 'subtotal', 'discount_tax', 'manual_discount_total', 'coupon_discount_total', 'shipping_tax', 'shipping_total', 'fee_total', 'tax_total', 'total_paid', 'total_refund'];
         public function parse($accessor = '', $code = '', $transformer = null): ?string
@@ -53922,6 +54860,9 @@ namespace FluentCart\App\Services\ShortCodeParser\Parsers {
         {
         }
         public function getPaymentMethodTitle(): string
+        {
+        }
+        public function getPaymentInstructions(): string
         {
         }
         public function getFeeLines(): string
