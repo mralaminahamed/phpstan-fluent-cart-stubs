@@ -5484,6 +5484,37 @@ namespace FluentCart\App\Events\Subscription {
         {
         }
     }
+    class SubscriptionPaymentMethodChanged extends \FluentCart\App\Events\EventDispatcher
+    {
+        public string $hook = 'fluent_cart/subscription_payment_method_changed';
+        protected array $listeners = [];
+        public \FluentCart\App\Models\Subscription $subscription;
+        public ?\FluentCart\App\Models\Order $order;
+        public ?\FluentCart\App\Models\Customer $customer;
+        public array $oldPaymentMethod;
+        public array $newPaymentMethod;
+        public string $change;
+        /**
+         * @param array  $oldPaymentMethod billing info as stored in active_payment_method; at least ['method' => slug]
+         * @param array  $newPaymentMethod billing info from PaymentHelper::parsePaymentMethodDetails()
+         * @param string $change 'update' (same gateway) or 'switch' (another gateway)
+         */
+        public function __construct(\FluentCart\App\Models\Subscription $subscription, array $oldPaymentMethod, array $newPaymentMethod, string $change)
+        {
+        }
+        public static function fire(\FluentCart\App\Models\Subscription $subscription, $oldPaymentMethod, array $newPaymentMethod, string $oldGateway)
+        {
+        }
+        public function toArray(): array
+        {
+        }
+        public function getActivityEventModel(): \FluentCart\App\Models\Subscription
+        {
+        }
+        public function shouldCreateActivity(): bool
+        {
+        }
+    }
     class SubscriptionPeriodSkipped extends \FluentCart\App\Events\EventDispatcher
     {
         public string $hook = 'fluent_cart/subscription_period_skipped';
@@ -8592,6 +8623,9 @@ namespace FluentCart\App\Hooks\Handlers\BlockEditors {
         {
         }
         public function localizeData(): array
+        {
+        }
+        public function useContext(): array
         {
         }
         public function render(array $shortCodeAttribute, $block = null)
@@ -23953,6 +23987,15 @@ namespace FluentCart\App\Models {
         public function hasAccessValidity()
         {
         }
+        /**
+         * Paid time already ended and was recorded: the cleared next billing date must not be
+         * rebuilt from past payments.
+         *
+         * @return bool
+         */
+        public function hasRecordedExpiry(): bool
+        {
+        }
         public function reSyncFromRemote()
         {
         }
@@ -25228,6 +25271,17 @@ namespace FluentCart\App\Modules\MCP {
         {
         }
         public function registerAbilities()
+        {
+        }
+        /**
+         * Keep only the tools the current user may run on the FluentCart server. Every
+         * FluentCart permission check reads the user alone, so it runs here without input.
+         *
+         * @param mixed $tools  The adapter's Tool records.
+         * @param mixed $server The adapter's server object.
+         * @return mixed
+         */
+        public static function listToolsForUser($tools, $server = null)
         {
         }
         /**
@@ -30222,6 +30276,10 @@ namespace FluentCart\App\Modules\PaymentMethods\PayPalGateway {
         public static function processRemoteRefund($transaction, $amount, $args)
         {
         }
+        // PayPal field limits count characters; a byte cut can split one and make json_encode() fail.
+        public static function limitText($text, $max)
+        {
+        }
         private static function getRemoteProductByData($productData = [])
         {
         }
@@ -31680,9 +31738,6 @@ namespace FluentCart\App\Modules\PaymentMethods\StripeGateway {
          * via a SetupIntent instead; confirmation (Confirmations::confirmSetupIntent)
          * persists the token, completes the $0 order, and activates the trial. The
          * trial-end invoice is then charged off-session like any other system renewal.
-         *
-         * Consent is REQUIRED here (not just disclosed): without a saved card the
-         * trial can never bill, so a checkout without the consent flag is rejected.
          */
         public function handleSetupOnlyPayment(\FluentCart\App\Services\Payments\PaymentInstance $paymentInstance, $paymentArgs = [])
         {
@@ -34906,6 +34961,20 @@ namespace FluentCart\App\Modules\StoreManagedRenewal\Services {
          * @return array Results with past_due and expired counts
          */
         public static function processOverdueRenewals(int $limit = 50): array
+        {
+        }
+        /**
+         * End access for cancelled store-billed subscriptions whose paid time is over.
+         * Mirrors the cancelled branch of Subscription::checkAndExpireSubscriptions(),
+         * which covers gateway-billed ones: status stays canceled, next_billing_date
+         * is cleared, validity_expired_at is set and SubscriptionValidityExpired fires.
+         * Unlike the sweep, an old validity_expired_at does not skip the row: an admin
+         * edit can extend a store-billed subscription without clearing it.
+         *
+         * @param int $batchSize Rows read per query
+         * @return array{expired: int, errors: array}
+         */
+        public static function expireCanceledSubscriptions(int $batchSize = 50): array
         {
         }
         /**
@@ -41376,6 +41445,10 @@ namespace FluentCart\App\Services\FileSystem\Drivers\S3 {
         public function downloadFile(string $filePath, $fileName = null, $bucket = null)
         {
         }
+        // S3 rejects a signed URL that lasts longer than 7 days, so a larger filtered value is capped
+        private function downloadExpirationMinutes(string $filePath, $bucket): int
+        {
+        }
         public function getFilePath(string $filePath, $fileName = null, $bucket = null)
         {
         }
@@ -45922,6 +45995,12 @@ namespace FluentCart\App\Services\Payments {
         {
         }
         /**
+         * Customer-facing label of a stored billing info: "Visa •••• 4242", "PayPal (jane@example.com)" or the gateway title.
+         */
+        public static function getPaymentMethodLabel(array $billingInfo): string
+        {
+        }
+        /**
          * Days in one billing cycle. Returns 0 when the interval cannot be resolved —
          * neither a core interval nor one a fluent_cart/subscription_interval_in_days
          * callback resolved to a positive day count. Callers must treat < 1 as
@@ -46704,6 +46783,16 @@ namespace FluentCart\App\Services\PluginInstaller {
     }
     class PaymentAddonManager extends \FluentCart\App\Services\PluginInstaller\AddonManager
     {
+        /**
+         * The install source a registered payment add-on lists for itself, or null when no
+         * payment gateway lists this plugin slug.
+         *
+         * @param string $pluginSlug
+         * @return array{type: string, link: string}|null
+         */
+        public static function getListedSource($pluginSlug)
+        {
+        }
     }
 }
 namespace FluentCart\App\Services {
@@ -55227,6 +55316,18 @@ namespace FluentCart\App\Services\ShortCodeParser {
         {
         }
         /**
+         * Parse an HTML template: a value inside an attribute is escaped for that
+         * attribute. Use make() for plain text such as subjects and addresses.
+         *
+         * @param string $template
+         * @param array $data
+         * @return string
+         * @throws \FluentCart\Framework\Container\Contracts\BindingResolutionException
+         */
+        public static function makeHtml(string $template, array $data = []): string
+        {
+        }
+        /**
          * Factory method to create an instance of TemplateBuilder and parse the template array.
          *
          * @param array $templates
@@ -55333,10 +55434,43 @@ namespace FluentCart\App\Services\ShortCodeParser {
          * @return string
          * @throws \FluentCart\Framework\Container\Contracts\BindingResolutionException
          */
-        public function parseTemplate(string $template, array $data): string
+        public function parseTemplate(string $template, array $data, bool $isHtml = false): string
         {
         }
-        private function parseOrderTemplate(string $template, array $data): string
+        private function parseOrderTemplate(string $template, array $data, ?callable $wrapValue = null): string
+        {
+        }
+        /**
+         * Parse SmartCodes in HTML, escaping each value for its position.
+         *
+         * Buyer fields keep a bare `"` (sanitize_text_field), so a raw value inside an
+         * attribute could close it and add an event handler. Text positions stay raw.
+         */
+        private function parseHtmlTemplate(string $template, array $data): string
+        {
+        }
+        /**
+         * Encode SmartCode openers in a value. Pro loop blocks parse a value, then the
+         * mailer parses the body again; a buyer's `{{...}}` must stay literal text.
+         */
+        private function neutralizeSmartCodes(string $value): string
+        {
+        }
+        /**
+         * Markers in text, comments or RCDATA, keyed by marker text. The HTML API
+         * tokenizes as browsers do, so `<!-->` and `<textarea>` content are handled.
+         */
+        private function markersInText(string $html, string $markerPattern): array
+        {
+        }
+        private function fillAttribute(\WP_HTML_Tag_Processor $processor, string $name, string $marker, string $markerPattern, array $values, array &$urls): void
+        {
+        }
+        /**
+         * Lowercase scheme of a URL as a browser reads it: entities fully decoded,
+         * whitespace and control characters dropped. Empty when the URL has none.
+         */
+        private function urlScheme(string $url): string
         {
         }
         /**
